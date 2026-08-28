@@ -165,7 +165,7 @@ dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 2
 dialog::backdrop { background: rgba(0,0,0,.35); }
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1c2330; color: #fff; padding: 10px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
 #toast.show { opacity: 1; }
-#overlay { position: fixed; inset: 0; background: rgba(255,255,255,.9); display: none; align-items: center; justify-content: center; z-index: 40; font-size: 18px; text-align: center; padding: 20px; }
+#overlay { position: fixed; inset: 0; background: #fff; display: none; align-items: center; justify-content: center; z-index: 40; font-size: 18px; text-align: center; padding: 20px; }
 #overlay.show { display: flex; }
 .loader-box { position: relative; width: 120px; height: 120px; overflow: hidden; margin: 0 auto 6px; }
 .loader-box .loader { position: absolute; left: 50%; top: 50%; width: 300px; height: 225px; transform: translate(-50%, -50%); mix-blend-mode: multiply; }
