@@ -26,8 +26,14 @@ window.VL_BOOKMARKLET = function (APP) {
         return t.trim() + ' ' + x.trim().replace(/\s+/g, ' ');
       }));
     }
+    // solo il pannello della trascrizione: quello dei capitoli ha lo stesso aspetto (tempi + titoli) ma non è una trascrizione
     var panels = Array.prototype.slice.call(document.querySelectorAll('ytd-engagement-panel-section-list-renderer'))
-      .filter(function (p) { return p.getAttribute('visibility') === 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED'; });
+      .filter(function (p) {
+        var tid = (p.getAttribute('target-id') || '').toLowerCase();
+        if (/chapter|macro-markers|comments|description/.test(tid)) return false;
+        var head = (((p.querySelector('#header') || {}).innerText || '') + ' ' + (p.innerText || '').slice(0, 400)).toLowerCase();
+        return p.getAttribute('visibility') === 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED' && (/transcript/.test(tid) || /trascrizione|transcript/.test(head));
+      });
     for (var i = 0; i < panels.length; i++) {
       var lines = (panels[i].innerText || '').split('\n'), out = [];
       for (var k = 0; k < lines.length; k++) {
@@ -46,7 +52,8 @@ window.VL_BOOKMARKLET = function (APP) {
   function openPanel() {
     var ex = document.querySelector('#description-inline-expander #expand, tp-yt-paper-button#expand');
     if (ex) { try { ex.click(); } catch (e) { /* ignore */ } }
-    var btn = Array.prototype.slice.call(document.querySelectorAll('button')).filter(function (b) {
+    var btn = document.querySelector('ytd-video-description-transcript-section-renderer button, [target-id*="transcript"] button, button[aria-label*="rascrizione" i], button[aria-label*="ranscript" i]');
+    if (!btn) btn = Array.prototype.slice.call(document.querySelectorAll('button')).filter(function (b) {
       return /transcript|trascrizione/i.test((b.textContent || '') + ' ' + (b.getAttribute('aria-label') || ''));
     })[0];
     if (btn) { try { btn.click(); } catch (e) { /* ignore */ } }
@@ -63,9 +70,10 @@ window.VL_BOOKMARKLET = function (APP) {
   (function poll() {
     segs = fromDom();
     if (segs) { go(segs); return; }
-    if (++tries > 25) {
+    if (tries === 12 && !hadButton) hadButton = openPanel();   // secondo tentativo: la descrizione può aprirsi in ritardo
+    if (++tries > 50) {
       alert('Trascrizione non disponibile per questo video: NON è utilizzabile con Video Esercizi, a meno di inserire la trascrizione a mano nell\'app.' +
-        (hadButton ? '' : ' (Non trovo il pulsante "Mostra trascrizione" nella pagina.)'));
+        (hadButton ? ' (Il pannello "Trascrizione" non si è aperto: prova ad aprirlo tu — descrizione → Mostra trascrizione — e clicca di nuovo il pulsante.)' : ' (Non trovo il pulsante "Mostra trascrizione" nella pagina.)'));
       return;
     }
     setTimeout(poll, 300);

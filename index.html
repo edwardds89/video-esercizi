@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg">
-<link rel="stylesheet" href="styles.css?v=20260828-13">
+<link rel="stylesheet" href="styles.css?v=20260828-14">
 </head>
 <body>
 <header class="topbar">
@@ -61,7 +61,10 @@
               <select id="f-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option></select></div>
           </div>
           <div class="grid2">
-            <div><label>Numero di esercizi</label><input id="f-n" type="number" min="1" max="40" value="10"></div>
+            <div><label>Numero di esercizi</label>
+              <div class="row" style="gap:8px"><label class="chip" style="margin:0" title="Circa un esercizio ogni 30-50 secondi di video tenuto, solo dove c'è una frase di senso compiuto della lunghezza giusta"><input type="checkbox" id="f-nauto" checked> Automatico (uno ogni 30-50 s)</label>
+              <input id="f-n" type="number" min="1" max="40" value="10" class="short" disabled></div>
+              <div id="f-n-hint" class="hint"></div></div>
             <div><label>Durata per lo studente</label>
               <select id="f-range">
                 <option value="full">Tutto il video (nessun taglio)</option>
@@ -95,6 +98,8 @@
             <label class="chip"><input type="checkbox" value="missing" checked> Missing word</label>
             <label class="chip"><input type="checkbox" value="extra" checked> Extra word</label>
             <label class="chip"><input type="checkbox" value="wrong" checked> Wrong word</label>
+            <label class="chip" title="Domanda con 4 risposte: le scrive il modello AI (senza AI resta da compilare a mano)"><input type="checkbox" value="mc"> Multiple choice (AI)</label>
+            <label class="chip" title="Nelle domande a scelta multipla una risposta sbagliata è fatta apposta per confondere"><input type="checkbox" id="f-tricky"> …con risposta "tricky"</label>
           </div>
           <label>Generazione</label>
           <div class="row">
@@ -126,7 +131,7 @@
   <section id="view-editor" class="view">
     <div class="row editor-bar">
       <input id="e-title" type="text" class="grow" style="font-size:18px;font-weight:600">
-      <button id="btn-save" class="primary">Salva</button>
+      <button id="btn-save" class="primary" title="Salva tutto e torna al portfolio">💾 Salva e torna al portfolio</button>
       <button id="btn-student">▶ Anteprima studente</button>
       <button id="btn-share">Link studente</button>
       <button id="btn-export">Esporta JSON</button>
@@ -159,10 +164,27 @@
             <label class="chip" style="margin:0"><input type="checkbox" id="e-fx" checked> Animazione quando la risposta è giusta</label>
             <label class="chip" style="margin:0" title="Con la barra bloccata non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="e-lock"> 🔒 Barra bloccata (non si possono saltare gli esercizi)</label>
             <label class="chip" style="margin:0" title="Per i video con i sottotitoli stampati nell'immagine: fascia sfocata sopra il video, spostabile e ridimensionabile col mouse; la posizione viene salvata con la lezione"><input type="checkbox" id="e-cover"> ▬ Copri i sottotitoli stampati nel video</label>
+            <label class="chip" style="margin:0" title="Di default, durante il riascolto la frase sparisce e il video torna grande, per concentrarsi sull'ascolto"><input type="checkbox" id="e-showreplay"> Mostra la frase durante il riascolto</label>
           </div>
         </div>
       </div>
       <div class="editor-right">
+        <div class="card" id="e-vocab-card">
+          <div class="row"><h2 style="margin:0">Parole utili</h2>
+            <span class="hint">schede prima del video · stelle per il Quizlet</span>
+            <button id="btn-vocab-ai" class="small right">✨ Proponi con l'AI</button>
+            <button id="btn-vocab-rules" class="small">Proponi (regole)</button>
+            <button id="btn-vocab-add" class="small">+ Parola</button></div>
+          <div class="row" style="margin-top:8px">
+            <label class="chip" style="margin:0"><input type="checkbox" id="v-matching"> Scheda 1: abbina parola ↔ foto/traduzione</label>
+            <label class="chip" style="margin:0"><input type="checkbox" id="v-flash"> Scheda 2: flashcards</label>
+            <label class="chip" style="margin:0"><input type="checkbox" id="v-write"> Flashcards: lo studente scrive la parola</label>
+            <label class="chip" style="margin:0">Traduzione in <select id="v-support" style="width:auto;padding:2px 6px;margin-left:4px"><option value="en">inglese</option><option value="it">italiano</option><option value="es">spagnolo</option><option value="fr">francese</option><option value="de">tedesco</option></select></label>
+          </div>
+          <div id="e-vocab"></div>
+          <div class="row" style="margin-top:6px"><button id="btn-vocab-translate" class="small">🌐 Traduci le parole senza traduzione (AI)</button><span id="e-vocab-status" class="hint"></span></div>
+          <p class="hint">Seleziona le parole da usare nelle schede iniziali; ogni parola ha bisogno di una traduzione, una foto ("🔍 Foto" cerca su Wikipedia) o un'emoji. Le parole che compaiono nelle frasi degli esercizi sono segnate.</p>
+        </div>
         <div class="card">
           <div class="row"><h2 style="margin:0">Esercizi</h2>
             <button id="btn-add-ex" class="small right">+ Esercizio al tempo corrente</button></div>
@@ -230,7 +252,9 @@
   <h2>Rigenera la bozza</h2>
   <p class="hint">Sostituisce esercizi e tagli attuali con una nuova proposta (la trascrizione resta).</p>
   <div class="grid2">
-    <div><label>Numero di esercizi</label><input id="r-n" type="number" min="1" max="40" value="10"></div>
+    <div><label>Numero di esercizi</label>
+      <label class="chip" style="margin:0 0 6px"><input type="checkbox" id="r-nauto" checked> Automatico (uno ogni 30-50 s)</label>
+      <input id="r-n" type="number" min="1" max="40" value="10" disabled></div>
     <div><label>Durata finale (mm:ss)</label><input id="r-target" type="text"></div>
   </div>
   <label>Lunghezza delle frasi</label>
@@ -252,6 +276,8 @@
     <label class="chip"><input type="checkbox" value="missing" checked> Missing word</label>
     <label class="chip"><input type="checkbox" value="extra" checked> Extra word</label>
     <label class="chip"><input type="checkbox" value="wrong" checked> Wrong word</label>
+    <label class="chip"><input type="checkbox" value="mc"> Multiple choice (AI)</label>
+    <label class="chip"><input type="checkbox" id="r-tricky"> …con risposta "tricky"</label>
   </div>
   <div class="row" style="margin-top:8px"><label class="chip" style="margin:0"><input type="checkbox" id="r-ai"> Usa l'AI</label></div>
   <label>Indicazioni per l'AI</label>
@@ -262,12 +288,12 @@
 <div id="overlay"><div><div class="spinner"></div><div id="overlay-text">Generazione in corso…</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260828-13"></script>
-<script src="exercises.js?v=20260828-13"></script>
-<script src="generator.js?v=20260828-13"></script>
-<script src="ai.js?v=20260828-13"></script>
-<script src="demo-data.js?v=20260828-13"></script>
-<script src="bookmarklet.js?v=20260828-13"></script>
-<script src="app.js?v=20260828-13"></script>
+<script src="lang.js?v=20260828-14"></script>
+<script src="exercises.js?v=20260828-14"></script>
+<script src="generator.js?v=20260828-14"></script>
+<script src="ai.js?v=20260828-14"></script>
+<script src="demo-data.js?v=20260828-14"></script>
+<script src="bookmarklet.js?v=20260828-14"></script>
+<script src="app.js?v=20260828-14"></script>
 </body>
 </html>

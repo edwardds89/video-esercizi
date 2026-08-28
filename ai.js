@@ -7,7 +7,7 @@
 
   const DEFAULT_MODEL = 'claude-sonnet-5';
   const PRICES = { 'claude-sonnet-5': [2, 10], 'claude-haiku-4-5-20251001': [1, 5], 'claude-opus-5': [5, 25] };
-  const TYPE_NAMES = { gap: 'gap', gapbank: 'gapbank', scramble: 'scramble', missing: 'missing', extra: 'extra', wrong: 'wrong' };
+  const TYPE_NAMES = { gap: 'gap', gapbank: 'gapbank', scramble: 'scramble', missing: 'missing', extra: 'extra', wrong: 'wrong', mc: 'mc' };
 
   function fmtChunks(chunks) {
     return chunks.filter(function (c) { return !c.silence; }).map(function (c) {
@@ -21,12 +21,13 @@
       'You receive the transcript split into chunks (id|start seconds|end seconds|text). Output ONLY a JSON object that follows the schema; no prose, no markdown fences.';
     const lines = [];
     lines.push('TRANSCRIPT LANGUAGE: ' + (p.lang || 'it') + '   STUDENT LEVEL (CEFR): ' + (p.level || 'B1'));
-    lines.push('NUMBER OF EXERCISES: ' + n + '   ALLOWED TYPES: ' + types.join(', '));
-    if (p.range === 'smart') lines.push('SENTENCE LENGTH: gap 22-32 words, gapbank 18-30, scramble 7-12, missing/extra/wrong 10-20 (a passage may span several consecutive chunks).');
+    lines.push('NUMBER OF EXERCISES: ' + n + (p.auto ? ' (about one every 30-50 seconds of kept video; if a slot has no complete sentence of the required length, leave it without an exercise — fewer is fine)' : '') + '   ALLOWED TYPES: ' + types.join(', '));
+    if (p.range === 'smart') lines.push('SENTENCE LENGTH: gap/missing/extra/wrong 25-32 words, gapbank 22-30, scramble 16-22, mc 25-40 (a passage may span several consecutive chunks).');
     else if (p.range && p.range.length === 2) lines.push('SENTENCE LENGTH: between ' + p.range[0] + ' and ' + p.range[1] + ' words for every exercise (a passage may span several consecutive chunks; this overrides the per-type ranges below).');
     lines.push('VIDEO DURATION: ' + Math.round(p.duration) + 's   TARGET KEPT DURATION: ' + Math.round(p.target) + 's' +
       (p.target < p.duration - 5 ? ' (skip about ' + Math.round(p.duration - p.target) + 's)' : ' (no cuts needed)'));
     if (p.focus) lines.push('TEACHER NOTES / FOCUS: ' + p.focus);
+    if (p.tricky) lines.push('TRICKY: yes — every mc exercise must include one deliberately misleading wrong option.');
     lines.push('');
     lines.push('TASKS');
     lines.push('1. Choose exactly ' + n + ' sentences for listening exercises, spread across the video (about one per equal time slice). ' +
@@ -36,17 +37,22 @@
     lines.push('2. Assign each sentence one type, rotating through the allowed types so each is used, with these constraints: ' +
       'gap = 18-40 words (about 25-30 is ideal), list 3-5 content words to blank in "gaps" (exact words from the sentence, not adjacent, not the first word); ' +
       'gapbank = 12-30 words, same as gap but the student gets a word bank: list 3-4 "gaps" and 2 plausible wrong words from the video in "distractors"; ' +
-      'scramble = 5-10 words; ' +
-      'missing = 6-14 words, give the word to remove in "missing"; ' +
-      'extra = 6-14 words, give a function word to insert and the word it comes after in "extra": {"word","after"}; ' +
-      'wrong = 6-14 words, give a word to replace and a plausible wrong replacement of the same grammatical category in "wrong": {"word","replacement"} (the replacement must not appear elsewhere in the sentence).');
+      'scramble = 16-22 words; ' +
+      'missing = 25-32 words, give the word to remove in "missing"; ' +
+      'extra = 25-32 words, give a function word to insert and the word it comes after in "extra": {"word","after"}; ' +
+      'wrong = 25-32 words, give a word to replace and a plausible wrong replacement of the same grammatical category in "wrong": {"word","replacement"} (the replacement must not appear elsewhere in the sentence); ' +
+      'mc = 25-40 words: a comprehension question about the sentence in the transcript language in "question", four short "options", the index of the right one in "correct" (0-3) and, if TRICKY is requested, the index of a deliberately misleading but wrong option in "tricky".');
     lines.push('3. Propose cuts (parts of the video to skip) as inclusive ranges of chunk ids "from"/"to", so that the kept duration is close to the target. ' +
       'Skip intros, sponsor/ads, calls to action, digressions, repetitions and long silences first. Never cut a chunk that contains an exercise sentence, nor the 20 seconds before it. ' +
       'Prefer few long cuts (at least 8 seconds each) over many short ones. If the target is not reachable without harming coherence, do your best and say so in "notes".');
     lines.push('4. Give a short lesson "title" in the transcript language.');
+    const sup = p.support || (p.lang === 'en' ? 'it' : 'en');
+    lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student must know to understand the video, in "vocab". ' +
+      'Prioritize words that occur in the exercise sentences you chose (mark them with "inExercise": true), then other key words of the video. Use the dictionary form as it appears in the video (singular noun, infinitive verb, masculine adjective) ' +
+      'and give the translation in language "' + sup + '" ("translation"). For concrete words add one emoji that pictures the meaning ("emoji"); leave it empty for abstract words. No numbers, no proper names, no function words.');
     lines.push('');
     lines.push('OUTPUT SCHEMA (JSON only):');
-    lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"notes":"..."}');
+    lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"vocab":[{"word":"smalto","translation":"enamel","emoji":"🦷","inExercise":true}],"notes":"..."}');
     lines.push('Include only the fields relevant to each exercise type.');
     lines.push('');
     lines.push('TRANSCRIPT CHUNKS (id|start|end|text):');
@@ -172,7 +178,8 @@
         extraWord: pe.extra && pe.extra.word ? pe.extra.word : null,
         extraAfter: pe.extra && pe.extra.after != null ? pe.extra.after : null,
         wrongWord: pe.wrong && pe.wrong.word ? pe.wrong.word : null,
-        wrongReplacement: pe.wrong && pe.wrong.replacement ? pe.wrong.replacement : null
+        wrongReplacement: pe.wrong && pe.wrong.replacement ? pe.wrong.replacement : null,
+        question: pe.question || null, options: Array.isArray(pe.options) ? pe.options : null, correct: pe.correct, tricky: pe.tricky
       };
       const seed = 1000 + i;
       let ex = EX.buildExercise(type, sentenceText, { lang: lang, seed: seed, choices: choices, vocab: vocab });
@@ -203,7 +210,9 @@
     });
 
     // Completa fino a n con il motore a regole, nelle zone scoperte, evitando i tagli del modello e i 20s successivi
-    if (exercises.length < n) {
+    // (in modalità automatica il modello può lasciare vuoti gli slot senza una frase adatta: si completa solo se ne ha dati meno della metà)
+    const minWanted = ctx.auto ? Math.ceil(n / 2) : n;
+    if (exercises.length < minWanted) {
       const avoid = new Set(used);
       chunks.forEach(function (c) {
         if (rawCuts.some(function (r) { return c.start < r.end + 20 && c.end > r.start; })) avoid.add(c.id);
@@ -259,8 +268,90 @@
 
     return {
       exercises: exercises, cuts: cuts, title: plan.title || '', notes: plan.notes || '', warnings: warnings,
+      vocab: cleanVocab(plan.vocab),
       stats: { duration: D, target: target, effective: effective, removed: D - effective, n: exercises.length }
     };
+  }
+
+  /** Normalizza la lista di parole utili restituita dal modello: [{word, translation, emoji, inExercise}], senza doppioni. */
+  function cleanVocab(list) {
+    const out = [], seen = {};
+    (Array.isArray(list) ? list : []).forEach(function (v) {
+      if (!v || typeof v !== 'object') return;
+      const word = String(v.word || '').trim().replace(/\s+/g, ' ');
+      if (!word || word.length > 40) return;
+      const k = L.normalize(word);
+      if (!k || seen[k]) return;
+      seen[k] = 1;
+      out.push({ word: word, translation: String(v.translation || '').trim(), emoji: String(v.emoji || '').trim().slice(0, 4), inExercise: !!v.inExercise });
+    });
+    return out;
+  }
+
+  /** Parole utili su richiesta (editor): dalle frasi degli esercizi e dal video. params: { chunks, exercises, lang, support, level, n, apiKey, model, fetchImpl } */
+  async function suggestVocab(params) {
+    const lang = params.lang || 'it', sup = params.support || (lang === 'en' ? 'it' : 'en');
+    const sentences = (params.exercises || []).map(function (e, i) { return (i + 1) + '. ' + e.sentence; }).join('\n');
+    const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
+    const system = 'You help a language teacher prepare vocabulary for a video lesson. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + (params.level || 'B1') + '   TRANSLATION LANGUAGE: ' + sup,
+      'List ' + (params.n || 14) + ' words (or short fixed expressions) the student must know to understand the video. Prioritize words that occur in the EXERCISE SENTENCES (mark "inExercise": true), then other key words of the video. ' +
+      'Dictionary form as used in the video (singular noun, infinitive verb, masculine adjective); "translation" in ' + sup + '; "emoji": one emoji picturing the meaning for concrete words, empty for abstract ones. No numbers, proper names or function words.' +
+      (params.exclude && params.exclude.length ? ' Do NOT include: ' + params.exclude.join(', ') + '.' : ''),
+      'SCHEMA: {"vocab":[{"word":"...","translation":"...","emoji":"","inExercise":true}]}', '',
+      'EXERCISE SENTENCES:', sentences || '(none)', '', 'VIDEO TEXT:', text].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
+    const plan = extractJSON(res.text);
+    return { vocab: cleanVocab(plan.vocab), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  /** Domanda a scelta multipla su una frase del video. params: { sentence, context, lang, level, tricky, apiKey, model, fetchImpl } → { question, options, correct, tricky } */
+  async function generateMC(params) {
+    const lang = params.lang || 'it';
+    const system = 'You write comprehension questions for language students. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['LANGUAGE: ' + lang + '   STUDENT LEVEL: ' + (params.level || 'B1'),
+      'Write ONE multiple-choice comprehension question in ' + lang + ' about the SENTENCE below (the student has just listened to it). Four short options, exactly one correct. ' +
+      'Wrong options must be plausible and of the same kind as the right one.' + (params.tricky ? ' One wrong option must be "tricky": it echoes words that really occur in the sentence but does not answer the question, or is a near-synonym with the wrong nuance; give its index in "tricky".' : ' Set "tricky" to null.'),
+      'SCHEMA: {"question":"...","options":["a","b","c","d"],"correct":0,"tricky":null}', '',
+      'SENTENCE: ' + String(params.sentence || ''), '', 'CONTEXT (surrounding transcript):', String(params.context || '').slice(0, 3000)].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 600, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    const options = (Array.isArray(j.options) ? j.options : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 4);
+    if (!j.question || options.length < 2) throw new Error('Il modello non ha restituito una domanda valida');
+    return { question: String(j.question).trim(), options: options, correct: Math.max(0, Math.min(options.length - 1, j.correct | 0)), tricky: (j.tricky == null || j.tricky === j.correct) ? null : Math.max(0, Math.min(options.length - 1, j.tricky | 0)), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  /** Traduzione (parziale o totale) di una frase, in inglese britannico curato. params: { text, whole, context, lang, apiKey, model, fetchImpl } → { translation } */
+  async function translateSentence(params) {
+    const lang = params.lang || 'it';
+    const target = params.target || 'British English';
+    const system = 'You are a professional translator for language teachers. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['Translate the TEXT from ' + lang + ' into natural, idiomatic ' + target + ' (British spelling: colour, realise, organise; British idiom). Keep the register of the original. ' +
+      (params.whole ? 'Translate the whole sentence.' : 'The TEXT is a fragment of the SENTENCE: translate only the fragment, as it works inside that sentence (not the whole sentence).'),
+      'SCHEMA: {"translation":"..."}', '',
+      'TEXT: ' + String(params.text || ''), '', 'SENTENCE: ' + String(params.whole ? params.text : (params.sentence || '')), '', 'CONTEXT:', String(params.context || '').slice(0, 2000)].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 400, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    if (!j.translation) throw new Error('Nessuna traduzione nella risposta');
+    return { translation: String(j.translation).trim(), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  /** Traduzioni per una lista di parole (nel contesto del video). params: { words:[...], lang, support, context, apiKey, model, fetchImpl } → { translations: {word: translation} } */
+  async function translateWords(params) {
+    const lang = params.lang || 'it', sup = params.support || (lang === 'en' ? 'it' : 'en');
+    const words = (params.words || []).map(function (w) { return String(w).trim(); }).filter(Boolean);
+    if (!words.length) return { translations: {}, ai: null };
+    const system = 'You are a bilingual dictionary for language teachers. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['Translate each ' + lang + ' word into ' + sup + ' with the meaning it has in this context (one or two words each; keep the dictionary form). Also give one emoji for concrete words (empty for abstract).',
+      'SCHEMA: {"vocab":[{"word":"...","translation":"...","emoji":""}]}', '',
+      'WORDS: ' + words.join(', '), '', 'CONTEXT:', String(params.context || '').slice(0, 6000)].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1200, fetchImpl: params.fetchImpl });
+    const plan = extractJSON(res.text);
+    const map = {}, emo = {};
+    cleanVocab(plan.vocab).forEach(function (v) { map[L.normalize(v.word)] = v.translation; if (v.emoji) emo[L.normalize(v.word)] = v.emoji; });
+    const translations = {}, emojis = {};
+    words.forEach(function (w) { const k = L.normalize(w); if (map[k]) translations[w] = map[k]; if (emo[k]) emojis[w] = emo[k]; });
+    return { translations: translations, emojis: emojis, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /** Flusso completo: prompt → modello → piano applicato. params: { chunks, lines, duration, target, n, types, lang, level, focus, apiKey, model, fetchImpl } */
@@ -269,10 +360,10 @@
     const duration = params.duration;
     const chunks = params.chunks || G.annotate(G.buildChunks(params.lines, { duration: duration, lang: lang }), { lang: lang, duration: duration });
     const target = params.target && params.target > 0 ? Math.min(params.target, duration) : duration;
-    const msgs = buildMessages({ chunks: chunks, n: params.n, types: params.types, lang: lang, level: params.level, focus: params.focus, duration: duration, target: target, range: params.range });
+    const msgs = buildMessages({ chunks: chunks, n: params.n, auto: params.auto, types: params.types, lang: lang, level: params.level, focus: params.focus, duration: duration, target: target, range: params.range, support: params.support, nVocab: params.nVocab, tricky: params.tricky });
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: msgs.system, user: msgs.user, maxTokens: params.maxTokens, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    const applied = applyPlan(plan, { chunks: chunks, lang: lang, duration: duration, target: target, n: params.n, types: params.types });
+    const applied = applyPlan(plan, { chunks: chunks, lang: lang, duration: duration, target: target, n: params.n, types: params.types, auto: params.auto });
     applied.chunks = chunks;
     applied.ai = { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL), raw: res.text };
     return applied;
@@ -283,5 +374,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, translateSentence: translateSentence };
 });

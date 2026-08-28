@@ -11,7 +11,8 @@
     scramble: 'Riordina la frase (scrambled sentence)',
     missing: 'Trova la parola mancante (find the missing word)',
     extra: 'Trova la parola in più (find the extra word)',
-    wrong: 'Trova la parola sbagliata (find the wrong word)'
+    wrong: 'Trova la parola sbagliata (find the wrong word)',
+    mc: 'Scelta multipla (multiple choice)'
   };
 
   const INSTRUCTIONS = {
@@ -20,7 +21,8 @@
     scramble: 'Tocca le parole nell\'ordine giusto per ricostruire la frase che hai sentito.',
     missing: 'In questa frase manca una parola rispetto a quello che hai sentito: scrivila.',
     extra: 'In questa frase c\'è una parola in più rispetto a quello che hai sentito: toccala.',
-    wrong: 'In questa frase c\'è una parola diversa da quella che hai sentito: toccala e scrivi quella giusta.'
+    wrong: 'In questa frase c\'è una parola diversa da quella che hai sentito: toccala e scrivi quella giusta.',
+    mc: 'Ascolta e scegli la risposta giusta.'
   };
 
   function shuffle(arr, rand) {
@@ -90,14 +92,13 @@
       const answers = idx.map(function (i) { return tokens[i].core; });
       const data = { tokens: tokens.map(function (t) { return t.raw; }), gapIndices: idx, answers: answers };
       if (type === 'gapbank') {
-        // banca di parole: le risposte più, se richiesto, parole sbagliate prese dal lessico del video
+        // banca di parole: le risposte più, se richiesto, parole sbagliate SIMILI alle risposte (stessa desinenza/lunghezza), prese dal lessico del video
         let distractors = Array.isArray(ch.distractors) ? ch.distractors.slice() : [];
         const nd = o.distractors == null ? 2 : o.distractors;
         if (!distractors.length && nd > 0 && Array.isArray(o.vocab)) {
           const used = new Set(tokens.map(function (t) { return t.norm; }));
           const pool = o.vocab.filter(function (w) { return !used.has(L.normalize(w)); });
-          const sh = shuffle(pool, rand);
-          distractors = sh.slice(0, nd);
+          distractors = similarDistractors(answers, pool, nd, rand);
         }
         data.distractors = distractors;
         data.wordBank = shuffle(answers.concat(distractors), rand);
@@ -106,7 +107,7 @@
     }
 
     if (type === 'scramble') {
-      if (tokens.length > 14) return null;
+      if (tokens.length > 24) return null;
       const words = tokens.map(function (t, i) {
         let w = t.core;
         if (i === 0 && w.length > 1 && w.slice(1) === w.slice(1).toLowerCase()) w = w[0].toLowerCase() + w.slice(1);
@@ -153,6 +154,16 @@
       return { type: 'extra', data: { shown: shown, extraIndex: p, extraWord: word, original: tokens.map(function (t) { return t.raw; }) } };
     }
 
+    if (type === 'mc') {
+      // scelta multipla: domanda + 4 opzioni scritte dall'insegnante o dal modello (choices); senza domanda non è costruibile
+      const q = String(ch.question || '').trim();
+      const opts4 = Array.isArray(ch.options) ? ch.options.map(function (x) { return String(x || '').trim(); }) : [];
+      if (!q || opts4.filter(Boolean).length < 2) return null;
+      const correct = Math.max(0, Math.min(opts4.length - 1, ch.correct | 0));
+      const tricky = (ch.tricky == null || ch.tricky === correct) ? null : Math.max(0, Math.min(opts4.length - 1, ch.tricky | 0));
+      return { type: 'mc', data: { question: q, options: opts4, correct: correct, tricky: tricky } };
+    }
+
     if (type === 'wrong') {
       let i = -1, repl = null;
       if (ch.wrongWord) {
@@ -176,9 +187,49 @@
     return null;
   }
 
+  /** Quanto una parola "assomiglia" a un'altra: stessa desinenza, stesso inizio, lunghezza simile (per distrattori credibili). */
+  function similarity(a, b) {
+    const x = L.normalize(a), y = L.normalize(b);
+    if (!x || !y || x === y) return -1;
+    let suf = 0; while (suf < Math.min(x.length, y.length) - 1 && x[x.length - 1 - suf] === y[y.length - 1 - suf]) suf++;
+    let pre = 0; while (pre < Math.min(x.length, y.length) - 1 && x[pre] === y[pre]) pre++;
+    const lenPenalty = Math.abs(x.length - y.length) * 0.6;
+    return Math.min(suf, 4) * 1.5 + Math.min(pre, 3) * 1.2 - lenPenalty + (x[0] === y[0] ? 0.5 : 0);
+  }
+  /** nd parole sbagliate ma plausibili: per ogni risposta la parola del lessico più simile (mai uguale a una risposta). */
+  function similarDistractors(answers, pool, nd, rand) {
+    const taken = new Set(answers.map(function (a) { return L.normalize(a); }));
+    const out = [];
+    let k = 0, guard = 0;
+    while (out.length < nd && guard++ < 50) {
+      const ans = answers[k % answers.length]; k++;
+      let best = null, bestS = -Infinity;
+      pool.forEach(function (w) { const n = L.normalize(w); if (taken.has(n)) return; const sc = similarity(ans, w) + rand() * 0.8; if (sc > bestS) { bestS = sc; best = w; } });
+      if (!best) break;
+      taken.add(L.normalize(best)); out.push(best);
+    }
+    return out;
+  }
+
   function eq(a, b, strict) {
     const opts = { accents: !!strict };
     return L.normalize(a, opts) === L.normalize(b, opts);
+  }
+
+  /**
+   * Spazi "uniti": parole nascoste adiacenti formano un unico spazio in cui lo studente scrive tutta l'espressione.
+   * Ritorna [{ indices:[i,...], answer:'parola1 parola2' }] nell'ordine della frase.
+   */
+  function gapRuns(d) {
+    const idx = (d.gapIndices || []).slice().sort(function (a, b) { return a - b; });
+    const runs = [];
+    idx.forEach(function (i) {
+      const last = runs[runs.length - 1];
+      const ans = d.answers[d.gapIndices.indexOf(i)];
+      if (last && i === last.indices[last.indices.length - 1] + 1) { last.indices.push(i); last.answer += ' ' + ans; }
+      else runs.push({ indices: [i], answer: ans });
+    });
+    return runs;
   }
 
   /** Corregge una risposta. Ritorna { correct, detail }. */
@@ -189,6 +240,12 @@
       case 'gap':
       case 'gapbank': {
         const arr = Array.isArray(answer) ? answer : [answer];
+        const runs = gapRuns(d);
+        if (runs.length !== d.gapIndices.length && arr.length === runs.length) {
+          // risposte per spazio unito (una per gruppo di parole adiacenti)
+          const perRun = runs.map(function (r, k) { return eq(arr[k] || '', r.answer, strict); });
+          return { correct: perRun.every(Boolean), detail: perRun };
+        }
         const per = d.answers.map(function (a, i) { return eq(arr[i] || '', a, strict); });
         return { correct: per.every(Boolean), detail: per };
       }
@@ -200,6 +257,8 @@
       }
       case 'missing':
         return { correct: eq(answer || '', d.answer, strict), detail: null };
+      case 'mc':
+        return { correct: Number(answer) === d.correct, detail: null };
       case 'extra':
         return { correct: Number(answer) === d.extraIndex, detail: null };
       case 'wrong': {
@@ -219,11 +278,12 @@
       case 'gap': case 'gapbank': return d.answers.join(', ');
       case 'scramble': return d.words.join(' ');
       case 'missing': return d.answer;
+      case 'mc': return d.options[d.correct];
       case 'extra': return d.extraWord;
       case 'wrong': return d.wrongWord + ' → ' + d.answer;
     }
     return '';
   }
 
-  return { LABELS: LABELS, INSTRUCTIONS: INSTRUCTIONS, buildExercise: buildExercise, check: check, solution: solution, shuffle: shuffle };
+  return { LABELS: LABELS, INSTRUCTIONS: INSTRUCTIONS, buildExercise: buildExercise, check: check, solution: solution, shuffle: shuffle, gapRuns: gapRuns, similarity: similarity, similarDistractors: similarDistractors };
 });
