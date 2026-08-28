@@ -97,6 +97,20 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   await page.waitForTimeout(200);
   const ex0 = await page.evaluate(function () { const ls = Object.values(window.VLApp.S.lessons)[0]; const e = ls.exercises[0]; return { m: e.markerTime, end: e.segment.end }; });
   assert.ok(Math.abs(ex0.m - ex0.end - 0.1) < 0.06, 'marker allineato a fine frase');
+  // fascia copri-sottotitoli: si accende dall'editor, si trascina, la posizione resta nella lezione
+  await page.check('#e-cover');
+  await page.waitForTimeout(150);
+  const cov = await page.$('#e-player .cover');
+  assert.ok(cov, 'fascia visibile');
+  await cov.scrollIntoViewIfNeeded();
+  const cb = await cov.boundingBox();
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2 - 60, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const covOpt = await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].options.cover; });
+  assert.ok(covOpt.on && covOpt.y < 71, 'fascia spostata e salvata: ' + JSON.stringify(covOpt));
   // persistenza
   await page.reload();
   await page.waitForSelector('#view-home.active');
@@ -109,8 +123,13 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   console.log('3. modalità studente: percorso completo');
   await page.click('#btn-student');
   await page.waitForSelector('#view-student.active');
-  await page.waitForSelector('#s-panel button:has-text("Inizia")');
-  await page.click('#s-panel button:has-text("Inizia")');
+  await page.waitForSelector('#btn-start:visible');
+  await page.waitForSelector('#s-player .cover');
+  assert.ok(await page.$eval('#s-cover', function (c) { return c.checked; }), 'fascia attiva anche in modalità studente');
+  await page.uncheck('#s-cover');
+  await page.waitForTimeout(100);
+  assert.ok(!(await page.$('#s-player .cover')), 'fascia spenta dallo studente/insegnante');
+  await page.click('#btn-start');
   const lesson = await page.evaluate(function () { return JSON.parse(JSON.stringify(window.VLApp.S.student.lesson)); });
   const samples = [];
   const tStart = Date.now();
@@ -192,9 +211,9 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
 
   console.log('3b. barra libera, blocco, clic sui numeri');
   await page.click('#s-panel button:has-text("Ricomincia")');
-  await page.waitForSelector('#s-panel button:has-text("Inizia")');
+  await page.waitForSelector('#btn-start:visible');
   assert.ok(!(await page.$eval('#s-lock', function (c) { return c.checked; })), 'barra libera di default');
-  await page.click('#s-panel button:has-text("Inizia")');
+  await page.click('#btn-start');
   await page.waitForTimeout(300);
   const exs = lesson.exercises;
   // salto in avanti oltre gli esercizi 1 e 2: nessun esercizio compare e il video NON torna indietro
@@ -233,7 +252,7 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   page2.on('pageerror', function (e) { errors.push('pageerror(2): ' + e.message); });
   await page2.goto(link);
   await page2.waitForSelector('#view-student.active');
-  await page2.waitForSelector('#s-panel button:has-text("Inizia")');
+  await page2.waitForSelector('#btn-start:visible');
   assert.strictEqual(await page2.$eval('#btn-edit', function (b) { return b.style.display; }), 'none', 'niente editor nel link studente');
   console.log('   link studente ok, lunghezza', link.length);
 
