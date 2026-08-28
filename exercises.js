@@ -108,9 +108,12 @@
 
     if (type === 'scramble') {
       if (tokens.length > 24) return null;
+      // la prima parola tiene la maiuscola e l'ultima il punto (o ? !): sono suggerimenti voluti su inizio e fine della frase;
+      // la punteggiatura interna (virgole) resta fuori e ricompare a risposta giusta
+      const last = tokens.length - 1;
       const words = tokens.map(function (t, i) {
         let w = t.core;
-        if (i === 0 && w.length > 1 && w.slice(1) === w.slice(1).toLowerCase()) w = w[0].toLowerCase() + w.slice(1);
+        if (i === last && /[.!?…]$/.test(t.post || '')) w += (t.post.match(/[.!?…]+$/) || [''])[0];
         return w;
       }).filter(Boolean);
       if (words.length < 3) return null;

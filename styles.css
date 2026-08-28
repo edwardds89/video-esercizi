@@ -230,6 +230,16 @@ button.star.on { color: #e0a800; }
 /* scheda abbinamento */
 .match { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 8px 0; }
 .match .col { display: flex; flex-direction: column; gap: 6px; }
+/* coppie abbinate: salgono in alto, una riga per coppia, legate da una linea; non più cliccabili (tranne la stella) */
+.match-done { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.match-done:empty { display: none; }
+.mpair { display: grid; grid-template-columns: 1fr 18px 1fr; align-items: center; }
+.mpair .link { height: 3px; background: var(--ok); }
+.mpair .mchip { pointer-events: none; }
+.mpair .mchip:first-child { border-radius: 10px 0 0 10px; border-right-color: transparent; }
+.mpair .mchip:last-child { border-radius: 0 10px 10px 0; border-left-color: transparent; }
+.mpair .mchip button.star { pointer-events: auto; }
+.mchip[data-flip] { will-change: transform; }
 .mchip { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--chip); border: 2px solid var(--line); border-radius: 10px; padding: 6px 10px; cursor: pointer; font-size: 18px; min-height: 44px; user-select: none; }
 .mchip:hover { border-color: #b9c2cc; }
 .mchip.sel { border-color: var(--marker); background: #ffe8cc; }
@@ -281,14 +291,6 @@ button.star.on { color: #e0a800; }
 .translation { margin-top: 8px; padding: 8px 10px; background: #eef4ff; border-radius: 8px; font-size: 16px; }
 
 /* abbinamento: ogni coppia trovata ha il suo colore */
-.mchip.good.pair-0 { background: #e6f4ea; border-color: #1a7f37; color: #14532d; }
-.mchip.good.pair-1 { background: #e3ecff; border-color: #1f6feb; color: #123a8a; }
-.mchip.good.pair-2 { background: #fff1c2; border-color: #d99a00; color: #6b4b00; }
-.mchip.good.pair-3 { background: #fde2e2; border-color: #d43c3c; color: #7a1f1f; }
-.mchip.good.pair-4 { background: #efe5ff; border-color: #7c4dff; color: #3d1f99; }
-.mchip.good.pair-5 { background: #ffe6cc; border-color: #ff8a00; color: #7a3e00; }
-.mchip.good.pair-6 { background: #d8f5f2; border-color: #0f9e8e; color: #0b5c53; }
-.mchip.good.pair-7 { background: #ffe0f0; border-color: #d6338f; color: #7a1a52; }
 .ex-panel .actions .chip.withtext { font-size: 14px; padding: 6px 10px; display: inline-flex; align-items: center; gap: 4px; }
 .chip.struck { background: var(--bad-bg) !important; border-color: var(--bad) !important; color: var(--bad); text-decoration: line-through; font-weight: 600; }
 .chip.struck .fix { text-decoration: none; color: #0f5a27; font-weight: 800; }

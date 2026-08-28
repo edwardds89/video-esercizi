@@ -1994,49 +1994,82 @@
     const kind = st.cards[st.cardIdx];
     if (kind === 'matching') renderMatching(p, ls, st); else renderFlashcards(p, ls, st);
   }
+  /** FLIP: anima lo spostamento degli elementi con data-flip dentro root tra prima e dopo `mutate`. */
+  function flipMove(root, mutate, animate) {
+    const before = {};
+    if (animate) $$('[data-flip]', root).forEach(function (e) { before[e.getAttribute('data-flip')] = e.getBoundingClientRect(); });
+    mutate();
+    if (!animate) return;
+    $$('[data-flip]', root).forEach(function (e) {
+      const b = before[e.getAttribute('data-flip')]; if (!b) return;
+      const a = e.getBoundingClientRect();
+      const dx = b.left - a.left, dy = b.top - a.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      e.style.transition = 'none'; e.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      requestAnimationFrame(function () {
+        e.style.transition = 'transform .45s cubic-bezier(.2,.8,.2,1)'; e.style.transform = '';
+        setTimeout(function () { e.style.transition = ''; }, 500);
+      });
+    });
+  }
   function renderMatching(p, ls, st) {
     const all = EX.shuffle(cardVocab(ls), L.rng(Date.now() % 9973));
     const per = 8, rounds = Math.ceil(all.length / per);
+    const fx = !ls.options || ls.options.fx !== false;
     let round = 0;
     const playRound = function () {
       p.innerHTML = '';
       const words = all.slice(round * per, (round + 1) * per);
       cardHeader(p, 'Parole utili: abbina', rounds > 1 ? '(' + (round + 1) + ' di ' + rounds + ')' : '');
-      p.appendChild(el('div', { class: 'instr', text: 'Tocca una parola e poi la sua foto o traduzione. La stella segna le parole da ripassare.' }));
+      p.appendChild(el('div', { class: 'instr', text: 'Tocca una parola e poi la sua foto o traduzione (o il contrario): le coppie giuste salgono in alto, legate. La stella segna le parole da ripassare.' }));
+      // le coppie abbinate si accumulano qui sopra, una riga per coppia, e non si toccano più
+      const done = el('div', { class: 'match-done' });
       const grid = el('div', { class: 'match' });
       const left = el('div', { class: 'col' }), right = el('div', { class: 'col' });
-      let sel = null, doneN = 0, errors = 0;
+      const chipL = {}, chipR = {};
+      let sel = null, doneN = 0, errors = 0;   // sel = { side: 'l' | 'r', w }
       const fb = el('div', { class: 'feedback' });
-      const leftEls = {};
-      const colorOf = {}; words.forEach(function (w, k) { colorOf[w.id] = k % 8; });   // ogni coppia abbinata prende il suo colore
+      const clearSel = function () { $$('.mchip.sel', grid).forEach(function (x) { x.classList.remove('sel'); }); sel = null; };
+      const matched = function (w) {
+        clearSel(); doneN++; fb.textContent = '';
+        flipMove(p, function () {
+          const row = el('div', { class: 'mpair' }, [
+            el('div', { class: 'mchip good', 'data-id': w.id, 'data-flip': 'l-' + w.id }, [el('span', { class: 'txt', text: w.word }), starButton(ls, w.word)]),
+            el('div', { class: 'link' }),
+            el('div', { class: 'mchip good target', 'data-flip': 'r-' + w.id }, [backOf(w)])
+          ]);
+          done.appendChild(row);
+          chipL[w.id].remove(); chipR[w.id].remove();
+        }, fx);
+        if (doneN === words.length) {
+          fb.textContent = '✓ Tutte abbinate!' + (errors ? ' (' + errors + ' errori)' : ''); fb.style.color = 'var(--ok)';
+          if (fx) celebrate(p, fb);
+          const nextBtn = el('button', { class: 'primary', text: round + 1 < rounds ? 'Avanti ▶' : 'Continua ▶', onclick: function () { if (round + 1 < rounds) { round++; playRound(); } else nextCard(); } });
+          foot.insertBefore(nextBtn, foot.firstChild);
+        }
+      };
+      const pick = function (side, w, c) {
+        if (sel && sel.side !== side) {
+          if (sel.w.id === w.id) return matched(w);
+          errors++; c.classList.add('wrongpick'); setTimeout(function () { c.classList.remove('wrongpick'); }, 700);
+          fb.textContent = '✗ Non è questa. Riprova.'; fb.style.color = 'var(--bad)';
+          return;
+        }
+        clearSel(); c.classList.add('sel'); sel = { side: side, w: w };
+        fb.textContent = side === 'l' ? 'Ora tocca la sua foto o traduzione.' : 'Ora tocca la parola giusta.'; fb.style.color = 'var(--muted)';
+      };
       words.forEach(function (w) {
-        const c = el('div', { class: 'mchip', 'data-id': w.id }, [el('span', { class: 'txt', text: w.word }), starButton(ls, w.word)]);
-        c.addEventListener('click', function () { if (c.classList.contains('good')) return; $$('.mchip.sel', left).forEach(function (x) { x.classList.remove('sel'); }); c.classList.add('sel'); sel = w; });
-        leftEls[w.id] = c; left.appendChild(c);
+        const c = el('div', { class: 'mchip', 'data-id': w.id, 'data-flip': 'l-' + w.id }, [el('span', { class: 'txt', text: w.word }), starButton(ls, w.word)]);
+        c.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('button.star')) return; pick('l', w, c); });
+        chipL[w.id] = c; left.appendChild(c);
       });
-      EX.shuffle(words, L.rng(words.length * 31 + round)).forEach(function (w) {
-        const c = el('div', { class: 'mchip target' }, [backOf(w)]);
-        c.addEventListener('click', function () {
-          if (c.classList.contains('good')) return;
-          if (!sel) { fb.textContent = 'Prima tocca una parola a sinistra.'; fb.style.color = 'var(--muted)'; return; }
-          if (sel.id === w.id) {
-            c.classList.add('good', 'pair-' + colorOf[w.id]); leftEls[w.id].classList.remove('sel'); leftEls[w.id].classList.add('good', 'pair-' + colorOf[w.id]); sel = null; doneN++;
-            fb.textContent = ''; 
-            if (doneN === words.length) {
-              fb.textContent = '✓ Tutte abbinate!' + (errors ? ' (' + errors + ' errori)' : ''); fb.style.color = 'var(--ok)';
-              if (!ls.options || ls.options.fx !== false) celebrate(p, fb);
-              const nextBtn = el('button', { class: 'primary', text: round + 1 < rounds ? 'Avanti ▶' : 'Continua ▶', onclick: function () { if (round + 1 < rounds) { round++; playRound(); } else nextCard(); } });
-              foot.insertBefore(nextBtn, foot.firstChild);
-            }
-          } else {
-            errors++; c.classList.add('wrongpick'); setTimeout(function () { c.classList.remove('wrongpick'); }, 700);
-            fb.textContent = '✗ Non è questa. Riprova.'; fb.style.color = 'var(--bad)';
-          }
-        });
-        right.appendChild(c);
+      EX.shuffle(words.slice(), L.rng(words.length * 31 + round)).forEach(function (w) {
+        const c = el('div', { class: 'mchip target', 'data-flip': 'r-' + w.id }, [backOf(w)]);
+        c.addEventListener('click', function () { pick('r', w, c); });
+        chipR[w.id] = c; right.appendChild(c);
       });
       grid.appendChild(left); grid.appendChild(right);
-      p.appendChild(grid); p.appendChild(fb);
+      p.appendChild(done); p.appendChild(grid); p.appendChild(fb);
       const foot = cardFooter(p, st);
     };
     playRound();
