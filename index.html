@@ -30,6 +30,16 @@
       </div>
       <p class="hint">Le lezioni sono salvate in questo browser. Per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
     </div>
+    <div class="card" id="bookmarklet-card">
+      <h2>Pulsante per Chrome: dal video alla bozza senza copia-incolla</h2>
+      <p>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla): <a id="bookmarklet-link" class="chip" href="#" style="font-weight:600">▶ Video Esercizi</a></p>
+      <p class="hint">Poi, su un video di YouTube, cliccalo: legge titolo, durata e trascrizione dal pannello di YouTube e apre qui la nuova lezione già compilata. Se il video non ha la trascrizione ti avvisa che non è utilizzabile (a meno di incollarla a mano).</p>
+      <details><summary class="hint">Non riesci a trascinarlo? Crea un preferito a mano</summary>
+        <p class="hint">Aggiungi un preferito qualsiasi, poi modificalo: nome "Video Esercizi", indirizzo = il codice qui sotto.</p>
+        <div id="bookmarklet-code" class="linkbox"></div>
+        <div class="row" style="margin-top:6px"><button id="bookmarklet-copy" class="small">Copia il codice</button></div>
+      </details>
+    </div>
   </section>
 
   <!-- NUOVA LEZIONE -->
@@ -51,7 +61,17 @@
           </div>
           <div class="grid2">
             <div><label>Numero di esercizi</label><input id="f-n" type="number" min="1" max="40" value="10"></div>
-            <div><label>Durata finale desiderata (mm:ss)</label><input id="f-target" type="text" placeholder="es. 10:00 — vuoto = nessun taglio">
+            <div><label>Durata per lo studente</label>
+              <select id="f-range">
+                <option value="full">Tutto il video (nessun taglio)</option>
+                <option value="300">Circa 5 minuti</option>
+                <option value="480">Circa 8 minuti</option>
+                <option value="600">Circa 10 minuti</option>
+                <option value="720">Circa 12 minuti</option>
+                <option value="900">Circa 15 minuti</option>
+                <option value="custom">Personalizzata…</option>
+              </select>
+              <input id="f-target" type="text" placeholder="mm:ss" class="short" style="display:none;margin-top:6px">
               <div id="f-duration-hint" class="hint"></div></div>
           </div>
           <label>Tipi di esercizio</label>
@@ -76,10 +96,11 @@
           <div id="f-player" class="player-box"></div>
           <label>Trascrizione con i tempi</label>
           <textarea id="f-transcript" style="min-height:260px" placeholder="0:00&#10;ciao a tutti&#10;0:03&#10;oggi parliamo di…"></textarea>
-          <div class="hint">Su YouTube: sotto il video apri la descrizione → <b>Mostra trascrizione</b> → seleziona tutto il testo del pannello → copia → incolla qui. Vanno bene anche file .srt / .vtt.</div>
+          <div class="hint">Con il <a href="#" data-view="home">pulsante per Chrome</a> arriva da sola. A mano: su YouTube, sotto il video apri la descrizione → <b>Mostra trascrizione</b> → seleziona tutto il testo del pannello → copia → incolla qui. Vanno bene anche file .srt / .vtt.</div>
           <div id="f-transcript-status" class="hint"></div>
         </div>
       </div>
+      <div id="f-error"></div>
       <div class="row" style="margin-top:16px">
         <button id="btn-generate" class="primary big">Genera la bozza</button>
         <button data-view="home">Annulla</button>
@@ -204,6 +225,7 @@
 <script src="generator.js"></script>
 <script src="ai.js"></script>
 <script src="demo-data.js"></script>
+<script src="bookmarklet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

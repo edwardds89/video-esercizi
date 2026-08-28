@@ -199,8 +199,23 @@
   });
 
   // ---------- HOME ----------
+  function bookmarkletUrl() {
+    if (!window.VL_BOOKMARKLET) return '';
+    const base = location.origin + location.pathname;
+    return 'javascript:' + encodeURIComponent('(' + window.VL_BOOKMARKLET.toString() + ')(' + JSON.stringify(base) + ')');
+  }
+  function renderBookmarklet() {
+    const a = $('#bookmarklet-link'); if (!a) return;
+    const url = bookmarkletUrl();
+    if (!url || !/^https?:/.test(location.protocol)) { $('#bookmarklet-card').style.display = 'none'; return; }
+    a.setAttribute('href', url);
+    a.onclick = function (e) { e.preventDefault(); toast('Trascina il pulsante nella barra dei preferiti, poi usalo su YouTube'); };
+    $('#bookmarklet-code').textContent = url;
+    $('#bookmarklet-copy').onclick = function () { copyText(url); };
+  }
   function renderHome() {
     show('home');
+    renderBookmarklet();
     const list = $('#lesson-list');
     list.innerHTML = '';
     const items = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
@@ -280,8 +295,8 @@
     }
     return promise.then(function (r) {
       if (!r) {
-        const d = G.generateDraft({ chunks: chunks, lines: ls.lines, duration: duration, n: p.n, target: p.target, types: p.types, lang: ls.lang, contextBefore: p.contextBefore, seed: (Date.now() % 100000) + 1 });
-        r = { exercises: d.exercises, cuts: d.cuts, stats: d.stats, warnings: d.stats.shortfall > 5 ? ['Durata target non raggiungibile senza tagliare gli esercizi: mancano ' + Math.round(d.stats.shortfall) + 's.'] : [] };
+        const d = G.generateDraft({ chunks: chunks, lines: ls.lines, duration: duration, n: p.n, target: p.target, tolerance: p.tolerance, types: p.types, lang: ls.lang, contextBefore: p.contextBefore, seed: (Date.now() % 100000) + 1 });
+        r = { exercises: d.exercises, cuts: d.cuts, stats: d.stats, warnings: d.stats.shortfall > Math.max(5, p.tolerance || 0) ? ['Durata target non raggiungibile senza tagliare gli esercizi: mancano ' + Math.round(d.stats.shortfall) + 's.'] : [] };
         ls.ai = null;
       }
       ls.exercises = r.exercises;
@@ -296,7 +311,11 @@
 
   // ---------- NUOVA LEZIONE ----------
   const N = { videoId: null, duration: 0, ok: false };
-  function openNew() {
+  function showFormError(msg) {
+    const box = $('#f-error'); box.innerHTML = '';
+    if (msg) box.appendChild(el('div', { class: 'notice bad', text: msg }));
+  }
+  function openNew(prefill) {
     show('new');
     $('#f-ai').checked = !!S.settings.apiKey;
     $('#f-ai-status').textContent = S.settings.apiKey ? 'chiave salvata · modello ' + S.settings.model : 'nessuna chiave: apri "Impostazioni AI" per aggiungerla';
@@ -306,6 +325,40 @@
     $('#f-transcript-status').textContent = '';
     $('#f-duration-hint').textContent = '';
     $('#new-title').textContent = 'Nuova lezione';
+    $('#f-range').value = 'full'; $('#f-target').style.display = 'none';
+    showFormError('');
+    if (prefill) {
+      $('#f-url').value = prefill.v ? 'https://www.youtube.com/watch?v=' + prefill.v : (prefill.url || '');
+      $('#f-title').value = prefill.title || '';
+      $('#f-transcript').value = prefill.transcript || '';
+      if (prefill.duration > 0) { N.duration = prefill.duration; }
+      $('#new-title').textContent = 'Nuova lezione (importata da YouTube)';
+      updateTranscriptStatus();
+      suggestRange();
+      if (!(prefill.transcript || '').trim()) showFormError('Questo video non ha una trascrizione disponibile: non è utilizzabile, a meno di incollare la trascrizione a mano qui a destra (o scegliere un altro video).');
+      checkVideo();
+    }
+  }
+  /** Propone "circa 10 minuti" se il video è più lungo di 11 minuti, altrimenti tutto il video. */
+  function suggestRange() {
+    let d = N.duration || 0;
+    let estimated = false;
+    if (!d) {
+      const p = G.parseTranscript($('#f-transcript').value);
+      if (p.lines.length) { d = p.lines[p.lines.length - 1].end + 2; estimated = true; }
+    }
+    const sel = $('#f-range');
+    if (d > 660) sel.value = '600';
+    else if (d > 0) sel.value = 'full';
+    $('#f-target').style.display = sel.value === 'custom' ? '' : 'none';
+    if (d > 0) $('#f-duration-hint').textContent = (estimated ? 'Durata stimata dalla trascrizione: ' : 'Durata del video: ') + fmtMin(d);
+  }
+  $('#f-range').addEventListener('change', function () { $('#f-target').style.display = $('#f-range').value === 'custom' ? '' : 'none'; });
+  function selectedTarget(duration) {
+    const v = $('#f-range').value;
+    if (v === 'full') return duration;
+    if (v === 'custom') { const t = L.parseTime($('#f-target').value.trim()); return isNaN(t) || t <= 0 ? NaN : Math.min(t, duration); }
+    return Math.min(parseInt(v, 10), duration);
   }
   $('#f-url').addEventListener('change', checkVideo);
   $('#f-url').addEventListener('paste', function () { setTimeout(checkVideo, 50); });
@@ -329,34 +382,39 @@
   function readDuration() {
     if (!S.player || S.view !== 'new') return;
     const d = S.player.duration();
-    if (d > 0) { N.duration = d; $('#f-duration-hint').textContent = 'Durata del video: ' + fmtMin(d); }
+    if (d > 0 && Math.abs(d - N.duration) > 1) { const had = N.duration > 0; N.duration = d; if (!had) suggestRange(); else $('#f-duration-hint').textContent = 'Durata del video: ' + fmtMin(d); }
   }
-  $('#f-transcript').addEventListener('input', function () {
+  function updateTranscriptStatus() {
     const p = G.parseTranscript($('#f-transcript').value);
     const st = $('#f-transcript-status');
     if (!p.lines.length) { st.textContent = $('#f-transcript').value.trim() ? '⚠ Non trovo i tempi (0:00, 0:03…): copia il testo dal pannello "Mostra trascrizione".' : ''; return; }
     const last = p.lines[p.lines.length - 1];
     st.textContent = '✓ ' + p.lines.length + ' righe (' + p.format + '), ultimo tempo ' + fmtMin(last.start) + (N.duration ? '' : ' — durata stimata ' + fmtMin(last.end + 2));
-  });
+    if (!N.duration) { N.duration = 0; }
+  }
+  $('#f-transcript').addEventListener('input', function () { showFormError(''); updateTranscriptStatus(); if (!N.duration && $('#f-range').value === 'full') suggestRange(); });
   $('#btn-generate').addEventListener('click', function () {
     const url = $('#f-url').value.trim();
     const id = extractVideoId(url);
     const parsed = G.parseTranscript($('#f-transcript').value);
-    if (!id) return toast('Inserisci un link YouTube valido');
-    if (!parsed.lines.length) return toast('Incolla la trascrizione con i tempi');
+    showFormError('');
+    if (!id) return showFormError('Inserisci un link YouTube valido (es. https://www.youtube.com/watch?v=…).');
+    if (!parsed.lines.length) {
+      return showFormError($('#f-transcript').value.trim()
+        ? 'La trascrizione incollata non ha i tempi (0:00, 0:07…): senza tempi il video non è utilizzabile. Copia il testo dal pannello "Mostra trascrizione" di YouTube.'
+        : 'Manca la trascrizione: questo video non è utilizzabile finché non la incolli a mano (YouTube → Mostra trascrizione) o non usi il pulsante per Chrome. Se YouTube non la offre, scegli un altro video.');
+    }
     const types = $$('#f-types input:checked').map(function (i) { return i.value; });
-    if (!types.length) return toast('Scegli almeno un tipo di esercizio');
+    if (!types.length) return showFormError('Scegli almeno un tipo di esercizio.');
     const last = parsed.lines[parsed.lines.length - 1];
     const duration = N.duration > last.start ? N.duration : last.end + 2;
-    const targetStr = $('#f-target').value.trim();
-    let target = targetStr ? L.parseTime(targetStr) : duration;
-    if (isNaN(target) || target <= 0) return toast('Durata finale non valida (usa mm:ss)');
-    if (target > duration) target = duration;
+    let target = selectedTarget(duration);
+    if (isNaN(target) || target <= 0) return showFormError('Durata personalizzata non valida: usa il formato mm:ss (es. 9:30).');
     const ls = newLesson({
       title: $('#f-title').value.trim() || ('Lezione ' + new Date().toLocaleDateString('it-IT')),
       videoId: id, videoUrl: url, lang: $('#f-lang').value, level: $('#f-level').value, lines: parsed.lines, duration: duration, transcriptRaw: $('#f-transcript').value
     });
-    ls.params = { n: Math.max(1, parseInt($('#f-n').value, 10) || 10), target: target, types: types, contextBefore: parseInt($('#f-ctx').value, 10) || 25, ai: $('#f-ai').checked, focus: $('#f-focus').value.trim() };
+    ls.params = { n: Math.max(1, parseInt($('#f-n').value, 10) || 10), target: target, tolerance: $('#f-range').value === 'custom' ? 0 : Math.round(target * 0.1), types: types, contextBefore: parseInt($('#f-ctx').value, 10) || 25, ai: $('#f-ai').checked, focus: $('#f-focus').value.trim() };
     overlay(true, 'Genero la bozza…');
     generate(ls, ls.params.ai).then(function () { overlay(false); openEditor(ls.id); })
       .catch(function (e) { overlay(false); toast('Errore: ' + e.message); console.error(e); });
@@ -957,6 +1015,13 @@
     S.mock = q.get('mock') === '1';
     S.speed = Math.max(0.25, parseFloat(q.get('speed') || '1') || 1);
     const h = location.hash;
+    if (h.indexOf('#import=') === 0) {
+      try {
+        const data = JSON.parse(unb64url(h.slice(8)));
+        history.replaceState(null, '', location.pathname + location.search);
+        return openNew(data);
+      } catch (e) { toast('Importazione da YouTube non riuscita: ' + e.message); }
+    }
     if (h.indexOf('#d=') === 0) {
       try {
         const ls = JSON.parse(unb64url(h.slice(3)));

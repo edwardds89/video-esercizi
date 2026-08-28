@@ -34,11 +34,14 @@
     it: ['iscrivetevi', 'iscriviti', 'iscrivervi', 'iscrivendovi', 'campanella', 'sponsor', 'sponsorizzat', 'codice sconto', 'link in descrizione',
       'in descrizione', 'nella descrizione', 'descrizione del video', 'patreon', 'mettete like', 'mettete un like', 'lascia un like', 'lasciate un like', 'commentate', 'condividete',
       'nei commenti', 'seguitemi', 'seguimi', 'telegram', 'instagram', 'prossimo video', 'video precedente', 'ci vediamo', 'alla prossima',
-      'buona visione', 'benvenuti', 'bentornati', 'in questo video', 'oggi parliamo', 'oggi vi parlo', 'grazie per'],
+      'buona visione', 'benvenuti', 'bentornati', 'in questo video', 'oggi parliamo', 'oggi vi parlo', 'grazie per', 'abbonarvi', 'abbonatevi',
+      'abbonamento', 'mecenati', 'meccenati', 'sostenerci', 'sosteneteci', 'membri del canale', 'iscriversi al canale', 'torniamo al video',
+      'vi ringrazio', 'ringrazio anche', 'appuntamento qui', 'per il supporto'],
     en: ['subscribe', 'subscribing', 'sponsor', 'sponsored', 'promo code', 'discount code', 'link in the description', 'description below',
       'in the description', 'description of the video', 'patreon', 'like button', 'hit the bell', 'notifications', 'comment below', 'in the comments', 'follow me',
       'next video', 'previous video', 'see you', 'thanks for watching', 'stay tuned', 'merch', 'giveaway', 'welcome back', 'welcome to',
-      "in today's video", 'in this video', "today we're", 'today we are']
+      "in today's video", 'in this video', "today we're", 'today we are', 'join the channel', 'become a member', 'support us', 'back to the video',
+      'thank you for watching', 'thanks to our']
   };
 
   // Coppie di parole funzionali plausibili per "find the wrong word"
@@ -104,6 +107,14 @@
 
   function isNoise(text) { return NOISE.some(function (r) { return r.test(text); }); }
 
+  const LEADING_SOFT = {
+    it: 'che ma cioè e però quindi mentre perché oppure o poi allora invece anche'.split(' '),
+    en: 'that but and because so which while or then also when'.split(' ')
+  };
+  function startsSoftly(tokens, lang) {
+    if (!tokens.length) return false;
+    return (LEADING_SOFT[lang] || LEADING_SOFT.it).map(normalize).indexOf(tokens[0].norm) !== -1;
+  }
   function endsBadly(tokens, lang) {
     if (!tokens.length) return true;
     const last = tokens[tokens.length - 1].norm;
@@ -155,7 +166,7 @@
   return {
     STOPWORDS: STOPWORDS, CTA: CTA, SWAPS: SWAPS, EXTRA: EXTRA,
     stopwords: stopwords, normalize: normalize, tokenize: tokenize, words: words, isContent: isContent,
-    hasCTA: hasCTA, isNoise: isNoise, endsBadly: endsBadly, endsWithPunct: endsWithPunct, swapFor: swapFor,
+    hasCTA: hasCTA, isNoise: isNoise, endsBadly: endsBadly, startsSoftly: startsSoftly, endsWithPunct: endsWithPunct, swapFor: swapFor,
     extraCandidates: extraCandidates, rng: rng, fmtTime: fmtTime, parseTime: parseTime
   };
 });

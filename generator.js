@@ -24,8 +24,11 @@
 
   function cleanText(t) {
     return String(t || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&gt;/g, '>').replace(/&lt;/g, '<')
+      .replace(/\[[^\]]{1,40}\]/g, ' ')   // [musica], [applausi], [Music]... anche in mezzo alla riga
       .replace(/\s+/g, ' ').trim();
   }
+  const SKIP_ROW = /^#?\s*(chapter|capitolo|kapitel|chapitre|cap[ií]tulo)\s*\d+\s*[:.\-–]/i;
+  const DURATION_ROW = /^\d+\s+(seconds?|secondi|second[oi]|minutes?|minut[oi]|hours?|or[ae])\b/i;
 
   /**
    * Riconosce: pannello "Mostra trascrizione" di YouTube (timestamp su una riga e testo sulla successiva, oppure "0:12 testo"),
@@ -56,7 +59,7 @@
       format = 'youtube';
       let cur = null, extra = 0;
       for (const r of rows) {
-        if (r === '') continue;
+        if (r === '' || SKIP_ROW.test(r) || DURATION_ROW.test(r)) continue;
         let m = r.match(TS_ONLY);
         if (m) {
           if (cur) lines.push(cur);
@@ -91,8 +94,8 @@
     const wps = span > 10 ? Math.min(4, Math.max(1.2, totalWords / span * 1.08)) : 2.4;
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i], nx = lines[i + 1];
-      l.noise = L.isNoise(l.text) || l.text === '';
-      if (l.noise) l.text = '';
+      if (L.isNoise(l.text)) l.text = cleanText(l.text);
+      l.noise = l.text === '';
       if (l.end == null || l.end <= l.start) {
         const est = Math.max(0.8, L.words(l.text).length / wps);
         l.end = nx ? Math.min(nx.start, l.start + est) : l.start + est;
@@ -107,13 +110,86 @@
 
   // ---------- 2. Chunk (unità di senso approssimate) ----------
 
-  function buildChunks(lines, opts) {
-    const o = Object.assign({ maxWords: 16, minWords: 4, pauseBreak: 1.0, silenceMin: 2.5, duration: null, lang: 'it' }, opts || {});
-    const segs = []; // segmenti "duri": parlato tra pause lunghe / punteggiatura, oppure silenzio
+  function silenceChunk(start, end) {
+    return { start: start, end: end, text: '', lines: [], tokens: [], wordCount: 0, silence: true };
+  }
+  function chunkFromWords(ws) {
+    const text = ws.map(function (x) { return x.w; }).join(' ').trim();
+    const tokens = L.tokenize(text);
+    return { start: ws[0].start, end: ws[ws.length - 1].end, text: text, lines: [], words: ws.map(function (x) { return { start: x.start, end: x.end }; }), tokens: tokens, wordCount: tokens.length };
+  }
+  /** Parole con tempi stimati (distribuite uniformemente dentro la riga), più marcatori di silenzio. */
+  function wordStream(lines) {
+    const out = [];
+    lines.forEach(function (l, i) {
+      if (l.noise) { out.push({ silence: true, start: l.start, end: l.end }); return; }
+      const ws = String(l.text).split(/\s+/).filter(Boolean);
+      const d = (l.end - l.start) / Math.max(1, ws.length);
+      ws.forEach(function (w, k) { out.push({ w: w, start: l.start + k * d, end: l.start + (k + 1) * d, line: i }); });
+    });
+    return out;
+  }
+  function hasPunctuation(lines) {
+    const text = lines.map(function (l) { return l.text; }).join(' ');
+    const words = L.words(text).length;
+    const marks = (text.match(/[.!?…]+(\s|$)/g) || []).length;
+    return words >= 20 && marks / words >= 1 / 30;
+  }
+  const SENT_END = /[.!?…]+["'»)\]]*$/;
+
+  /** Modalità "frasi": trascrizione con punteggiatura → una frase per chunk, con tempi per parola interpolati. */
+  function sentenceChunks(lines, o) {
+    const stream = wordStream(lines);
+    const chunks = [];
+    let cur = [];
+    const flush = function () { if (cur.length) { chunks.push(chunkFromWords(cur)); cur = []; } };
+    for (let i = 0; i < stream.length; i++) {
+      const it = stream[i];
+      const prev = stream[i - 1];
+      if (it.silence) { flush(); if (it.end - it.start >= 0.3) chunks.push(silenceChunk(it.start, it.end)); continue; }
+      if (prev && !prev.silence && it.start - prev.end >= o.silenceMin) { flush(); chunks.push(silenceChunk(prev.end, it.start)); }
+      cur.push(it);
+      if (SENT_END.test(it.w) && !/^\d+[.,]$/.test(it.w)) flush();
+    }
+    flush();
+    // Frasi troppo lunghe: dividi alla virgola/punto e virgola più vicina al centro, altrimenti a metà
+    const CONJ = { it: ['e', 'ma', 'però', 'quindi', 'cioè', 'perché', 'che', 'mentre', 'oppure', 'o', 'anche', 'poi', 'allora', 'infatti', 'invece'],
+      en: ['and', 'but', 'because', 'so', 'which', 'while', 'or', 'that', 'then', 'also', 'when'] };
+    const conj = new Set((CONJ[o.lang] || CONJ.it).map(function (w) { return L.normalize(w); }));
+    const hardMax = o.maxWords + 10;
+    function splitLong(c) {
+      if (c.wordCount <= o.maxWords) return [c];
+      const raw = c.text.split(/\s+/);
+      const ws = c.words.map(function (t, k) { return { w: raw[k], start: t.start, end: t.end }; });
+      const mid = ws.length / 2;
+      let best = -1, bestCost = Infinity;
+      for (let k = o.minWords - 1; k < ws.length - o.minWords; k++) {
+        let weight = 0;
+        if (/[,;:]["'»)]*$/.test(ws[k].w) || /[-–—]$/.test(ws[k].w)) weight = 1;          // taglio dopo una virgola
+        else if (conj.has(L.normalize(ws[k + 1].w))) weight = 0.6;                      // taglio prima di una congiunzione
+        if (!weight) continue;
+        const cost = Math.abs(k + 1 - mid) / weight;
+        if (cost < bestCost) { bestCost = cost; best = k; }
+      }
+      const tolerated = best !== -1 && Math.abs(best + 1 - mid) <= mid * 0.7;
+      if (!tolerated) {
+        if (ws.length <= hardMax) return [c];      // meglio una frase un po' lunga che spezzata a metà clausola
+        best = Math.floor(mid) - 1;
+      }
+      if (best < o.minWords - 1 || ws.length - best - 1 < o.minWords) return [c];
+      return splitLong(chunkFromWords(ws.slice(0, best + 1))).concat(splitLong(chunkFromWords(ws.slice(best + 1))));
+    }
+    const out = [];
+    chunks.forEach(function (c) { if (c.silence) out.push(c); else splitLong(c).forEach(function (x) { out.push(x); }); });
+    return out;
+  }
+
+  /** Modalità "pause": senza punteggiatura → spezza alle pause tra le righe (ricorsivamente alla pausa più marcata). */
+  function pauseChunks(lines, o) {
+    const segs = [];
     let cur = null, prevEnd = 0;
     function close() { if (cur && cur.lines.length) segs.push(cur); cur = null; }
     function silence(start, end) { if (end - start >= 0.3) segs.push({ silence: true, start: start, end: end }); }
-
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
       if (l.start - prevEnd >= o.silenceMin) { close(); silence(prevEnd, l.start); }
@@ -126,9 +202,7 @@
       prevEnd = Math.max(prevEnd, l.end);
     }
     close();
-
     const wcOf = function (ls) { return ls.reduce(function (s, l) { return s + L.words(l.text).length; }, 0); };
-    // Divide ricorsivamente i segmenti lunghi alla pausa interna più marcata (a parità, la più vicina al centro)
     function split(ls) {
       const total = wcOf(ls);
       if (total <= o.maxWords || ls.length < 2) return [ls];
@@ -142,7 +216,6 @@
       }
       if (best === -1) return [ls];
       if (bestGap < 0.15) {
-        // nessuna pausa utile: taglia alla riga più vicina al centro
         acc = 0; best = -1; bestDist = Infinity;
         for (let k = 0; k < ls.length - 1; k++) {
           acc += L.words(ls[k].text).length;
@@ -154,16 +227,22 @@
       }
       return split(ls.slice(0, best + 1)).concat(split(ls.slice(best + 1)));
     }
-
     const chunks = [];
     for (const sg of segs) {
-      if (sg.silence) { chunks.push({ start: sg.start, end: sg.end, text: '', lines: [], tokens: [], wordCount: 0, silence: true }); continue; }
+      if (sg.silence) { chunks.push(silenceChunk(sg.start, sg.end)); continue; }
       for (const part of split(sg.lines)) {
         const text = part.map(function (l) { return l.text; }).join(' ').trim();
         const tokens = L.tokenize(text);
         chunks.push({ start: part[0].start, end: part[part.length - 1].end, text: text, lines: part, tokens: tokens, wordCount: tokens.length });
       }
     }
+    return chunks;
+  }
+
+  function buildChunks(lines, opts) {
+    const o = Object.assign({ maxWords: 16, minWords: 4, pauseBreak: 1.0, silenceMin: 2.5, duration: null, lang: 'it', mode: 'auto' }, opts || {});
+    const mode = o.mode === 'auto' ? (hasPunctuation(lines) ? 'sentences' : 'pauses') : o.mode;
+    const chunks = mode === 'sentences' ? sentenceChunks(lines, o) : pauseChunks(lines, o);
 
     // Fonde i chunk minuscoli (1-2 parole) con il precedente parlato se contiguo
     const merged = [];
@@ -172,25 +251,27 @@
       if (!c.silence && c.wordCount <= 2 && prev && !prev.silence && c.start - prev.end < 0.8 && prev.wordCount < o.maxWords + 4) {
         prev.text = (prev.text + ' ' + c.text).trim();
         prev.end = c.end;
-        prev.lines = prev.lines.concat(c.lines);
+        if (prev.words && c.words) prev.words = prev.words.concat(c.words); else { prev.lines = (prev.lines || []).concat(c.lines || []); prev.words = null; }
         prev.tokens = L.tokenize(prev.text);
         prev.wordCount = prev.tokens.length;
       } else merged.push(c);
     }
 
     if (o.duration && merged.length && o.duration - merged[merged.length - 1].end >= o.silenceMin) {
-      merged.push({ start: merged[merged.length - 1].end, end: o.duration, text: '', lines: [], tokens: [], wordCount: 0, silence: true });
+      merged.push(silenceChunk(merged[merged.length - 1].end, o.duration));
     }
     merged.forEach(function (c, i) {
       c.id = 'c' + (i + 1);
       c.gapAfter = merged[i + 1] ? Math.max(0, merged[i + 1].start - c.end) : 99;
       c.cta = !c.silence && L.hasCTA(c.text, o.lang);
+      c.mode = mode;
     });
     return merged;
   }
 
   /** Tempo stimato di ogni parola di un chunk (parole distribuite uniformemente nella riga di appartenenza). */
   function wordTimes(chunk) {
+    if (chunk.words && chunk.words.length) return chunk.words.map(function (w) { return { start: w.start, end: w.end }; });
     const out = [];
     for (const ln of chunk.lines || []) {
       const ws = String(ln.text).split(/\s+/).filter(Boolean);
@@ -243,6 +324,7 @@
       else if (c.start < 30) s *= 0.3;
       if (D && c.end > D - 30) s *= 0.5;
       if (L.endsBadly(c.tokens, lang)) s *= 0.5;
+      if (L.startsSoftly(c.tokens, lang)) s *= 0.8;
       if (L.endsWithPunct(c.text)) s *= 1.2;
       if (c.gapAfter >= 0.5) s *= 1.15;
       if (/\d{3,}/.test(c.text)) s *= 0.85;
@@ -339,8 +421,9 @@
     const minCut = params.minCut || 8;
     const protect = (params.protect || []).map(function (p) { return { start: Math.max(0, p.start), end: Math.min(D, p.end) }; });
     const existing = params.existing || [];
+    const tol = Math.max(0, params.tolerance || 0);
     let need = D - T - existing.reduce(function (s, c) { return s + (c.end - c.start); }, 0);
-    if (!(need > 0)) return { cuts: [], removed: 0, shortfall: 0 };
+    if (!(need > tol)) return { cuts: [], removed: 0, shortfall: 0 };
 
     // Unità sulla linea del tempo con copertura completa 0..D
     const units = [];
@@ -383,8 +466,10 @@
     let removed = 0;
     for (const r of runs) {
       if (removed >= need - 2) break;
+      if (removed >= need - tol && r.priority >= 0.3) break;   // dentro la tolleranza: non tagliare contenuto vero
       const remaining = need - removed;
-      if (r.length < minCut && !(r.intro || r.outro || r.cta || r.silence)) continue;
+      const minForRun = r.silence ? 3 : r.cta ? 4 : (r.intro || r.outro) ? 5 : minCut;
+      if (r.length < minForRun) continue;
       const reason = r.silence ? 'silenzio' : r.ctaShare > 0.5 ? 'sponsor / appello al pubblico' : (r.intro && r.length < 60) ? 'introduzione' : (r.outro && r.length < 90) ? 'chiusura' : r.mean < 0.35 ? 'bassa densità' : 'parte secondaria';
       if (r.length <= remaining + minCut / 2) {
         cuts.push({ start: r.start, end: r.end, reason: reason });
@@ -429,7 +514,7 @@
       else mergedCuts.push({ start: c.start, end: c.end, reason: c.reason });
     }
     removed = mergedCuts.reduce(function (s, c) { return s + (c.end - c.start); }, 0);
-    return { cuts: mergedCuts, removed: removed, shortfall: Math.max(0, need - removed) };
+    return { cuts: mergedCuts, removed: removed, shortfall: Math.max(0, need - tol - removed) };
   }
 
   function keepRanges(cuts, duration) {
@@ -496,7 +581,7 @@
       if (ex) exercises.push(ex);
     });
 
-    const result = fitCuts(chunks, exercises, { duration: duration, target: target, contextBefore: params.contextBefore, lang: lang });
+    const result = fitCuts(chunks, exercises, { duration: duration, target: target, tolerance: params.tolerance, contextBefore: params.contextBefore, lang: lang });
     return {
       chunks: chunks, exercises: exercises, cuts: result.cuts,
       stats: { duration: duration, target: target, removed: result.removed, effective: effectiveDuration(result.cuts, duration), shortfall: result.shortfall, contextUsed: result.contextUsed, n: exercises.length }
@@ -510,7 +595,7 @@
     let best = null;
     for (const ctx of ctxList) {
       const protect = exercises.map(function (e) { return { start: e.segment.start - ctx, end: e.segment.end + 1.0 }; });
-      const r = planCuts(chunks, { duration: duration, target: target, protect: protect, existing: params.existing || [], lang: params.lang });
+      const r = planCuts(chunks, { duration: duration, target: target, tolerance: params.tolerance, protect: protect, existing: params.existing || [], lang: params.lang });
       r.contextUsed = ctx;
       if (!best || r.shortfall < best.shortfall) best = r;
       if (r.shortfall <= 5) break;
