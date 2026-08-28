@@ -39,8 +39,10 @@
     en: 'really very much many thing things something anything nothing everything actually basically always never going gonna right okay maybe pretty little every about because first second other another still even just also only then than there here where when what which while though although quite rather almost already again away back down over under through around between along without within toward towards people person time times year years day days way ways kind kinds sort part parts lot lots video channel subscribe comment comments like'.split(' ')
   };
   function vocabCandidates(chunks, exercises, opts) {
-    const o = Object.assign({ lang: 'it', n: 16 }, opts || {});
+    const o = Object.assign({ lang: 'it', n: 16, support: null, level: 'B1' }, opts || {});
     const skip = new Set(VOCAB_SKIP[o.lang] || VOCAB_SKIP.it);
+    const support = o.support || (o.lang === 'en' ? 'it' : 'en');
+    const advanced = /^(B1|B2|C1|C2)$/i.test(String(o.level || 'B1'));
     const inEx = {};
     (exercises || []).forEach(function (ex) {
       L.tokenize(ex.sentence || '').forEach(function (t) { const k = L.normalize(String(t.core || '').replace(/^(?:l|un|d|dell|all|nell|sull|dall|quell|c|s|n|m|t|v|gl|degl|agl|negl|sugl)['’]/i, '')); if (k) inEx[k] = (inEx[k] || 0) + 1; });
@@ -56,9 +58,13 @@
     Object.keys(inEx).forEach(function (k) { if (!f[k] && k.length >= 4 && L.isContent(k, o.lang) && !/\d/.test(k) && !skip.has(k)) { f[k] = 1; orig[k] = k; } });
     const list = Object.keys(f).map(function (k) {
       const len = orig[k].length;
-      const score = (inEx[k] ? 10 : 0) + Math.min(f[k], 6) * 0.8 + Math.min(len, 12) * 0.35;
-      return { word: orig[k], inExercises: !!inEx[k], freq: f[k], score: Math.round(score * 100) / 100 };
-    });
+      let score = (inEx[k] ? 10 : 0) + Math.min(f[k], 6) * 0.8 + Math.min(len, 12) * 0.35;
+      // parole trasparenti per chi parla la lingua d'appoggio (globale/global) e parole di base (casa, mangiare) non sono "utili" a un B1
+      const cognate = L.isCognate(orig[k], o.lang, support), basic = advanced && L.isBasic(orig[k], o.lang);
+      if (cognate) score *= 0.3;
+      if (basic) score *= 0.2;
+      return { word: orig[k], inExercises: !!inEx[k], freq: f[k], score: Math.round(score * 100) / 100, cognate: cognate, basic: basic };
+    }).filter(function (x) { return !(x.cognate && x.basic); });
     list.sort(function (a, b) { return b.score - a.score || a.word.localeCompare(b.word); });
     return list.slice(0, o.n);
   }
@@ -367,6 +373,8 @@
     const lang = ctx.lang || 'it';
     const D = ctx.duration || (chunks.length ? chunks[chunks.length - 1].end : 0);
     const freq = ctx.freq || wordFreq(chunks);
+    // le parole-chiave del video (le più frequenti tra quelle piene): le frasi che le contengono portano il filo del discorso
+    const topWords = new Set(Object.keys(freq).filter(function (w) { return w.length >= 4 && L.isContent(w, lang); }).sort(function (a, b) { return freq[b] - freq[a]; }).slice(0, 25));
     for (const c of chunks) {
       if (c.silence) { c.value = 0; c.exScore = 0; c.contentRatio = 0; c.rate = 0; continue; }
       const dur = Math.max(0.5, c.end - c.start);
@@ -377,11 +385,15 @@
       if (content.length) {
         rarity = content.reduce(function (s, t) { return s + 1 / Math.sqrt(freq[t.norm] || 1); }, 0) / content.length;
       }
-      // valore "da tenere" (usato per decidere i tagli)
-      let v = 0.25 * Math.min(1, c.rate / 2.5) + 0.55 * c.contentRatio + 0.2 * rarity;
-      if (c.cta) v *= 0.15;
-      if (c.start < 20) v *= 0.4;
-      if (D && c.end > D - 45) v *= 0.5;
+      // quanto la frase sta sul tema principale (parole-chiave del video)
+      const topic = content.length ? content.filter(function (t) { return topWords.has(t.norm); }).length / Math.max(3, content.length) : 0;
+      // valore "da tenere" (usato per decidere i tagli): filo del discorso e densità contano; i dettagli (numeri) e le digressioni valgono meno
+      let v = 0.2 * Math.min(1, c.rate / 2.5) + 0.45 * c.contentRatio + 0.1 * rarity + 0.35 * Math.min(1, topic * 2.5);
+      const nums = (c.text.match(/\d+([.,]\d+)?\s*(%|km|kg|mg|cm|mm|m|g|°|euro|€|\$)?/g) || []).length;
+      if (nums >= 2) v *= 0.7; else if (nums === 1) v *= 0.85;      // informazioni dettagliate: prime candidate al taglio
+      if (L.isDigression(c.text, lang)) v *= 0.7;                    // esempi, parentesi, curiosità
+      if (c.cta) v *= 0.15;                                          // sponsor, saluti, appelli al pubblico
+      if (D && c.end > D - 30) v *= 0.6;                             // coda finale
       c.value = Math.max(0, Math.min(1, v));
       // idoneità come frase per esercizio
       let s = lengthScore(c.wordCount) * (0.5 + 0.5 * c.contentRatio) * (0.7 + 0.3 * rarity);
@@ -625,6 +637,13 @@
     if (chunks.length && chunks[0].start > 0.5) units.push({ start: 0, end: chunks[0].start, value: 0, silence: true });
     for (const c of chunks) units.push({ start: c.start, end: c.end, value: c.value || 0, silence: !!c.silence, cta: !!c.cta, id: c.id });
     if (chunks.length && D - chunks[chunks.length - 1].end > 0.5) units.push({ start: chunks[chunks.length - 1].end, end: D, value: 0, silence: true });
+    // L'introduzione del tema (le prime frasi non promozionali, ~40 s) e la conclusione (gli ultimi ~25 s di contenuto prima dei saluti)
+    // non si tagliano: senza, il video accorciato perde il senso. Saluti/sponsor all'inizio e alla fine restano tagliabili.
+    const introKeep = params.keepIntro === false ? 0 : (params.introSeconds || 40);
+    const outroKeep = params.keepOutro === false ? 0 : (params.outroSeconds || 25);
+    const contentUnits = units.filter(function (u) { return !u.silence && !u.cta; });
+    if (contentUnits.length && introKeep) protect.push({ start: contentUnits[0].start, end: Math.min(D, contentUnits[0].start + introKeep) });
+    if (contentUnits.length && outroKeep) { const last = contentUnits[contentUnits.length - 1]; protect.push({ start: Math.max(0, last.end - outroKeep), end: last.end }); }
     units.forEach(function (u, i) {
       u.free = !protect.some(function (p) { return overlaps(u, p); }) && !existing.some(function (p) { return overlaps(u, p); });
     });
@@ -651,8 +670,7 @@
       let pr = r.mean;
       if (r.silence) pr = 0;
       if (r.cta) pr *= 0.3;
-      if (r.intro) pr *= 0.4;
-      if (r.outro) pr *= 0.5;
+      if (r.outro) pr *= 0.7;
       r.priority = pr;
     });
     runs.sort(function (a, b) { return a.priority - b.priority; });

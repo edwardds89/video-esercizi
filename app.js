@@ -400,7 +400,7 @@
       // parole utili: dal modello (con traduzioni) o dalle regole (da tradurre nell'editor)
       const vb = vocabState(ls);
       const proposed = (r.vocab && r.vocab.length) ? r.vocab.map(function (v) { return { word: v.word, translation: v.translation, emoji: v.emoji, inExercise: v.inExercise, source: 'ai' }; })
-        : G.vocabCandidates(chunks, ls.exercises, { lang: ls.lang, n: 14 }).map(function (v) { return { word: v.word, translation: '', emoji: '', inExercise: v.inExercises, source: 'rules' }; });
+        : G.vocabCandidates(chunks, ls.exercises, { lang: ls.lang, n: 14, support: vb.support, level: ls.level }).map(function (v) { return { word: v.word, translation: '', emoji: '', inExercise: v.inExercises, source: 'rules' }; });
       vb.words = proposed.map(function (v) { return Object.assign({ id: uid(), image: '', selected: true }, v); });
       touch(ls);
       saveLessons();
@@ -767,7 +767,7 @@
   function proposeVocabRules(ls) {
     const vb = vocabState(ls);
     const have = new Set(vb.words.map(function (w) { return L.normalize(w.word); }));
-    const cands = G.vocabCandidates(ls.chunks || [], ls.exercises, { lang: ls.lang, n: 20 }).filter(function (c) { return !have.has(L.normalize(c.word)); });
+    const cands = G.vocabCandidates(ls.chunks || [], ls.exercises, { lang: ls.lang, n: 20, support: vb.support, level: ls.level }).filter(function (c) { return !have.has(L.normalize(c.word)); });
     cands.slice(0, 14).forEach(function (c) { vb.words.push({ id: uid(), word: c.word, translation: '', emoji: '', image: '', selected: true, inExercise: c.inExercises, source: 'rules' }); });
     touch(ls); renderVocabEditor(ls);
     toast(cands.length ? cands.slice(0, 14).length + ' parole aggiunte (senza traduzione)' : 'Nessuna nuova parola trovata');

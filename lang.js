@@ -34,13 +34,13 @@
     it: ['iscrivetevi', 'iscriviti', 'iscrivervi', 'iscrivendovi', 'campanella', 'sponsor', 'sponsorizzat', 'codice sconto', 'link in descrizione',
       'in descrizione', 'nella descrizione', 'descrizione del video', 'patreon', 'mettete like', 'mettete un like', 'lascia un like', 'lasciate un like', 'commentate', 'condividete',
       'nei commenti', 'seguitemi', 'seguimi', 'telegram', 'instagram', 'prossimo video', 'video precedente', 'ci vediamo', 'alla prossima',
-      'buona visione', 'benvenuti', 'bentornati', 'in questo video', 'oggi parliamo', 'oggi vi parlo', 'grazie per', 'abbonarvi', 'abbonatevi',
+      'buona visione', 'benvenuti', 'bentornati', 'grazie per', 'abbonarvi', 'abbonatevi',
       'abbonamento', 'mecenati', 'meccenati', 'sostenerci', 'sosteneteci', 'membri del canale', 'iscriversi al canale', 'torniamo al video',
       'vi ringrazio', 'ringrazio anche', 'appuntamento qui', 'per il supporto'],
     en: ['subscribe', 'subscribing', 'sponsor', 'sponsored', 'promo code', 'discount code', 'link in the description', 'description below',
       'in the description', 'description of the video', 'patreon', 'like button', 'hit the bell', 'notifications', 'comment below', 'in the comments', 'follow me',
       'next video', 'previous video', 'see you', 'thanks for watching', 'stay tuned', 'merch', 'giveaway', 'welcome back', 'welcome to',
-      "in today's video", 'in this video', "today we're", 'today we are', 'join the channel', 'become a member', 'support us', 'back to the video',
+      'join the channel', 'become a member', 'support us', 'back to the video',
       'thank you for watching', 'thanks to our']
   };
 
@@ -99,6 +99,27 @@
     return n.length >= 3 && !stopwords(lang).has(n) && !/^\d+$/.test(n);
   }
 
+  // segnali di digressione / esempio / dettaglio: candidati ai tagli quando serve accorciare
+  const DIGRESSION = {
+    it: ['per esempio', 'ad esempio', "tra l'altro", 'a proposito', 'piccola parentesi', 'parentesi', 'curiosita', 'per inciso', 'detto questo', 'nota a margine', 'piccola nota', 'per la cronaca', 'tra parentesi', 'un esempio', 'facciamo un esempio', 'immaginate', 'pensate che'],
+    en: ['for example', 'for instance', 'by the way', 'side note', 'fun fact', 'incidentally', 'as an aside', 'imagine', 'think about it', 'let me give you an example']
+  };
+  function isDigression(text, lang) {
+    const t = normalize(text);
+    const list = DIGRESSION[lang] || DIGRESSION.it;
+    return list.some(function (k) { return t.indexOf(normalize(k)) !== -1; });
+  }
+  // Parole "trasparenti" per chi parla inglese (cognati latini): globale/global, specifico/specific, informazione/information…
+  // Euristica sulle desinenze: non perfetta, ma evita di proporre come "utili" parole che uno studente anglofono capisce a colpo d'occhio.
+  const COGNATE_IT_EN = /(zione|sione|ale|ali|ico|ica|ici|iche|ità|ita|mento|menti|enza|enze|anza|anze|ore|ori|ista|isti|ismo|ismi|ura|ure|ivo|iva|ivi|ive|oso|osa|osi|ose|abile|ibile|abili|ibili|ario|aria|ente|enti|ante|anti)$/;
+  const BASIC_IT = new Set(('casa tempo anno anni giorno giorni mano mani acqua cibo bocca denti dente testa occhio occhi piede piedi uomo donna bambino bambina ragazzo ragazza amico amica famiglia madre padre figlio figlia scuola lavoro libro tavolo sedia porta finestra strada città paese mondo vita morte sole luna cielo mare terra fuoco aria notte mattina sera pomeriggio settimana mese ora minuto secondo numero nome parola lingua cosa persona persone gente uomini donne bambini soldi euro prezzo negozio mercato pane latte carne pesce frutta verdura vino caffè zucchero sale olio pasta pizza colore rosso verde blu bianco nero giallo grande piccolo nuovo vecchio buono cattivo bello brutto caldo freddo alto basso lungo corto veloce lento facile difficile aperto chiuso pieno vuoto pulito sporco felice triste stanco malato sano forte debole giovane vecchio ricco povero vero falso importante possibile primo ultimo prossimo stesso altro tutto niente qualcosa mangiare bere dormire andare venire fare dire vedere sentire parlare leggere scrivere aprire chiudere prendere dare mettere sapere volere potere dovere piacere pensare guardare ascoltare camminare correre lavorare studiare giocare comprare vendere pagare aiutare chiamare aspettare cercare trovare perdere vincere iniziare finire arrivare partire entrare uscire salire scendere tornare restare vivere morire nascere crescere cambiare usare provare capire credere sperare amare odiare ricordare dimenticare').split(' '));
+  function isCognate(word, lang, support) {
+    const w = normalize(word).replace(/'/g, '');
+    if (!w || w.length < 5) return false;
+    if ((lang === 'it' && support === 'en') || (lang === 'en' && support === 'it')) return COGNATE_IT_EN.test(w) && w.length >= 6;
+    return false;
+  }
+  function isBasic(word, lang) { return lang === 'it' ? BASIC_IT.has(normalize(word)) : false; }
   function hasCTA(text, lang) {
     const t = normalize(text, { accents: true });
     const list = CTA[lang] || CTA.it;
@@ -167,7 +188,7 @@
   }
 
   return {
-    STOPWORDS: STOPWORDS, CTA: CTA, SWAPS: SWAPS, EXTRA: EXTRA,
+    STOPWORDS: STOPWORDS, CTA: CTA, SWAPS: SWAPS, EXTRA: EXTRA, isDigression: isDigression, isCognate: isCognate, isBasic: isBasic,
     stopwords: stopwords, normalize: normalize, tokenize: tokenize, words: words, isContent: isContent,
     hasCTA: hasCTA, isNoise: isNoise, endsBadly: endsBadly, startsSoftly: startsSoftly, endsWithPunct: endsWithPunct, swapFor: swapFor,
     extraCandidates: extraCandidates, rng: rng, fmtTime: fmtTime, parseTime: parseTime

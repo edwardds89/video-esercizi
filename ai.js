@@ -43,13 +43,16 @@
       'wrong = 25-32 words, give a word to replace and a plausible wrong replacement of the same grammatical category in "wrong": {"word","replacement"} (the replacement must not appear elsewhere in the sentence); ' +
       'mc = 25-40 words: a comprehension question about the sentence in the transcript language in "question", four short "options", the index of the right one in "correct" (0-3) and, if TRICKY is requested, the index of a deliberately misleading but wrong option in "tricky".');
     lines.push('3. Propose cuts (parts of the video to skip) as inclusive ranges of chunk ids "from"/"to", so that the kept duration is close to the target. ' +
-      'Skip intros, sponsor/ads, calls to action, digressions, repetitions and long silences first. Never cut a chunk that contains an exercise sentence, nor the 20 seconds before it. ' +
-      'Prefer few long cuts (at least 8 seconds each) over many short ones. If the target is not reachable without harming coherence, do your best and say so in "notes".');
+      'Work from the TEXT: the shortened video must still make sense on its own, like a good abridgement. ALWAYS KEEP the opening that introduces the topic (what the video is about), the main line of explanation, and the conclusion. ' +
+      'CUT, in this order: greetings/sponsor/calls to action, digressions and asides, repeated examples, overly detailed or technical passages (numbers, lists, minor specifics), long silences. ' +
+      'Every cut must start at the beginning of a sentence and end at the end of a sentence (chunk boundaries), never mid-sentence. Never cut a chunk that contains an exercise sentence, nor the 20 seconds before it. ' +
+      'Prefer few long cuts (at least 8 seconds each) over many short ones; give a short "reason" for each. If the target is not reachable without harming coherence, do your best and say so in "notes".');
     lines.push('4. Give a short lesson "title" in the transcript language.');
     const sup = p.support || (p.lang === 'en' ? 'it' : 'en');
-    lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student must know to understand the video, in "vocab". ' +
+    lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student whose own language is "' + sup + '" must learn to understand the video, in "vocab". ' +
+      'Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (e.g. Italian "globale" ≈ English "global", "informazione" ≈ "information"), basic words a ' + (p.level || 'B1') + ' student already knows, proper names and numbers. ' +
       'Prioritize words that occur in the exercise sentences you chose (mark them with "inExercise": true), then other key words of the video. Use the dictionary form as it appears in the video (singular noun, infinitive verb, masculine adjective) ' +
-      'and give the translation in language "' + sup + '" ("translation"). For concrete words add one emoji that pictures the meaning ("emoji"); leave it empty for abstract words. No numbers, no proper names, no function words.');
+      'and give the translation in language "' + sup + '" ("translation"). For concrete words add one emoji that pictures the meaning ("emoji"); leave it empty for abstract words.');
     lines.push('');
     lines.push('OUTPUT SCHEMA (JSON only):');
     lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"vocab":[{"word":"smalto","translation":"enamel","emoji":"🦷","inExercise":true}],"notes":"..."}');
@@ -295,8 +298,8 @@
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
     const system = 'You help a language teacher prepare vocabulary for a video lesson. Output ONLY a JSON object, no prose, no markdown fences.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + (params.level || 'B1') + '   TRANSLATION LANGUAGE: ' + sup,
-      'List ' + (params.n || 14) + ' words (or short fixed expressions) the student must know to understand the video. Prioritize words that occur in the EXERCISE SENTENCES (mark "inExercise": true), then other key words of the video. ' +
-      'Dictionary form as used in the video (singular noun, infinitive verb, masculine adjective); "translation" in ' + sup + '; "emoji": one emoji picturing the meaning for concrete words, empty for abstract ones. No numbers, proper names or function words.' +
+      'List ' + (params.n || 14) + ' words (or short fixed expressions) a ' + (params.level || 'B1') + ' student whose own language is ' + sup + ' must LEARN to understand the video. Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (e.g. Italian "globale" ≈ English "global"), basic words a ' + (params.level || 'B1') + ' student already knows, proper names and numbers. Prioritize words that occur in the EXERCISE SENTENCES (mark "inExercise": true), then other key words of the video. ' +
+      'Dictionary form as used in the video (singular noun, infinitive verb, masculine adjective); "translation" in ' + sup + '; "emoji": one emoji picturing the meaning for concrete words, empty for abstract ones.' +
       (params.exclude && params.exclude.length ? ' Do NOT include: ' + params.exclude.join(', ') + '.' : ''),
       'SCHEMA: {"vocab":[{"word":"...","translation":"...","emoji":"","inExercise":true}]}', '',
       'EXERCISE SENTENCES:', sentences || '(none)', '', 'VIDEO TEXT:', text].join('\n');

@@ -26,3 +26,4 @@
 - Traduzione AI (`AI.translateSentence`, inglese britannico) dal pop-up: tutta la frase o solo il testo selezionato col mouse.
 - Suono "Giusto!": Web Audio (`playWinSound`), nessun file.
 - Bookmarklet: accetta solo il pannello Trascrizione (target-id/intestazione), mai quello dei capitoli; il codice è incorporato nel preferito → dopo ogni modifica l'utente deve ritrascinare il pulsante.
+- Tagli (regole): valore di un chunk = ritmo + densità + parole-chiave del video (filo del discorso); numeri/dettagli e digressioni ("per esempio", "parentesi"…) valgono meno; CTA ×0,15. `planCuts` protegge sempre l'introduzione del tema (primi 40 s di contenuto non promozionale) e la conclusione (ultimi 25 s prima dei saluti); "oggi parliamo"/"in questo video" NON sono CTA. I confini dei tagli sono confini di chunk (= frasi in modalità "sentences"). Per tagli forti (>30%) le regole restano grossolane: serve l'AI (prompt "abridgement").
