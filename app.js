@@ -743,7 +743,9 @@
       const renderImg = function () {
         img.innerHTML = '';
         if (w.image) {
-          img.appendChild(el('img', { src: w.image, alt: '', title: w.image, onclick: function () { if (confirm('Togliere la foto?')) { w.image = ''; touch(ls); renderImg(); } } }));
+          const im = el('img', { src: w.image, alt: '', title: w.image + ' (clic per togliere)', referrerpolicy: 'no-referrer', onclick: function () { if (confirm('Togliere la foto?')) { w.image = ''; touch(ls); renderImg(); } } });
+          im.addEventListener('error', function () { im.replaceWith(el('span', { class: 'notice bad', style: 'padding:2px 6px;font-size:12px', text: 'foto non caricabile: toglila', title: w.image, onclick: function () { w.image = ''; touch(ls); renderImg(); } })); });
+          img.appendChild(im);
         } else {
           img.appendChild(el('button', { class: 'small', text: '🔍 Foto', title: 'Cerca una foto su Wikipedia', onclick: function () { findImage(ls, w, renderImg); } }));
           img.appendChild(el('button', { class: 'small', text: 'URL', title: 'Incolla l\'indirizzo di un\'immagine', onclick: function () { const u = prompt('Indirizzo dell\'immagine (https://…)'); if (u && /^https?:\/\//.test(u.trim())) { w.image = u.trim(); touch(ls); renderImg(); } } }));
@@ -813,7 +815,7 @@
       fetch('https://' + tr[0] + '.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(cap(tr[1].trim())) + '?redirect=true')
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
-          if (j && j.type !== 'disambiguation' && j.thumbnail && j.thumbnail.source) { w.image = j.thumbnail.source.replace(/\/\d+px-/, '/320px-'); touch(ls); done(); toast('Foto da Wikipedia: ' + (j.title || tr[1])); }
+          if (j && j.type !== 'disambiguation' && j.thumbnail && j.thumbnail.source) { w.image = j.thumbnail.source; touch(ls); done(); toast('Foto da Wikipedia: ' + (j.title || tr[1])); }
           else next();
         })
         .catch(next);
@@ -1762,13 +1764,20 @@
     return out;
   }
   function backOf(w, big) {
-    // "retro" della parola: foto se c'è, altrimenti emoji + traduzione
+    // "retro" della parola: SOLO la foto se c'è (niente traduzione), altrimenti emoji + traduzione;
+    // se la foto non si carica, si ripiega su emoji + traduzione
     const d = el('div', { class: 'back' + (big ? ' big' : '') });
-    if (w.image) d.appendChild(el('img', { src: w.image, alt: w.translation || '' }));
-    else {
+    const textBack = function () {
+      d.innerHTML = '';
       if (w.emoji) d.appendChild(el('div', { class: 'emoji', text: w.emoji }));
       if (w.translation) d.appendChild(el('div', { class: 'tr', text: w.translation }));
-    }
+      if (!w.emoji && !w.translation) d.appendChild(el('div', { class: 'tr', text: '?' }));
+    };
+    if (w.image) {
+      const img = el('img', { src: w.image, alt: '', referrerpolicy: 'no-referrer' });
+      img.addEventListener('error', textBack);
+      d.appendChild(img);
+    } else textBack();
     return d;
   }
   function cardHeader(p, title, sub) {
@@ -1809,6 +1818,7 @@
       let sel = null, doneN = 0, errors = 0;
       const fb = el('div', { class: 'feedback' });
       const leftEls = {};
+      const colorOf = {}; words.forEach(function (w, k) { colorOf[w.id] = k % 8; });   // ogni coppia abbinata prende il suo colore
       words.forEach(function (w) {
         const c = el('div', { class: 'mchip', 'data-id': w.id }, [el('span', { class: 'txt', text: w.word }), starButton(ls, w.word)]);
         c.addEventListener('click', function () { if (c.classList.contains('good')) return; $$('.mchip.sel', left).forEach(function (x) { x.classList.remove('sel'); }); c.classList.add('sel'); sel = w; });
@@ -1820,7 +1830,7 @@
           if (c.classList.contains('good')) return;
           if (!sel) { fb.textContent = 'Prima tocca una parola a sinistra.'; fb.style.color = 'var(--muted)'; return; }
           if (sel.id === w.id) {
-            c.classList.add('good'); leftEls[w.id].classList.remove('sel'); leftEls[w.id].classList.add('good'); sel = null; doneN++;
+            c.classList.add('good', 'pair-' + colorOf[w.id]); leftEls[w.id].classList.remove('sel'); leftEls[w.id].classList.add('good', 'pair-' + colorOf[w.id]); sel = null; doneN++;
             fb.textContent = ''; 
             if (doneN === words.length) {
               fb.textContent = '✓ Tutte abbinate!' + (errors ? ' (' + errors + ' errori)' : ''); fb.style.color = 'var(--ok)';

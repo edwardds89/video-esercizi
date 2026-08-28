@@ -123,8 +123,9 @@ button.play { padding: 4px 12px; color: var(--accent); font-weight: 700; }
 .stage.docked .player-box { position: relative; inset: auto; flex: 0 0 auto; height: 54%; width: auto; max-width: 100%; aspect-ratio: 16 / 9; margin: 34px auto 0; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.25); z-index: 2; transition: none; }
 .stage.docked .pop { display: block; position: static; flex: 1 1 auto; min-height: 0; overflow: auto; border: none; border-radius: 0; padding: 8px 24px 12px; }
 .stage.docked .pop .ex-head { position: absolute; top: 4px; left: 14px; right: 14px; z-index: 3; margin: 0; }
-/* schede delle parole prima del video e riepilogo: il video serve poco, resta piccolo in alto */
-.stage.docked.cards .player-box { height: 26%; }
+/* schede delle parole prima del video e riepilogo: il video (in pausa) è nascosto, la scheda prende tutto lo spazio */
+.stage.docked.cards .player-box { display: none; }
+.stage.docked.cards .pop { padding-top: 44px; }
 .stage.docked .pop .ex-head h3.ex-title { font-size: 18px; }
 .stage.docked .pop > h2 { margin-top: 0; }
 .stage .pop .sentence { font-size: clamp(19px, 1.7vw, 26px); }
@@ -271,3 +272,13 @@ button.star.on { color: #e0a800; }
 .mc-opt.wrongpick { border-color: var(--bad); background: var(--bad-bg); }
 .sentence.question { font-weight: 600; }
 .translation { margin-top: 8px; padding: 8px 10px; background: #eef4ff; border-radius: 8px; font-size: 16px; }
+
+/* abbinamento: ogni coppia trovata ha il suo colore */
+.mchip.good.pair-0 { background: #e6f4ea; border-color: #1a7f37; color: #14532d; }
+.mchip.good.pair-1 { background: #e3ecff; border-color: #1f6feb; color: #123a8a; }
+.mchip.good.pair-2 { background: #fff1c2; border-color: #d99a00; color: #6b4b00; }
+.mchip.good.pair-3 { background: #fde2e2; border-color: #d43c3c; color: #7a1f1f; }
+.mchip.good.pair-4 { background: #efe5ff; border-color: #7c4dff; color: #3d1f99; }
+.mchip.good.pair-5 { background: #ffe6cc; border-color: #ff8a00; color: #7a3e00; }
+.mchip.good.pair-6 { background: #d8f5f2; border-color: #0f9e8e; color: #0b5c53; }
+.mchip.good.pair-7 { background: #ffe0f0; border-color: #d6338f; color: #7a1a52; }
