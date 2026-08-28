@@ -342,10 +342,11 @@ async function startVideo(page) {
     if (ex.type === 'gap' || ex.type === 'gapbank') {
       const inputs = await page.$$('#s-panel input.gap');
       // "💡 Aiuto": una lettera alla volta nel primo spazio non giusto
+      const run0 = await page.evaluate(function (id) { const e = window.VLApp.S.student.lesson.exercises.find(function (x) { return x.id === id; }); return window.VLEx.gapRuns(e.data)[0].answer; }, ex.id);
       await page.click('#s-panel button:has-text("Aiuto")');
-      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), ex.data.answers[0].slice(0, 1).toLowerCase(), 'prima lettera svelata');
+      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 1).toLowerCase(), 'prima lettera svelata');
       await page.click('#s-panel button:has-text("Aiuto")');
-      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), ex.data.answers[0].slice(0, 2).toLowerCase(), 'seconda lettera svelata');
+      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 2).toLowerCase(), 'seconda lettera svelata (risposta dello spazio unito)');
       for (const inp of inputs) await inp.fill('zzz');
       await page.click('#s-panel button:has-text("Controlla")');
       assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })));
@@ -387,6 +388,15 @@ async function startVideo(page) {
       await wEl.scrollIntoViewIfNeeded();
       try { await wEl.click({ timeout: 8000 }); } catch (e) { console.log('DIAG star click:', e.message.split('\n').slice(0, 8).join(' | ')); throw e; }
       assert.ok(await page.$('#s-panel .w.starred'), 'parola con la stella');
+      // parole adiacenti stellate = una sola voce (frase); togliendo la stella alla prima resta la seconda
+      const n1 = await page.locator('#s-panel .w').nth(1).getAttribute('data-w'), n2 = await page.locator('#s-panel .w').nth(2).getAttribute('data-w');
+      const w2 = page.locator('#s-panel .w').nth(2); await w2.click(); await page.waitForTimeout(100);
+      let keys = await page.evaluate(function () { return Object.keys(window.VLApp.S.student.stars); });
+      assert.ok(keys.indexOf(n1 + ' ' + n2) !== -1 && keys.indexOf(n1) === -1 && keys.indexOf(n2) === -1, 'due parole vicine = una frase: ' + JSON.stringify(keys));
+      assert.ok((await page.$$eval('#s-panel .w.starred', function (x) { return x.length; })) >= 2, 'entrambe segnate');
+      await page.locator('#s-panel .w').nth(1).click(); await page.waitForTimeout(100);
+      keys = await page.evaluate(function () { return Object.keys(window.VLApp.S.student.stars); });
+      assert.ok(keys.indexOf(n1 + ' ' + n2) === -1 && keys.indexOf(n2) !== -1 && keys.indexOf(n1) === -1, 'tolta la prima resta la seconda: ' + JSON.stringify(keys));
       // layout: video in alto al centro, esercizio sotto
       const geo = await page.evaluate(function () { const p = document.getElementById('s-player').getBoundingClientRect(); const st = document.getElementById('s-stage').getBoundingClientRect(); const b = document.querySelector('#s-panel .sentence, #s-panel .chips, #s-panel .mc-options').getBoundingClientRect(); return { pCenter: (p.left + p.width / 2) - (st.left + st.width / 2), pTop: p.top - st.top, bodyBelow: b.top >= p.bottom - 1, pH: p.height / st.height }; });
       assert.ok(Math.abs(geo.pCenter) < 4 && geo.pTop < 60 && geo.bodyBelow && geo.pH > 0.2 && geo.pH <= 0.56, 'video in alto al centro, frase sotto: ' + JSON.stringify(geo));
