@@ -2,7 +2,10 @@
 <body><video></video>
 <button id="expand">...more</button>
 <button id="tbtn" onclick="document.getElementById('panel').setAttribute('visibility','ENGAGEMENT_PANEL_VISIBILITY_EXPANDED')">Show transcript</button>
-<ytd-engagement-panel-section-list-renderer id="panel" visibility="ENGAGEMENT_PANEL_VISIBILITY_HIDDEN" style="display:block">
+<ytd-engagement-panel-section-list-renderer id="chapters" target-id="engagement-panel-macro-markers-description-chapters" visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED" style="display:block">
+<div>Capitoli</div><div>0:00</div><div>Il chip Neuralink: cos'è</div><div>1:24</div><div>Come funziona</div><div>3:10</div><div>Le sfide</div><div>5:00</div><div>Dove ci porta</div>
+</ytd-engagement-panel-section-list-renderer>
+<ytd-engagement-panel-section-list-renderer id="panel" target-id="engagement-panel-searchable-transcript" visibility="ENGAGEMENT_PANEL_VISIBILITY_HIDDEN" style="display:block">
 <div>In this video</div><div>Chapters</div><div>Transcript</div><div>Search transcript</div>
 <div>Chapter 1: Il chip Neuralink: cos'è, a cosa serve e come funzionano le BCI</div>
 <div>0:00</div><div>0 seconds</div><div>Ma voi vi fareste impiantare un chip nel cervello?</div>
