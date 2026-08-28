@@ -174,6 +174,27 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (els) { return els.length; }), 10);
   assert.ok(/Durata per lo studente: (9:[3-5]\d|10:[0-5]\d|11:0\d)/.test(realStats), 'durata circa 10 minuti');
 
+  console.log('6b. lunghezza frase per esercizio + helper');
+  const firstCard = '#e-exercises .ex-card:first-child';
+  const rangeSel = await page.$(firstCard + ' select[title^="Lunghezza"]');
+  assert.ok(rangeSel, 'select lunghezza');
+  const before6 = await page.$eval(firstCard + ' textarea', function (t) { return t.value; });
+  await rangeSel.selectOption('20-30');
+  await page.waitForTimeout(300);
+  const after6 = await page.$eval(firstCard + ' textarea', function (t) { return t.value; });
+  const wc6 = after6.split(/\s+/).length;
+  assert.ok(wc6 >= 20 && wc6 <= 30, 'frase di 20-30 parole: ' + wc6 + ' (' + after6.slice(0, 40) + ')');
+  assert.notStrictEqual(before6, after6);
+  const helperText = await page.$eval(firstCard + ' select[title^="Frasi adatte"] option:first-child', function (o) { return o.textContent; });
+  assert.ok(/20-30 parole nel video: \d+/.test(helperText), helperText);
+  const nOpts = await page.$$eval(firstCard + ' select[title^="Frasi adatte"] option', function (os) { return os.length; });
+  assert.ok(nOpts > 5, 'helper con frasi: ' + nOpts);
+  await page.selectOption(firstCard + ' select[title^="Frasi adatte"]', '3');
+  await page.waitForTimeout(300);
+  const after6b = await page.$eval(firstCard + ' textarea', function (t) { return t.value; });
+  assert.notStrictEqual(after6b, after6, 'frase scelta dall\'helper applicata');
+  await page.screenshot({ path: 'test/shot-range.png' });
+
   console.log('7. video senza trascrizione → avviso chiaro; generazione senza trascrizione → errore');
   let dialogMsg = '';
   page.once('dialog', function (d) { dialogMsg = d.message(); d.dismiss(); });

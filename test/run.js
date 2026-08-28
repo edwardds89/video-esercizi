@@ -170,6 +170,24 @@ test('bozza sulla trascrizione reale: niente CTA/sponsor tra gli esercizi, durat
   assert.ok(!d.cuts.some(function (c) { return c.end - c.start < 3; }), 'tagli ridicoli');
 });
 
+test('passaggi di lunghezza scelta: 20-30 e 30-40 parole, esercizi nell\'intervallo, senza CTA', function () {
+  [[20, 30], [30, 40]].forEach(function (r) {
+    const ps = G.passages(realChunks, { min: r[0], max: r[1], lang: 'it' });
+    assert.ok(ps.length > 20, 'candidati ' + ps.length);
+    ps.forEach(function (p) { assert.ok(p.wordCount >= r[0] && p.wordCount <= r[1], 'parole ' + p.wordCount); assert.strictEqual(L.words(p.text).length >= r[0], true); });
+    const d = G.generateDraft({ chunks: realChunks, lines: real.lines, duration: 719, n: 6, target: 719, lang: 'it', seed: 3, range: r });
+    assert.strictEqual(d.exercises.length, 6);
+    d.exercises.forEach(function (e) {
+      const wc = e.sentence.split(/\s+/).length;
+      assert.ok(wc >= r[0] && wc <= r[1], 'esercizio con ' + wc + ' parole');
+      assert.ok(!/abbonarvi|abbonamento|meccenati|jopap/i.test(e.sentence));
+      assert.ok(e.chunkIds.length >= 1 && e.segment.end > e.segment.start);
+    });
+    const near = G.passagesNear(realChunks, 300, { range: r, lang: 'it', type: 'gap', exclude: new Set() });
+    assert.ok(near.length >= 1);
+  });
+});
+
 console.log('Esercizi');
 const S = 'Il cervello umano contiene circa ottantasei miliardi di neuroni.';
 test('gap fill: costruzione e correzione', function () {
