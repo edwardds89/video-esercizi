@@ -184,6 +184,10 @@
         wrongReplacement: pe.wrong && pe.wrong.replacement ? pe.wrong.replacement : null,
         question: pe.question || null, options: Array.isArray(pe.options) ? pe.options : null, correct: pe.correct, tricky: pe.tricky
       };
+      if (type === 'mc' && choices.options && choices.options.length > 1 && ctx.shuffle !== false) {
+        const sh = shuffleMC(choices.options, Math.max(0, Math.min(choices.options.length - 1, choices.correct | 0)), (choices.tricky == null ? null : choices.tricky | 0), ctx.rand);
+        choices.options = sh.options; choices.correct = sh.correct; choices.tricky = sh.tricky;
+      }
       const seed = 1000 + i;
       let ex = EX.buildExercise(type, sentenceText, { lang: lang, seed: seed, choices: choices, vocab: vocab });
       if (!ex) {
@@ -308,6 +312,16 @@
     return { vocab: cleanVocab(plan.vocab), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
+  /** Mescola le opzioni di una scelta multipla (il modello mette quasi sempre quella giusta per prima) e rimappa gli indici. */
+  function shuffleMC(options, correct, tricky, rand) {
+    const r = typeof rand === 'function' ? rand : Math.random;
+    const idx = options.map(function (o, i) { return i; });
+    for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+    // se dopo il mescolamento la giusta è ancora prima e ci sono almeno 2 opzioni, la sposta (evita il "sempre la prima")
+    if (idx.length > 1 && idx[0] === correct) { const k = 1 + Math.floor(r() * (idx.length - 1)); const t = idx[0]; idx[0] = idx[k]; idx[k] = t; }
+    return { options: idx.map(function (i) { return options[i]; }), correct: idx.indexOf(correct), tricky: (tricky == null || tricky < 0) ? null : idx.indexOf(tricky) };
+  }
+
   /** Domanda a scelta multipla su una frase del video. params: { sentence, context, lang, level, tricky, apiKey, model, fetchImpl } → { question, options, correct, tricky } */
   async function generateMC(params) {
     const lang = params.lang || 'it';
@@ -321,7 +335,10 @@
     const j = extractJSON(res.text);
     const options = (Array.isArray(j.options) ? j.options : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 4);
     if (!j.question || options.length < 2) throw new Error('Il modello non ha restituito una domanda valida');
-    return { question: String(j.question).trim(), options: options, correct: Math.max(0, Math.min(options.length - 1, j.correct | 0)), tricky: (j.tricky == null || j.tricky === j.correct) ? null : Math.max(0, Math.min(options.length - 1, j.tricky | 0)), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+    const correct = Math.max(0, Math.min(options.length - 1, j.correct | 0));
+    const tricky = (j.tricky == null || j.tricky === j.correct) ? null : Math.max(0, Math.min(options.length - 1, j.tricky | 0));
+    const sh = params.shuffle === false ? { options: options, correct: correct, tricky: tricky } : shuffleMC(options, correct, tricky, params.rand);
+    return { question: String(j.question).trim(), options: sh.options, correct: sh.correct, tricky: sh.tricky, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /** Su richiesta: sostituisce una risposta sbagliata con una "tricky". params: { question, options, correct, sentence, context, lang, level, apiKey, model, fetchImpl } → { index, option } */
@@ -395,5 +412,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, makeTricky: makeTricky, translateSentence: translateSentence };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence };
 });

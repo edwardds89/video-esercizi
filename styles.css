@@ -210,7 +210,11 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .vocab-row.off input[type=text] { opacity: .55; }
 .vocab-row input[type=text] { padding: 4px 8px; }
 .vocab-row .v-img { display: flex; gap: 4px; align-items: center; }
-.vocab-row .v-img img { width: 44px; height: 32px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid var(--line); }
+.vocab-row .v-img img { width: 44px; height: 32px; object-fit: cover; border-radius: 4px; cursor: zoom-in; border: 1px solid var(--line); }
+.img-preview { position: fixed; z-index: 60; display: none; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25); padding: 6px; max-width: 392px; pointer-events: none; }
+.img-preview.show { display: block; }
+.img-preview img { display: block; max-width: 380px; max-height: 290px; min-width: 120px; min-height: 60px; border-radius: 8px; object-fit: contain; background: #f2f4f7; }
+.img-preview .cap { font-size: 12px; color: var(--muted); margin-top: 4px; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .vocab-row { grid-template-columns: 22px 1fr 1fr; } .vocab-row .badge { display: none; } }
 
 /* stelle sulle parole */

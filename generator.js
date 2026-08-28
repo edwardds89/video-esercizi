@@ -584,12 +584,14 @@
       .sort(function (a, b) { return b.score * typeFitRange(o.type, b, o.lang) - a.score * typeFitRange(o.type, a, o.lang); });
   }
 
+  function emptyMC() { return { type: 'mc', data: { question: '', options: ['', '', '', ''], correct: 0, tricky: null } }; }
   function makeExerciseFromPassage(p, type, opts) {
     const lang = opts.lang || 'it';
     const seed = (opts.seed || 1) * 7919 + p.wordCount;
     const text = capFirst(p.text);
     const bo = { lang: lang, seed: seed, vocab: opts.vocab || null, distractors: opts.distractors };
     let ex = EX.buildExercise(type, text, bo);
+    if (!ex && type === 'mc') ex = emptyMC();   // vedi makeExercise
     if (!ex) {
       for (const alt of ['gap', 'missing', 'scramble', 'extra', 'wrong']) { if (alt === type) continue; ex = EX.buildExercise(alt, text, bo); if (ex) break; }
     }
@@ -759,6 +761,7 @@
     const text = capFirst(chunk.text);
     const bo = { lang: lang, seed: seed, vocab: opts.vocab || null, distractors: opts.distractors };
     let ex = EX.buildExercise(type, text, bo);
+    if (!ex && type === 'mc') ex = emptyMC();   // scelta multipla senza domanda: resta "mc" (domanda dal modello o dall'insegnante), MAI un fill the gaps al suo posto
     if (!ex) {
       for (const alt of ['gap', 'missing', 'scramble', 'extra', 'wrong']) {
         if (alt === type) continue;
@@ -786,7 +789,10 @@
     const lines = params.lines;
     const duration = params.duration || (lines.length ? lines[lines.length - 1].end : 0);
     const chunks = params.chunks || annotate(buildChunks(lines, { duration: duration, lang: lang }), { lang: lang, duration: duration });
-    const types = params.types && params.types.length ? params.types : DEFAULT_TYPES.slice();
+    // la scelta multipla ha bisogno di una domanda che le regole non sanno scrivere: nella bozza a regole non entra
+    // (si aggiunge dall'editor: col modello o a mano); senza questo filtro uscirebbero esercizi vuoti al posto suo
+    let types = params.types && params.types.length ? params.types.filter(function (t) { return t !== 'mc'; }) : DEFAULT_TYPES.slice();
+    if (!types.length) types = DEFAULT_TYPES.slice();
     const target = params.target && params.target > 0 ? Math.min(params.target, duration) : duration;
     const auto = params.n === 'auto' || !(params.n > 0);
     const n = auto ? autoCount(target, params.spacing) : Math.max(1, params.n | 0);

@@ -392,6 +392,7 @@
       if (!r) {
         const d = G.generateDraft({ chunks: chunks, lines: ls.lines, duration: duration, n: p.n, target: p.target, tolerance: p.tolerance, types: p.types, range: p.range, lang: ls.lang, contextBefore: p.contextBefore, seed: (Date.now() % 100000) + 1 });
         r = { exercises: d.exercises, cuts: d.cuts, stats: d.stats, warnings: d.stats.shortfall > Math.max(5, p.tolerance || 0) ? ['Durata target non raggiungibile senza tagliare gli esercizi: mancano ' + Math.round(d.stats.shortfall) + 's.'] : [] };
+        if ((p.types || []).indexOf('mc') !== -1) r.warnings.push('Scelta multipla: le regole non sanno scrivere domande, quindi nella bozza non c\'è; nell\'editor cambia il tipo di un esercizio in "Scelta multipla" (con la chiave AI domanda e risposte arrivano da sole).');
         ls.ai = null;
       }
       ls.exercises = r.exercises;
@@ -741,15 +742,22 @@
 
       const img = el('div', { class: 'v-img' });
       const syncWord = function () { const v = wi.value.trim(); if (v && v !== w.word) { w.word = v; touch(ls); } };   // la ricerca usa sempre la parola scritta ora
+      // anteprima grande al passaggio del mouse su miniatura e pulsanti (resta aperta mentre si clicca "↻ Altra")
+      let hovering = false;
+      img.addEventListener('mouseenter', function () { hovering = true; if (w.image) showImgPreview(img, w.image, imgCaption(w)); });
+      img.addEventListener('mouseleave', function () { hovering = false; hideImgPreview(); });
       const renderImg = function () {
         img.innerHTML = '';
         if (w.image) {
-          const im = el('img', { src: w.image, alt: '', title: w.image, referrerpolicy: 'no-referrer' });
+          const im = el('img', { src: w.image, alt: '', title: 'Passa col mouse per vederla grande', referrerpolicy: 'no-referrer' });
           im.addEventListener('error', function () { im.replaceWith(el('span', { class: 'notice bad', style: 'padding:2px 6px;font-size:12px', text: 'non caricabile', title: w.image })); });
+          im.addEventListener('click', function () { if (isPreviewShown()) hideImgPreview(); else showImgPreview(img, w.image, imgCaption(w)); });   // touch: un tocco apre, un altro chiude
           img.appendChild(im);
+          if (hovering) showImgPreview(img, w.image, imgCaption(w));
           img.appendChild(el('button', { class: 'small', text: '↻ Altra', title: 'Cerca un\'altra foto per questa parola', onclick: function () { syncWord(); findImage(ls, w, renderImg, true); } }));
           img.appendChild(el('button', { class: 'small', text: '✕', title: 'Togli la foto', onclick: function () { w.image = ''; touch(ls); renderImg(); } }));
         } else {
+          hideImgPreview();
           img.appendChild(el('button', { class: 'small', text: '🔍 Foto', title: 'Cerca una foto (Wikipedia e Wikimedia Commons) per la parola scritta qui a sinistra', onclick: function () { syncWord(); findImage(ls, w, renderImg, false); } }));
           img.appendChild(el('button', { class: 'small', text: 'URL', title: 'Incolla l\'indirizzo di un\'immagine', onclick: function () { const u = prompt('Indirizzo dell\'immagine (https://…)'); if (u && /^https?:\/\//.test(u.trim())) { w.image = u.trim(); touch(ls); renderImg(); } } }));
         }
@@ -762,6 +770,33 @@
     });
     box.appendChild(table);
     box.appendChild(el('div', { class: 'hint ready', text: readyText(ls) }));
+  }
+  /** Anteprima grande di una foto (la miniatura da 44 px non basta per giudicarla): riquadro fisso accanto all'elemento. */
+  let previewBox = null;
+  function showImgPreview(anchor, src, caption) {
+    if (!previewBox) { previewBox = el('div', { class: 'img-preview' }); document.body.appendChild(previewBox); }
+    const cur = previewBox.querySelector('img');
+    if (!cur || cur.getAttribute('src') !== src) {
+      previewBox.innerHTML = '';
+      previewBox.appendChild(el('img', { src: src, alt: '', referrerpolicy: 'no-referrer' }));
+      previewBox.appendChild(el('div', { class: 'cap', text: caption || '' }));
+    } else previewBox.querySelector('.cap').textContent = caption || '';
+    previewBox.classList.add('show');
+    // a destra della miniatura se c'è spazio; altrimenti sotto (o sopra) la riga, mai sopra la riga stessa
+    const r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, W = 392, H = 330;
+    let left, top;
+    if (r.right + 12 + W <= vw - 8) { left = r.right + 12; top = r.top - 24; }
+    else { left = Math.max(8, Math.min(r.right - W, vw - W - 8)); top = (r.bottom + 8 + H <= vh - 8) ? r.bottom + 8 : r.top - H - 8; }
+    if (top + H > vh - 8) top = vh - H - 8;
+    if (top < 8) top = 8;
+    previewBox.style.left = left + 'px'; previewBox.style.top = top + 'px';
+  }
+  function hideImgPreview() { if (previewBox) previewBox.classList.remove('show'); }
+  function isPreviewShown() { return !!(previewBox && previewBox.classList.contains('show')); }
+  function imgCaption(w) {
+    const c = (w._imgs || [])[w._imgIdx];
+    if (c && c.url === w.image) return (w._imgIdx + 1) + '/' + w._imgs.length + ' · ' + c.title + ' (' + c.source + ')';
+    try { return new URL(w.image).hostname; } catch (e) { return ''; }
   }
   function readyText(ls) {
     const ready = cardVocab(ls).length;
@@ -898,6 +933,47 @@
     if (inp) { inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { /* ignore */ } }
   }
 
+  /** Parole della trascrizione intorno a un intervallo, con il tempo stimato di ciascuna (stessa segmentazione di L.words). */
+  function wordsNear(ls, seg, pad) {
+    const out = [];
+    (ls.chunks || []).filter(function (c) { return !c.silence && c.end >= seg.start - pad && c.start <= seg.end + pad; })
+      .sort(function (a, b) { return a.start - b.start; })
+      .forEach(function (c) {
+        const raw = String(c.text || '').split(/\s+/).filter(Boolean);
+        let times = G.wordTimes(c);
+        if (times.length !== raw.length) { const d = (c.end - c.start) / Math.max(1, raw.length); times = raw.map(function (w, i) { return { start: c.start + i * d, end: c.start + (i + 1) * d }; }); }
+        raw.forEach(function (w, i) { L.words(w).forEach(function (n) { out.push({ norm: n, start: times[i].start, end: times[i].end }); }); });
+      });
+    return out;
+  }
+  /** Dopo una modifica a mano della frase: ritrova le sue parole nella trascrizione e restituisce {start, end} (o null). */
+  function retimeSentence(ls, ex) {
+    const words = L.words(ex.sentence);
+    if (words.length < 2) return null;
+    const pool = wordsNear(ls, ex.segment, 60);
+    const mid = (ex.segment.start + ex.segment.end) / 2;
+    let best = null;
+    for (let i = 0; i + words.length <= pool.length; i++) {
+      let ok = true;
+      for (let k = 0; k < words.length; k++) { if (pool[i + k].norm !== words[k]) { ok = false; break; } }
+      if (!ok) continue;
+      const d = Math.abs((pool[i].start + pool[i + words.length - 1].end) / 2 - mid);
+      if (!best || d < best.d) best = { d: d, start: pool[i].start, end: pool[i + words.length - 1].end };
+    }
+    if (best) return best;
+    // corrispondenza parziale: prima e ultima parola, con un numero di parole simile (qualcosa in mezzo è stato ritoccato)
+    const first = words[0], last = words[words.length - 1];
+    for (let i = 0; i < pool.length; i++) {
+      if (pool[i].norm !== first) continue;
+      for (let j = i + 1; j < pool.length && j - i <= words.length + 3; j++) {
+        if (pool[j].norm !== last || Math.abs((j - i + 1) - words.length) > 3) continue;
+        const d = Math.abs((pool[i].start + pool[j].end) / 2 - mid);
+        if (!best || d < best.d) best = { d: d, start: pool[i].start, end: pool[j].end, partial: true };
+      }
+    }
+    return best;
+  }
+
   function rebuildExercise(ls, ex, type, choices, seed) {
     const built = EX.buildExercise(type, ex.sentence, { lang: ls.lang, seed: seed || (Date.now() % 100000), choices: choices || null, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 });
     if (!built) return false;
@@ -907,7 +983,7 @@
 
   function renderExerciseCard(ls, ex, i) {
     const card = el('div', { class: 'ex-card ' + (ex.source || 'rules'), id: 'ex-' + ex.id });
-    const typeSel = el('select', { style: 'width:auto' });
+    const typeSel = el('select', { style: 'width:auto', title: 'Tipo di esercizio' });
     G.ALL_TYPES.forEach(function (t) { typeSel.appendChild(el('option', { value: t, text: EX.LABELS[t], selected: t === ex.type ? 'selected' : null })); });
     typeSel.addEventListener('change', function () {
       const newType = typeSel.value;
@@ -916,7 +992,7 @@
       // se la frase attuale non è della lunghezza giusta per il nuovo tipo (o il tipo non è applicabile), si cerca una frase adatta vicino allo stesso punto
       const fits = wc >= r[0] - 4 && wc <= r[1] + 4;
       if (fits && rebuildExercise(ls, ex, newType)) { touch(ls); renderEditorBody(); return; }
-      if (newType === 'mc') { ex.type = 'mc'; ex.data = { question: '', options: ['', '', '', ''], correct: 0, tricky: null }; touch(ls); renderEditorBody(); return; }
+      if (newType === 'mc') { ex.type = 'mc'; ex.data = { question: '', options: ['', '', '', ''], correct: 0, tricky: null }; touch(ls); renderEditorBody(); autoMC(ls, ex); return; }
       const used = usedChunkIds(ls, ex);
       const near = G.passagesNear(ls.chunks || [], ex.markerTime, { exclude: used, type: newType, lang: ls.lang, window: 90, range: 'smart' }).filter(function (p) { return !p.cta; });
       const complete = near.filter(function (p) { return p.startsSentence && p.endsSentence; });
@@ -987,10 +1063,22 @@
     card.appendChild(head);
     card.appendChild(el('div', { class: 'row', style: 'margin-top:6px' }, el('span', { class: 'hint', text: 'Helper:' }), helperSel));
     if (ex.note) card.appendChild(el('div', { class: 'hint', text: 'Perché: ' + ex.note }));
-    const ta = el('textarea', { class: 'sentence-edit', style: 'min-height:56px;margin-top:8px' }); ta.value = ex.sentence;
+    const ta = el('textarea', { class: 'sentence-edit', style: 'min-height:56px;margin-top:8px', title: 'Se togli o aggiungi parole all\'inizio o alla fine, inizio e fine vengono ricalcolati sulle parole' }); ta.value = ex.sentence;
     ta.addEventListener('change', function () {
+      const oldWords = L.words(ex.sentence).join(' ');
       ex.sentence = ta.value.trim();
-      if (!rebuildExercise(ls, ex, ex.type)) toast('Frase troppo corta per questo tipo');
+      if (L.words(ex.sentence).join(' ') !== oldWords) {
+        // parole cambiate: inizio e fine si ricalcolano sulle parole ritrovate nella trascrizione (se solo la punteggiatura cambia, i tempi restano)
+        const rt = retimeSentence(ls, ex);
+        if (rt) {
+          const wasAligned = Math.abs(ex.markerTime - ex.segment.end) < 0.6;
+          ex.segment = { start: Math.max(0, Math.round((rt.start - 0.2) * 10) / 10), end: Math.round((rt.end + 0.35) * 10) / 10 };
+          if (wasAligned || ex.markerTime < ex.segment.end) ex.markerTime = Math.round((ex.segment.end + 0.1) * 10) / 10;
+          sortExercises(ls);
+          toast('Tempi ricalcolati sulle parole: ' + fmt(ex.segment.start) + ' → ' + fmt(ex.segment.end) + (rt.partial ? ' (solo prima e ultima parola ritrovate)' : ''), 3500);
+        } else toast('Frase non ritrovata nella trascrizione: tempi lasciati com\'erano', 3500);
+      }
+      if (!rebuildExercise(ls, ex, ex.type, ex.type === 'mc' ? ex.data : null)) toast('Frase troppo corta per questo tipo');
       touch(ls); renderEditorBody();
     });
     card.appendChild(el('label', { text: 'Frase (quello che lo studente sente)' }));
@@ -1180,18 +1268,8 @@
       const pool = complete.length ? complete : cands;
       let best = null, bestS = -1;
       pool.forEach(function (p) { const d = Math.abs((p.start + p.end) / 2 - t); const sc = p.score / (1 + d / 20); if (sc > bestS) { bestS = sc; best = p; } });
-      if (best) ex = G.makeExerciseFromPassage(best, type === 'mc' ? 'gap' : type, { lang: ls.lang, seed: Date.now() % 1000, range: range, vocab: lessonVocab(ls), distractors: 2, source: 'rules' });
-      if (ex && type === 'mc') {
-        // scelta multipla: la frase è scelta, domanda e risposte le scrive il modello (o l'insegnante)
-        ex.type = 'mc'; ex.data = { question: '', options: ['', '', '', ''], correct: 0, tricky: null };
-        if (S.settings.apiKey) {
-          const context = (ls.chunks || []).filter(function (c) { return Math.abs((c.start + c.end) / 2 - t) < 60; }).map(function (c) { return c.text; }).join(' ');
-          const target = ex;
-          AI.generateMC({ sentence: ex.sentence, context: context, lang: ls.lang, level: ls.level, tricky: !!(ls.params && ls.params.tricky), apiKey: S.settings.apiKey, model: S.settings.model })
-            .then(function (r) { target.data = { question: r.question, options: r.options, correct: r.correct, tricky: r.tricky }; touch(ls); if (S.view === 'editor') renderEditorBody(); toast('Domanda a scelta multipla generata'); })
-            .catch(function (err) { toast('AI: ' + err.message, 6000); });
-        }
-      }
+      if (best) ex = G.makeExerciseFromPassage(best, type, { lang: ls.lang, seed: Date.now() % 1000, range: range, vocab: lessonVocab(ls), distractors: 2, source: 'rules' });
+      // scelta multipla: la frase è scelta qui, domanda e risposte le scrive il modello (autoMC, più sotto) o l'insegnante
     } else {
       const c = G.nearestChunk((ls.chunks || []).filter(function (c) { return !used.has(c.id); }), t);
       if (c) ex = G.makeExercise(c, type, { lang: ls.lang, seed: Date.now() % 1000, vocab: lessonVocab(ls), distractors: 2 });
@@ -1201,6 +1279,7 @@
     const card = $('#ex-' + ex.id);
     if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(function () { card.classList.remove('flash'); }, 1500); }
     toast('Esercizio ' + (ls.exercises.indexOf(ex) + 1) + ' aggiunto a ' + fmt(ex.markerTime));
+    autoMC(ls, ex);
   }
   function usedChunkIds(ls, except) {
     const used = new Set();
@@ -1222,6 +1301,22 @@
       .sort(function (a, b) { return a.start - b.start; })
       .map(function (c) { return { start: c.start, end: c.end, text: c.text, chunkIds: [c.id], wordCount: c.wordCount, chunk: c }; });
   }
+  /** Scelta multipla con frase nuova: se c'è la chiave, domanda e risposte le scrive subito il modello (l'ordine delle risposte è mescolato). */
+  function autoMC(ls, ex, tricky) {
+    if (ex.type !== 'mc' || (ex.data && ex.data.question)) return;
+    if (!S.settings.apiKey) return toast('Scelta multipla: scrivi domanda e risposte (con la chiave AI le scrive il modello)', 4000);
+    const context = (ls.chunks || []).filter(function (c) { return Math.abs((c.start + c.end) / 2 - ex.markerTime) < 60; }).map(function (c) { return c.text; }).join(' ');
+    const sentence = ex.sentence;
+    toast('Scelta multipla: chiedo domanda e risposte al modello…', 2500);
+    AI.generateMC({ sentence: sentence, context: context, lang: ls.lang, level: ls.level, tricky: tricky == null ? !!(ls.params && ls.params.tricky) : !!tricky, apiKey: S.settings.apiKey, model: S.settings.model })
+      .then(function (r) {
+        if (ex.type !== 'mc' || ex.sentence !== sentence) return;   // nel frattempo l'insegnante ha cambiato ancora
+        ex.data = { question: r.question, options: r.options, correct: r.correct, tricky: r.tricky }; touch(ls);
+        if (S.view === 'editor') renderEditorBody();
+        toast('Domanda a scelta multipla generata' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''));
+      })
+      .catch(function (err) { toast('AI: ' + err.message, 6000); });
+  }
   function applyCandidate(ls, ex, p) {
     const bo = { lang: ls.lang, seed: Date.now() % 1000, source: 'rules', range: ex.range, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 };
     const nx = p.chunk ? G.makeExercise(p.chunk, ex.type, bo) : G.makeExerciseFromPassage(p, ex.type, bo);
@@ -1229,6 +1324,7 @@
     ex.chunkId = nx.chunkId; ex.chunkIds = nx.chunkIds || [nx.chunkId]; ex.sentence = nx.sentence; ex.segment = nx.segment; ex.markerTime = nx.markerTime; ex.type = nx.type; ex.data = nx.data; ex.source = 'rules'; ex.note = '';
     if (!ex.range) delete ex.range;
     sortExercises(ls); touch(ls); renderEditorBody();
+    autoMC(ls, ex);
     const card = $('#ex-' + ex.id); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   function altSentence(ls, ex) {
@@ -1252,6 +1348,7 @@
     if (!nx) return toast('Frase non adatta');
     ex.chunkId = nx.chunkId; ex.sentence = nx.sentence; ex.segment = nx.segment; ex.markerTime = nx.markerTime; ex.type = nx.type; ex.data = nx.data; ex.source = 'rules'; ex.note = '';
     sortExercises(ls); touch(ls); renderEditorBody();
+    autoMC(ls, ex);
   }
 
   function renderCutRow(ls, c, i) {
