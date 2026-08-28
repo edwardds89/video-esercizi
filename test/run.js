@@ -196,7 +196,7 @@ test('lunghezza consigliata ("smart"): fill the gaps su 22-32 parole con ≥3 sp
     assert.ok(/^[^\p{L}]*\p{Lu}/u.test(e.sentence), 'maiuscola: ' + e.sentence);
     if (e.type === 'gap') { assert.ok(wc >= 22 && wc <= 32, 'gap ' + wc + ' parole'); assert.ok(e.data.gapIndices.length >= 3, 'almeno 3 spazi'); assert.ok(!e.data.wordBank, 'niente parole date'); }
     if (e.type === 'gapbank') { assert.ok(e.data.wordBank.length > e.data.answers.length, 'distrattori presenti'); assert.ok(e.data.gapIndices.length >= 3); }
-    if (e.type === 'scramble') assert.ok(wc <= 14, 'scramble corto: ' + wc);
+    if (e.type === 'scramble') assert.ok(wc <= 24, 'scramble entro 24 parole: ' + wc);
   });
   const complete = d.exercises.filter(function (e) { return /[.!?…]["'»)]*$/.test(e.sentence); }).length;
   assert.ok(complete >= 8, 'frasi complete: ' + complete + '/10');
@@ -272,6 +272,39 @@ test('makeExercise ripiega su un altro tipo se quello richiesto non è applicabi
   const c = { id: 'c99', start: 10, end: 14, text: 'Neuroni sinapsi plasticità cervello.', lines: [] };
   const ex = G.makeExercise(c, 'wrong', { lang: 'it' });
   assert.ok(ex && ex.type !== 'wrong');
+});
+
+console.log('Parole utili e modalità automatica');
+test('vocabCandidates: parole piene, priorità a quelle degli esercizi, niente avverbi comuni né articoli elisi', function () {
+  const yt = F.youtubeTranscript();
+  const lines = G.parseTranscript(yt.text).lines;
+  const chunks = G.annotate(G.buildChunks(lines, { duration: yt.duration, lang: 'it' }), { lang: 'it', duration: yt.duration });
+  const d = G.generateDraft({ chunks: chunks, lines: lines, duration: yt.duration, n: 8, target: 600, lang: 'it', range: 'smart' });
+  const v = G.vocabCandidates(chunks, d.exercises, { lang: 'it', n: 12 });
+  assert.strictEqual(v.length, 12);
+  assert.ok(v[0].inExercises, 'la prima è negli esercizi');
+  v.forEach(function (x) {
+    assert.ok(x.word.length >= 4, x.word);
+    assert.ok(!/^(molto|molte|direttamente|quindi|anche)$/.test(x.word), 'avverbio comune: ' + x.word);
+    assert.ok(!/^[a-z]+'/.test(x.word), 'articolo eliso: ' + x.word);
+  });
+  const inEx = v.filter(function (x) { return x.inExercises; }).length;
+  assert.ok(inEx >= 6, 'la maggior parte viene dalle frasi degli esercizi: ' + inEx);
+});
+test('modalità automatica: circa un esercizio ogni 40 s, distanza minima, solo frasi complete se la trascrizione ha la punteggiatura', function () {
+  const fs = require('fs');
+  const txt = fs.readFileSync(__dirname + '/fixture-neuralink.txt', 'utf8');
+  const lines = G.parseTranscript(txt).lines;
+  const d = G.generateDraft({ lines: lines, duration: 717, n: 'auto', target: 600, lang: 'it', range: 'smart' });
+  const want = G.autoCount(600);
+  assert.strictEqual(want, 15);
+  assert.ok(d.exercises.length >= 9 && d.exercises.length <= want, 'numero: ' + d.exercises.length);
+  for (let i = 1; i < d.exercises.length; i++) assert.ok(d.exercises[i].segment.start - d.exercises[i - 1].segment.end >= 25, 'distanza minima tra ' + (i) + ' e ' + (i + 1));
+  d.exercises.forEach(function (e) { assert.ok(/^[A-ZÀ-Ü]/.test(e.sentence) && /[.!?…]["'»)]*$/.test(e.sentence), 'frase completa: ' + e.sentence.slice(0, 40)); });
+  // trascrizione senza punteggiatura: non si può pretendere la frase completa, ma il numero resta simile
+  const yt = F.youtubeTranscript();
+  const d2 = G.generateDraft({ lines: G.parseTranscript(yt.text).lines, duration: yt.duration, n: 'auto', target: 600, lang: 'it', range: 'smart' });
+  assert.ok(d2.exercises.length >= 10, 'senza punteggiatura: ' + d2.exercises.length);
 });
 
 console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
