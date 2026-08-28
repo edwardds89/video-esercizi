@@ -1,0 +1,497 @@
+{
+ "v": 1,
+ "id": "dentifricio",
+ "title": "A cosa serve davvero il dentifricio? Come il fluoro protegge i denti (Geopop)",
+ "videoId": "LEN55dyOKw8",
+ "lang": "it",
+ "duration": 571,
+ "exercises": [
+  {
+   "id": "ec17-e1w9",
+   "chunkId": "c17",
+   "chunkIds": [
+    "c17"
+   ],
+   "type": "gap",
+   "sentence": "perché ci serve per capire proprio come funziona il fluoro del dentifricio. Eccola.",
+   "segment": {
+    "start": 52.08571428571428,
+    "end": 56.016666666666666
+   },
+   "markerTime": 56.06666666666666,
+   "data": {
+    "tokens": [
+     "perché",
+     "ci",
+     "serve",
+     "per",
+     "capire",
+     "proprio",
+     "come",
+     "funziona",
+     "il",
+     "fluoro",
+     "del",
+     "dentifricio.",
+     "Eccola."
+    ],
+    "gapIndices": [
+     7,
+     11
+    ],
+    "answers": [
+     "funziona",
+     "dentifricio"
+    ],
+    "wordBank": [
+     "dentifricio",
+     "funziona"
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec26-cnba",
+   "chunkId": "c26",
+   "chunkIds": [
+    "c26"
+   ],
+   "type": "scramble",
+   "sentence": "Il problema è che noi inseriamo in bocca un sacco di cose ogni giorno.",
+   "segment": {
+    "start": 84.13333333333333,
+    "end": 89.68333333333332
+   },
+   "markerTime": 89.73333333333332,
+   "data": {
+    "words": [
+     "il",
+     "problema",
+     "è",
+     "che",
+     "noi",
+     "inseriamo",
+     "in",
+     "bocca",
+     "un",
+     "sacco",
+     "di",
+     "cose",
+     "ogni",
+     "giorno"
+    ],
+    "shuffled": [
+     "sacco",
+     "problema",
+     "un",
+     "noi",
+     "di",
+     "che",
+     "il",
+     "inseriamo",
+     "ogni",
+     "bocca",
+     "giorno",
+     "cose",
+     "in",
+     "è"
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec32-9e2x",
+   "chunkId": "c32",
+   "chunkIds": [
+    "c32"
+   ],
+   "type": "missing",
+   "sentence": "Questo batterio ha un'abilità molto specifica, riesce a trasformare alcuni carboidrati semplici del cibo.",
+   "segment": {
+    "start": 111.8,
+    "end": 117.72309225235733
+   },
+   "markerTime": 117.77309225235733,
+   "data": {
+    "tokens": [
+     "Questo",
+     "batterio",
+     "ha",
+     "un'abilità",
+     "molto",
+     "specifica,",
+     "riesce",
+     "a",
+     "trasformare",
+     "alcuni",
+     "carboidrati",
+     "semplici",
+     "del",
+     "cibo."
+    ],
+    "missingIndex": 3,
+    "answer": "un'abilità"
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec51-28kf",
+   "chunkId": "c51",
+   "chunkIds": [
+    "c51"
+   ],
+   "type": "extra",
+   "sentence": "Però attenzione, la nostra saliva ha un ruolo importantissimo per evitare la continua demineralizzazione.",
+   "segment": {
+    "start": 191.8,
+    "end": 198.03654612617865
+   },
+   "markerTime": 198.08654612617866,
+   "data": {
+    "shown": [
+     "Però",
+     "attenzione,",
+     "la",
+     "nostra",
+     "saliva",
+     "ha",
+     "un",
+     "il",
+     "ruolo",
+     "importantissimo",
+     "per",
+     "evitare",
+     "la",
+     "continua",
+     "demineralizzazione."
+    ],
+    "extraIndex": 7,
+    "extraWord": "il",
+    "original": [
+     "Però",
+     "attenzione,",
+     "la",
+     "nostra",
+     "saliva",
+     "ha",
+     "un",
+     "ruolo",
+     "importantissimo",
+     "per",
+     "evitare",
+     "la",
+     "continua",
+     "demineralizzazione."
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec59-f5h6",
+   "chunkId": "c59",
+   "chunkIds": [
+    "c59"
+   ],
+   "type": "wrong",
+   "sentence": "Ora, se queste due reazioni sono equilibrate, il nostro smalto rimane costante.",
+   "segment": {
+    "start": 238.14327306308934,
+    "end": 243.69327306308932
+   },
+   "markerTime": 243.74327306308933,
+   "data": {
+    "shown": [
+     "Ora,",
+     "se",
+     "queste",
+     "due",
+     "reazioni",
+     "erano",
+     "equilibrate,",
+     "il",
+     "nostro",
+     "smalto",
+     "rimane",
+     "costante."
+    ],
+    "wrongIndex": 5,
+    "wrongWord": "erano",
+    "answer": "sono",
+    "original": [
+     "Ora,",
+     "se",
+     "queste",
+     "due",
+     "reazioni",
+     "sono",
+     "equilibrate,",
+     "il",
+     "nostro",
+     "smalto",
+     "rimane",
+     "costante."
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec79-cfs4",
+   "chunkId": "c79",
+   "chunkIds": [
+    "c79"
+   ],
+   "type": "gap",
+   "sentence": "Nel momento in cui ci laviamo i denti con il fluoro, cosa succede?",
+   "segment": {
+    "start": 323.4666666666667,
+    "end": 328.6357142857143
+   },
+   "markerTime": 328.6857142857143,
+   "data": {
+    "tokens": [
+     "Nel",
+     "momento",
+     "in",
+     "cui",
+     "ci",
+     "laviamo",
+     "i",
+     "denti",
+     "con",
+     "il",
+     "fluoro,",
+     "cosa",
+     "succede?"
+    ],
+    "gapIndices": [
+     1,
+     5
+    ],
+    "answers": [
+     "momento",
+     "laviamo"
+    ],
+    "wordBank": [
+     "momento",
+     "laviamo"
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec92-9epx",
+   "chunkId": "c92",
+   "chunkIds": [
+    "c92"
+   ],
+   "type": "scramble",
+   "sentence": "oltre all'acqua sono ad esempio il sorbitolo e il sodio lauril solfato.",
+   "segment": {
+    "start": 380.1730922523574,
+    "end": 385.7230922523574
+   },
+   "markerTime": 385.7730922523574,
+   "data": {
+    "words": [
+     "oltre",
+     "all'acqua",
+     "sono",
+     "ad",
+     "esempio",
+     "il",
+     "sorbitolo",
+     "e",
+     "il",
+     "sodio",
+     "lauril",
+     "solfato"
+    ],
+    "shuffled": [
+     "e",
+     "sodio",
+     "esempio",
+     "sono",
+     "oltre",
+     "il",
+     "il",
+     "lauril",
+     "solfato",
+     "sorbitolo",
+     "ad",
+     "all'acqua"
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec104-jdta",
+   "chunkId": "c104",
+   "chunkIds": [
+    "c104"
+   ],
+   "type": "missing",
+   "sentence": "soprattutto quelli grassi e per ridurre anche la carica batterica.",
+   "segment": {
+    "start": 424.5163653154467,
+    "end": 429.0166666666667
+   },
+   "markerTime": 429.0666666666667,
+   "data": {
+    "tokens": [
+     "soprattutto",
+     "quelli",
+     "grassi",
+     "e",
+     "per",
+     "ridurre",
+     "anche",
+     "la",
+     "carica",
+     "batterica."
+    ],
+    "missingIndex": 2,
+    "answer": "grassi"
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec112-d8we",
+   "chunkId": "c112",
+   "chunkIds": [
+    "c112"
+   ],
+   "type": "extra",
+   "sentence": "Serve l'azione meccanica delle setole e quindi è fondamentale usare lo spazzolino.",
+   "segment": {
+    "start": 456.8,
+    "end": 463.15000000000003
+   },
+   "markerTime": 463.20000000000005,
+   "data": {
+    "shown": [
+     "Serve",
+     "l'azione",
+     "meccanica",
+     "delle",
+     "il",
+     "setole",
+     "e",
+     "quindi",
+     "è",
+     "fondamentale",
+     "usare",
+     "lo",
+     "spazzolino."
+    ],
+    "extraIndex": 4,
+    "extraWord": "il",
+    "original": [
+     "Serve",
+     "l'azione",
+     "meccanica",
+     "delle",
+     "setole",
+     "e",
+     "quindi",
+     "è",
+     "fondamentale",
+     "usare",
+     "lo",
+     "spazzolino."
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  },
+  {
+   "id": "ec135-769k",
+   "chunkId": "c135",
+   "chunkIds": [
+    "c135"
+   ],
+   "type": "wrong",
+   "sentence": "anzi, come abbiamo visto, è fondamentale per la nostra salute orale.",
+   "segment": {
+    "start": 547.1730922523573,
+    "end": 551.4928571428571
+   },
+   "markerTime": 551.5428571428571,
+   "data": {
+    "shown": [
+     "anzi,",
+     "come",
+     "abbiamo",
+     "visto,",
+     "era",
+     "fondamentale",
+     "per",
+     "la",
+     "nostra",
+     "salute",
+     "orale."
+    ],
+    "wrongIndex": 4,
+    "wrongWord": "era",
+    "answer": "è",
+    "original": [
+     "anzi,",
+     "come",
+     "abbiamo",
+     "visto,",
+     "è",
+     "fondamentale",
+     "per",
+     "la",
+     "nostra",
+     "salute",
+     "orale."
+    ]
+   },
+   "source": "rules",
+   "range": [
+    10,
+    15
+   ]
+  }
+ ],
+ "cuts": [],
+ "options": {
+  "wordBank": true,
+  "strict": false
+ }
+}
