@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg">
-<link rel="stylesheet" href="styles.css?v=20260828-23">
+<link rel="stylesheet" href="styles.css?v=20260828-24">
 </head>
 <body>
 <header class="topbar">
@@ -165,7 +165,7 @@
             <label class="chip" style="margin:0"><input type="checkbox" id="e-fx" checked> Animazione quando la risposta è giusta</label>
             <label class="chip" style="margin:0" title="Con la barra bloccata non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="e-lock"> 🔒 Barra bloccata (non si possono saltare gli esercizi)</label>
             <label class="chip" style="margin:0" title="Per i video con i sottotitoli stampati nell'immagine: fascia sfocata sopra il video, spostabile e ridimensionabile col mouse; la posizione viene salvata con la lezione"><input type="checkbox" id="e-cover"> ▬ Copri i sottotitoli stampati nel video</label>
-            <label class="chip" style="margin:0" title="Di default, durante il riascolto la frase sparisce e il video torna grande, per concentrarsi sull'ascolto"><input type="checkbox" id="e-showreplay"> Mostra la frase durante il riascolto</label>
+            <label class="chip" style="margin:0" title="Di default, durante il riascolto la frase sparisce e il video torna grande, per concentrarsi sull'ascolto. È il valore di partenza di ogni esercizio: la casella 'con la frase' vale solo per l'esercizio in corso"><input type="checkbox" id="e-showreplay"> Mostra la frase durante il riascolto</label>
           </div>
         </div>
       </div>
@@ -213,6 +213,7 @@
         <div id="s-progress" class="progress"></div>
         <label id="s-cover-label" class="chip right" style="margin:0" title="Per i video con i sottotitoli stampati nell'immagine: una fascia sfocata sopra il video, da spostare e ridimensionare col mouse (resta dove la metti)"><input type="checkbox" id="s-cover"> ▬ Copri sottotitoli</label>
         <label id="s-lock-label" class="chip" style="margin:0" title="Se attivo, non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="s-lock"> 🔒 Blocca la barra</label>
+        <label id="s-yt-label" class="chip" style="margin:0" title="Di default i comandi di YouTube (barra rossa, pulsanti) sono nascosti: si usa la barra dell'app; il clic sul video mette in pausa e riprende"><input type="checkbox" id="s-yt"> ▶ Comandi YouTube</label>
         <button id="btn-fullscreen" class="small" title="Video e esercizi a tutto schermo (Esc per uscire)">⛶ Schermo intero</button>
         <button id="btn-stars" class="small" title="Le parole con la stella: si ritrovano qui e nel riepilogo finale, pronte per Quizlet">★ 0</button>
       </div>
@@ -297,12 +298,12 @@
 <div id="overlay"><div><div class="loader-box"><img class="loader" src="https://cdn.dribbble.com/userupload/22076800/file/original-8e7ce77dec0edaf0105e8287038f6e60.gif" alt="" onerror="this.classList.add('off')"><div class="spinner"></div></div><div id="overlay-text">loading</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260828-23"></script>
-<script src="exercises.js?v=20260828-23"></script>
-<script src="generator.js?v=20260828-23"></script>
-<script src="ai.js?v=20260828-23"></script>
-<script src="demo-data.js?v=20260828-23"></script>
-<script src="bookmarklet.js?v=20260828-23"></script>
-<script src="app.js?v=20260828-23"></script>
+<script src="lang.js?v=20260828-24"></script>
+<script src="exercises.js?v=20260828-24"></script>
+<script src="generator.js?v=20260828-24"></script>
+<script src="ai.js?v=20260828-24"></script>
+<script src="demo-data.js?v=20260828-24"></script>
+<script src="bookmarklet.js?v=20260828-24"></script>
+<script src="app.js?v=20260828-24"></script>
 </body>
 </html>

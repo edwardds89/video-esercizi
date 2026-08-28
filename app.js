@@ -49,8 +49,21 @@
     editor: { replay: null, altIdx: {}, previewId: null, focusKey: null },
     student: null
   };
+  /** Lezioni salvate con versioni precedenti: il riordino ora tiene maiuscola iniziale e punto finale (si ricostruisce a parità di parole). */
+  function migrateLesson(ls) {
+    if (!ls || !Array.isArray(ls.exercises)) return ls;
+    ls.exercises.forEach(function (ex) {
+      if (ex.type !== 'scramble' || !ex.data || !Array.isArray(ex.data.words) || !ex.sentence) return;
+      const nb = EX.buildExercise('scramble', ex.sentence, { lang: ls.lang, seed: 7 });
+      if (!nb) return;
+      const same = L.normalize(nb.data.words.join(' ')) === L.normalize(ex.data.words.join(' '));
+      if (same && nb.data.words.join(' ') !== ex.data.words.join(' ')) ex.data = nb.data;
+    });
+    return ls;
+  }
   function loadState() {
     try { S.lessons = JSON.parse(localStorage.getItem('vle.lessons') || '{}') || {}; } catch (e) { S.lessons = {}; }
+    Object.keys(S.lessons).forEach(function (id) { migrateLesson(S.lessons[id]); });
     try { Object.assign(S.settings, JSON.parse(localStorage.getItem('vle.settings') || '{}') || {}); } catch (e) { /* ignore */ }
   }
   function saveLessons() {
@@ -156,7 +169,9 @@
     return loadYT().then(function (YT) {
       return new Promise(function (resolve) {
         // cc_load_policy: 3 (non documentato) = sottotitoli spenti all'avvio; iv_load_policy: 3 = niente annotazioni
-        const vars = { rel: 0, playsinline: 1, modestbranding: 1, controls: 1, cc_load_policy: 3, iv_load_policy: 3 };
+        // controls: 0 = niente barra/comandi di YouTube (la barra è quella dell'app); resta il clic sul video per pausa/play
+        const vars = { rel: 0, playsinline: 1, modestbranding: 1, controls: opts.controls === false ? 0 : 1, cc_load_policy: 3, iv_load_policy: 3 };
+        if (opts.start > 0) vars.start = Math.floor(opts.start);
         if (/^https?:/.test(location.protocol)) vars.origin = location.origin;
         const p = new YT.Player(div, {
           width: '100%', height: '100%', videoId: videoId, playerVars: vars,
@@ -554,31 +569,50 @@
   });
 
   // ---------- TIMELINE ----------
+  /**
+   * Linea del tempo "compressa" (studente): i tagli non esistono, la durata è quella reale dopo i tagli.
+   * toV: tempo del video → posizione sulla barra; toR: posizione sulla barra → tempo del video.
+   */
+  function timeMap(lesson) {
+    const D = lesson.duration || 1;
+    const keep = G.keepRanges(lesson.cuts || [], D);
+    const V = keep.reduce(function (a, r) { return a + (r.end - r.start); }, 0) || 1;
+    const toV = function (t) { let v = 0; for (const r of keep) { if (t >= r.end) v += r.end - r.start; else if (t > r.start) { v += t - r.start; break; } else break; } return v; };
+    const toR = function (v) { let acc = 0; for (const r of keep) { const len = r.end - r.start; if (v <= acc + len) return r.start + (v - acc); acc += len; } return D; };
+    return { V: V, toV: toV, toR: toR };
+  }
   function renderTimeline(container, lesson, o) {
     o = o || {};
     container.innerHTML = '';
     const D = lesson.duration || 1;
+    const tm = o.collapseCuts ? timeMap(lesson) : null;
+    const span = tm ? tm.V : D;
+    const pos = function (t) { return 100 * Math.min(span, tm ? tm.toV(t) : t) / span; };
     const track = el('div', { class: 'track' });
-    (lesson.cuts || []).forEach(function (c) {
+    if (!tm) (lesson.cuts || []).forEach(function (c) {
       track.appendChild(el('div', { class: 'cut', style: 'left:' + (100 * c.start / D) + '%;width:' + (100 * (c.end - c.start) / D) + '%', title: 'Taglio ' + fmt(c.start) + '–' + fmt(c.end) + (c.reason ? ' (' + c.reason + ')' : '') }));
     });
     track.addEventListener('click', function (e) {
       if (!o.onSeek) return;
       const r = track.getBoundingClientRect();
-      o.onSeek(D * (e.clientX - r.left) / r.width, e);
+      const v = span * (e.clientX - r.left) / r.width;
+      o.onSeek(tm ? tm.toR(v) : v, e);
     });
     container.appendChild(track);
     (lesson.exercises || []).forEach(function (ex, i) {
-      const m = el('div', { class: 'marker' + (o.done && o.done.has(ex.id) ? ' done' : '') + (o.activeId === ex.id ? ' active' : ''), text: String(i + 1), style: 'left:' + (100 * ex.markerTime / D) + '%', title: fmt(ex.markerTime) + ' · ' + EX.LABELS[ex.type] });
+      const r = o.results && o.results[ex.id];
+      const m = el('div', { class: 'marker' + (o.done && o.done.has(ex.id) ? ' done' + (r ? (r.correct ? ' ok' : ' bad') : '') : '') + (o.activeId === ex.id ? ' active' : ''), text: String(i + 1), style: 'left:' + pos(ex.markerTime) + '%', title: fmt(tm ? tm.toV(ex.markerTime) : ex.markerTime) + ' · ' + EX.LABELS[ex.type] });
       // I segnaposto non si trascinano (troppo facile spostarli per sbaglio): l'orario si cambia nel campo "ferma il video a" della scheda.
       if (o.onMarker) m.addEventListener('click', function (e) { e.stopPropagation(); o.onMarker(ex); });
       container.appendChild(m);
     });
     container.appendChild(el('div', { class: 'cursor', style: 'left:0%' }));
-    container.appendChild(el('div', { class: 'labels' }, el('span', { text: '0:00' }), el('span', { text: fmtMin(D) })));
+    container.appendChild(el('div', { class: 'labels' }, el('span', { text: '0:00' }), el('span', { text: fmtMin(span) })));
+    container._timeMap = tm;
   }
   function drawCursor(container, t, D) {
     const c = container && container.querySelector('.cursor');
+    if (c && container._timeMap) { const tm = container._timeMap; c.style.left = (100 * Math.min(tm.toV(t), tm.V) / tm.V) + '%'; return; }
     if (c) c.style.left = (100 * Math.min(t, D) / (D || 1)) + '%';
   }
   function sortExercises(lesson) { lesson.exercises.sort(function (a, b) { return a.markerTime - b.markerTime; }); }
@@ -634,7 +668,7 @@
     ls.cuts.forEach(function (c) { if (Math.abs(c.end - old) < 0.6) c.end = d; });
     ls.duration = d;
     touch(ls);
-    if (S.view === 'editor') renderEditorBody(); else renderTimeline($('#s-timeline'), ls, { done: S.student.done, activeId: S.student.activeId });
+    if (S.view === 'editor') renderEditorBody(); else if (S.student) renderStudentTimeline();   // sempre con i clic (barra e numeri) attivi
   }
   function editorTick() {
     const ls = current(); if (!ls || !S.player) return;
@@ -672,7 +706,7 @@
   function playSegment(seg) {
     if (!S.player) return;
     const ls = current();
-    const redock = !!S.editor.previewId && !(ls && ls.options && ls.options.showDuringReplay) && $('#e-stage').classList.contains('docked');
+    const redock = !!S.editor.previewId && !S.withText && $('#e-stage').classList.contains('docked');
     S.editor.replay = { start: seg.start, end: seg.end, at: Date.now(), retried: false, redock: redock };
     if (redock) dock('#e-stage', false);
     S.player.seek(seg.start);
@@ -1427,12 +1461,12 @@
 
   // ---------- STUDENTE ----------
   function openStudent(id, fromEditor, lessonObj) {
-    const ls = lessonObj || S.lessons[id];
+    const ls = migrateLesson(lessonObj || S.lessons[id]);
     if (!ls) return renderHome();
     document.body.classList.toggle('standalone', !!S.standalone);
     S.currentId = ls.id;
     // lock: con la barra bloccata non si va oltre un esercizio da fare; di default la barra è libera (chi guida il video decide)
-    S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {}, lock: !!(ls.options && ls.options.lock), phase: 'start', stars: loadStars(ls) };
+    S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {}, hints: {}, lock: !!(ls.options && ls.options.lock), phase: 'start', stars: loadStars(ls) };
     show('student');
     $('#s-stage').classList.remove('cards');
     $('#s-title').textContent = ls.title || '';
@@ -1444,10 +1478,20 @@
     updateStarCount();
     renderStudentTimeline();
     renderProgress();
-    createPlayer($('#s-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
+    $('#s-yt').checked = !!S.settings.ytControls;
+    createPlayer($('#s-player'), ls.videoId, { lesson: ls, controls: !!S.settings.ytControls, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
       .then(function () { startLoop(); renderStart(); renderCover($('#s-player'), ls); })
       .catch(function (e) { $('#s-panel').innerHTML = ''; $('#s-panel').appendChild(el('div', { class: 'notice bad', text: e.message })); });
   }
+  // comandi di YouTube nel video: spenti di default (la barra rossa non ricompare a ogni ripartenza); il cambio ricrea il player allo stesso secondo
+  $('#s-yt').addEventListener('change', function () {
+    S.settings.ytControls = $('#s-yt').checked; saveSettings();
+    const st = S.student; if (!st || !S.player) return;
+    const ls = st.lesson, t = S.player.time(), playing = S.player.state() === 1;
+    st.lastT = null;
+    createPlayer($('#s-player'), ls.videoId, { lesson: ls, controls: !!S.settings.ytControls, start: t, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (x) { if (x === 0) onEnded(); } })
+      .then(function (w) { renderCover($('#s-player'), ls); if (t > 0) w.seek(t); if (playing) w.play(); else w.pause(); st.lastT = null; });
+  });
   $('#btn-edit').addEventListener('click', function () { if (S.player) S.player.pause(); openEditor(S.currentId); });
   $('#s-lock').addEventListener('change', function () { if (S.student) S.student.lock = $('#s-lock').checked; });
   $('#btn-fullscreen').addEventListener('click', function () {
@@ -1463,7 +1507,7 @@
   function renderStudentTimeline() {
     const st = S.student; if (!st) return;
     renderTimeline($('#s-timeline'), st.lesson, {
-      done: st.done, activeId: st.activeId,
+      done: st.done, results: st.results, activeId: st.activeId, collapseCuts: true,   // lo studente non vede i tagli: la barra è il video che resta
       onSeek: function (t) { if (S.player) S.player.seek(t); },
       onMarker: function (ex) { goToExercise(ex); }
     });
@@ -1477,7 +1521,8 @@
     if (st.lock && !st.done.has(ex.id) && st.lesson.exercises.some(function (e) { return !st.done.has(e.id) && e.markerTime < ex.markerTime; })) {
       return toast('Barra bloccata: prima vanno fatti gli esercizi precedenti (togli il blocco per saltare)');
     }
-    st.done.delete(ex.id);
+    // un esercizio già fatto resta verde/rosso: lo si può rifare (st.redo) senza perdere il risultato
+    st.redo = ex.id;
     st.blocked = false; st.activeId = null; st.replay = null; st.started = true;
     $('#s-panel').innerHTML = '';
     dock('#s-stage', false);
@@ -1494,7 +1539,39 @@
       box.appendChild(el('div', { class: 'dot' + (r ? (r.correct ? ' ok' : ' bad') : '') + (st.activeId === ex.id ? ' cur' : ''), text: String(i + 1), title: EX.LABELS[ex.type] + ' · clicca per andarci', onclick: function () { goToExercise(ex); } }));
     });
   }
-  function dock(stageSel, on) { const st = $(stageSel); if (st) st.classList.toggle('docked', !!on); }
+  function dock(stageSel, on) {
+    const st = $(stageSel); if (!st) return;
+    st.classList.toggle('docked', !!on);
+    const pb = st.querySelector('.player-box');
+    if (!on && pb) { pb.style.height = ''; pb.classList.remove('fitting'); }
+    if (on) fitStage(st);
+  }
+  /** Con l'esercizio sotto al video, il video si restringe (mai sotto 200 px) quanto basta perché tutto stia senza scorrere. */
+  function fitStage(stage) {
+    if (!stage || !stage.classList.contains('docked') || stage.classList.contains('cards') || window.innerWidth <= 720) return;
+    const pb = stage.querySelector('.player-box'), pop = stage.querySelector('.pop'); if (!pb || !pop) return;
+    const H = stage.clientHeight, W = stage.clientWidth; if (!H) return;
+    const top = parseFloat(getComputedStyle(pb).marginTop) || 0;
+    const prev = pop.style.cssText;
+    pop.style.flex = '0 0 auto'; pop.style.height = 'auto'; pop.style.overflow = 'visible';
+    const need = pop.offsetHeight;   // altezza naturale del contenuto
+    pop.style.cssText = prev;
+    const maxH = Math.min(Math.floor(H * 0.54), Math.floor(W * 9 / 16));
+    const ph = Math.max(Math.min(200, maxH), Math.min(maxH, H - top - need - 6));
+    if (Math.abs(ph - pb.offsetHeight) >= 2) pb.style.height = ph + 'px';
+    requestAnimationFrame(function () { pb.classList.add('fitting'); });
+  }
+  (function () {
+    // qualunque cambiamento nel pop (risposta, "Giusto!", frase completa, traduzione) rimisura lo stage
+    let raf = 0;
+    const schedule = function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; $$('.stage.docked').forEach(fitStage); }); };
+    if (window.MutationObserver) {
+      const mo = new MutationObserver(schedule);
+      ['#s-panel', '#e-pop'].forEach(function (sel) { const n = $(sel); if (n) mo.observe(n, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'style'] }); });
+    }
+    window.addEventListener('resize', schedule);
+    document.addEventListener('fullscreenchange', function () { setTimeout(schedule, 50); });
+  })();
   /** Schermata iniziale: il video resta grande; "▶ Inizia" (o il play del player) fa partire la lezione. */
   function renderStart() {
     const st = S.student; const p = $('#s-panel'); p.innerHTML = '';
@@ -1555,7 +1632,7 @@
     st.lastT = t; st.lastAt = now;
     const elapsed = prevAt ? (now - prevAt) / 1000 * (S.player.kind === 'mock' ? (S.speed || 1) : 1) : 0;
     const natural = prev != null && t >= prev && t - prev <= elapsed + 1.5;
-    const next = natural ? ls.exercises.find(function (e) { return !st.done.has(e.id) && exerciseReady(e) && t >= e.markerTime - 0.1 && prev < e.markerTime - 0.1; }) : null;
+    const next = natural ? ls.exercises.find(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && exerciseReady(e) && t >= e.markerTime - 0.1 && prev < e.markerTime - 0.1; }) : null;
     if (!next && st.lock && S.player.state() === 1) {
       // barra bloccata: se si è andati oltre un esercizio ancora da fare, si torna all'inizio della sua frase
       const passed = ls.exercises.find(function (e) { return !st.done.has(e.id) && t > e.markerTime + 1.5; });
@@ -1563,13 +1640,14 @@
     }
     if (next) {
       S.player.pause();
-      st.blocked = true; st.activeId = next.id;
+      st.blocked = true; st.activeId = next.id; st.redo = null;
       renderStudentTimeline();
       renderProgress();
       dock('#s-stage', true);
       renderExerciseInto($('#s-panel'), next, {
         mode: 'student', lesson: ls, index: ls.exercises.indexOf(next), total: ls.exercises.length,
-        replay: replaySegment, attempts: st.attempts,
+        replay: replaySegment, attempts: st.attempts, hints: st.hints,
+        review: st.done.has(next.id) ? (st.results[next.id] || { correct: false }) : null,   // già fatto: si riascolta, non si rifà
         onDone: function (correct) { finishExercise(next, correct); },
         onContinue: continueVideo,
         onSkip: function () { finishExercise(next, false); continueVideo(); }
@@ -1578,8 +1656,14 @@
     }
     if (S.player.state() === 1) {
       const c = G.inCut(ls.cuts, t);
-      // un taglio che contiene un esercizio ancora da fare non si salta: il video arriva fino al segnaposto
-      if (c && !ls.exercises.some(function (e) { return !st.done.has(e.id) && e.markerTime >= c.start && e.markerTime <= c.end; })) S.player.seek(c.end + 0.05);
+      if (c) {
+        // dentro un taglio: si salta alla fine; se nel taglio cade un esercizio ancora da fare (tagli e frasi si sovrappongono
+        // per una modifica a mano) si salta solo fino all'inizio della sua frase, così la frase si sente e il resto no
+        const inside = ls.exercises.filter(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && e.markerTime > t && e.markerTime <= c.end + 0.5; })
+          .sort(function (a, b) { return a.markerTime - b.markerTime; })[0];
+        const target = inside ? Math.max(t, Math.min(c.end, inside.segment.start - 0.3)) : c.end + 0.05;
+        if (target > t + 0.25) { S.player.seek(target); st.lastT = null; }
+      }
     }
     if (S.player.kind === 'mock' && S.player.state() === 0 && !st.ended) onEnded();
   }
@@ -1592,19 +1676,20 @@
     const st = S.student;
     st.replay = { start: ex.segment.start, end: ex.segment.end, at: Date.now(), retried: false, redock: false };
     // di default durante il riascolto la frase sparisce e il video torna grande: ci si concentra sull'ascolto
-    if (!(st.lesson.options && st.lesson.options.showDuringReplay) && $('#s-stage').classList.contains('docked')) { st.replay.redock = true; dock('#s-stage', false); }
+    if (!S.withText && $('#s-stage').classList.contains('docked')) { st.replay.redock = true; dock('#s-stage', false); }
     S.player.seek(ex.segment.start);
     S.player.play();
   }
   function finishExercise(ex, correct) {
     const st = S.student;
-    st.results[ex.id] = { correct: correct, attempts: st.attempts[ex.id] || 1 };
+    if (st.results[ex.id]) return;   // il risultato è definitivo: si può riascoltare, non rifare
+    st.results[ex.id] = { correct: correct, attempts: st.attempts[ex.id] || 1, hints: st.hints[ex.id] || 0 };
     st.done.add(ex.id);
   }
   function continueVideo() {
     const st = S.student;
     st.blocked = false; st.activeId = null;
-    renderTimeline($('#s-timeline'), st.lesson, { done: st.done });
+    renderStudentTimeline();
     renderProgress();
     const p = $('#s-panel'); p.innerHTML = '';
     dock('#s-stage', false);
@@ -1646,20 +1731,18 @@
     const fb = el('div', { class: 'feedback' });
     const actions = el('div', { class: 'actions' });
     const replayBtn = el('button', { text: '🔁 Riascolta', onclick: function () { if (opts.replay) opts.replay(ex); } });
-    // "con la frase": se spuntato, durante il riascolto lo schermo resta così (frase visibile); di default il video torna grande
-    const withText = el('input', { type: 'checkbox', title: 'Riascolta senza ingrandire il video: la frase resta visibile' });
-    withText.checked = !!(ls.options && ls.options.showDuringReplay);
-    withText.addEventListener('change', function () {
-      if (!ls.options) ls.options = {};
-      ls.options.showDuringReplay = withText.checked;
-      if (S.lessons[ls.id]) touch(ls);
-      const eb = $('#e-showreplay'); if (eb) eb.checked = withText.checked;
-    });
+    // "con la frase": se spuntato, durante il riascolto lo schermo resta così (frase visibile); di default il video torna grande.
+    // Vale SOLO per questo esercizio: a ogni esercizio riparte dal valore scelto dall'insegnante (di norma spento)
+    S.withText = !!(ls.options && ls.options.showDuringReplay);
+    const withText = el('input', { type: 'checkbox', title: 'Riascolta senza ingrandire il video: la frase resta visibile (solo per questo esercizio)' });
+    withText.checked = S.withText;
+    withText.addEventListener('change', function () { S.withText = withText.checked; });
     const withTextLbl = el('label', { class: 'chip withtext', style: 'margin:0', title: 'Riascolta senza ingrandire il video: la frase resta visibile' }, withText, ' con la frase');
     const checkBtn = el('button', { class: 'primary', text: 'Controlla' });
+    const hintBtn = el('button', { class: 'small hint-btn', text: '💡 Aiuto', title: 'Un aiuto alla volta: una lettera in più della risposta (o un pezzo della soluzione)' });
     const solBtn = el('button', { class: 'link', text: 'Mostra soluzione', style: 'display:none' });
     const skipBtn = el('button', { class: 'link', text: 'Salta', style: preview ? 'display:none' : '' });
-    actions.appendChild(replayBtn); actions.appendChild(withTextLbl); actions.appendChild(checkBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
+    actions.appendChild(replayBtn); actions.appendChild(withTextLbl); actions.appendChild(checkBtn); actions.appendChild(hintBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
     if (S.settings.apiKey) {
       // traduzione con l'AI (inglese britannico): tutta la frase, oppure solo le parole selezionate col mouse
       const trBtn = el('button', { class: 'small', text: '🌐 Traduci', title: 'Traduzione in inglese britannico: seleziona alcune parole per tradurre solo quelle, altrimenti tutta la frase' });
@@ -1674,14 +1757,56 @@
           .then(function () { trBtn.disabled = false; trBtn.textContent = '🌐 Traduci'; });
       });
       actions.appendChild(trBtn);
-      p.appendChild(actions); p.appendChild(trBox); p.appendChild(fb);
-    } else { p.appendChild(actions); p.appendChild(fb); }
+      actions.appendChild(fb);   // "Giusto!" a destra dei pulsanti, sulla stessa riga: niente righe in più da scorrere
+      p.appendChild(actions); p.appendChild(trBox);
+    } else { actions.appendChild(fb); p.appendChild(actions); }
     const attempts = opts.attempts || {};
+
+    // insegnante (lezione del portfolio, non link studente): ⌘/Alt + clic su una parola per correggerla al volo
+    if (!S.standalone && S.lessons[ls.id]) {
+      if (p._quickEdit) p.removeEventListener('click', p._quickEdit, true);
+      p._quickEdit = function (e) {
+        if (!(e.metaKey || e.altKey)) return;
+        const node = e.target.closest && e.target.closest('.w, .chip');
+        if (!node || !p.contains(node) || node.closest('.actions')) return;
+        e.preventDefault(); e.stopPropagation();
+        if (quickEditWord(ls, ex, node, p)) renderExerciseInto(p, ex, opts);
+      };
+      p.addEventListener('click', p._quickEdit, true);
+    }
+
+    if (opts.review) {
+      // esercizio già fatto: frase completa (verde se era giusto), soluzione se era da rivedere; niente Controlla
+      const rv = opts.review;
+      const ins = p.querySelector('.instr'); if (ins) ins.textContent = 'Esercizio già fatto' + (rv.correct ? ': giusto. ' : ': da rivedere. ') + 'Puoi riascoltare la frase, ma la risposta non si cambia. Clicca una parola per la stella ★.';
+      const full = starredSentence(ls, L.tokenize(ex.sentence).map(function (t) { return t.raw; }));
+      if (rv.correct) full.style.color = 'var(--ok)';
+      body.appendChild(full);
+      if (!rv.correct) body.appendChild(el('div', { class: 'feedback', style: 'color:var(--muted)', text: 'Soluzione: ' + EX.solution(ex) }));
+      checkBtn.remove(); hintBtn.remove(); solBtn.remove(); skipBtn.remove();
+      actions.appendChild(el('button', { class: 'primary', text: preview ? 'Chiudi anteprima' : 'Continua ▶', onclick: function () { if (preview) { if (opts.onClose) opts.onClose(); } else if (opts.onContinue) opts.onContinue(); } }));
+      return;
+    }
 
     const strict = !!(ls.options && ls.options.strict);
     let getAnswer = function () { return null; };
     let markResult = function () { };
+    let giveHint = null;   // per tipo: un aiuto alla volta (lettera in più, parola giusta al suo posto, opzione eliminata…)
     const d = ex.data;
+    const sameWord = function (a, b) { return L.normalize(a, { accents: strict }) === L.normalize(b, { accents: strict }); };
+    /** Svela una lettera in più: si riparte dall'inizio giusto già scritto dallo studente (accenti e maiuscole tollerati). */
+    const revealLetter = function (inp, answer) {
+      const cur = String(inp.value || ''), ans = String(answer || '');
+      let n = 0;
+      while (n < cur.length && n < ans.length && L.normalize(cur[n]) === L.normalize(ans[n])) n++;
+      n = Math.min(ans.length, n + 1);
+      inp.value = ans.slice(0, n);
+      inp.classList.remove('bad'); inp.classList.add('hinted');
+      if (n >= ans.length) inp.classList.add('ok');
+      inp.focus();
+      try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { /* ignore */ }
+      return true;
+    };
 
     if (ex.type === 'gap' || ex.type === 'gapbank') {
       const sent = el('div', { class: 'sentence' });
@@ -1714,7 +1839,20 @@
         } }); })));
       }
       getAnswer = function () { return inputs.map(function (i) { return i.value; }); };
-      markResult = function (res) { inputs.forEach(function (inp, k) { inp.classList.toggle('ok', !!res.detail[k]); inp.classList.toggle('bad', !res.detail[k]); }); if (res.correct) sent.style.color = 'var(--ok)'; };
+      giveHint = function () {
+        const k = inputs.findIndex(function (inp, i) { return !sameWord(inp.value, d.answers[i]); });
+        if (k === -1) return false;
+        return revealLetter(inputs[k], d.answers[k]);
+      };
+      markResult = function (res) {
+        inputs.forEach(function (inp, k) { inp.classList.toggle('ok', !!res.detail[k]); inp.classList.toggle('bad', !res.detail[k]); });
+        if (res.correct) {
+          sent.style.color = 'var(--ok)';
+          // le caselle lasciano il posto alle parole scritte, evidenziate e cliccabili per la stella: la frase sopra basta
+          inputs.forEach(function (inp) { const wrap = el('span', { class: 'filled' }); wrap.appendChild(starSpans(ls, inp.value.trim())); inp.replaceWith(wrap); });
+          const bank = body.querySelector('.chips'); if (bank) bank.remove();
+        }
+      };
       if (!preview) setTimeout(function () { if (inputs[0]) inputs[0].focus(); }, 50);   // in anteprima il fuoco resta all'editor
     } else if (ex.type === 'scramble') {
       const pool = el('div', { class: 'chips' });
@@ -1734,10 +1872,22 @@
       render();
       body.appendChild(ans); body.appendChild(pool);
       getAnswer = function () { return chosen.map(function (i) { return d.shuffled[i]; }); };
+      giveHint = function () {
+        // si tiene l'inizio giusto e si mette al suo posto la parola successiva
+        let ok = 0;
+        while (ok < chosen.length && ok < d.words.length && sameWord(d.shuffled[chosen[ok]], d.words[ok])) ok++;
+        if (ok >= d.words.length) return false;
+        chosen.length = ok;
+        const idx = d.shuffled.findIndex(function (w, i) { return chosen.indexOf(i) === -1 && sameWord(w, d.words[ok]); });
+        if (idx === -1) return false;
+        chosen.push(idx); render();
+        const last = ans.lastElementChild; if (last) last.classList.add('hinted');
+        return true;
+      };
       markResult = function (res) {
         $$('.chip', ans).forEach(function (c, k) { c.classList.toggle('good', !!res.detail[k]); c.classList.toggle('wrongpick', !res.detail[k]); });
         // a frase giusta, i chip ritrovano maiuscole e punteggiatura originali (virgole, punto interrogativo)
-        if (res.correct) { const raws = L.tokenize(ex.sentence).map(function (t) { return t.raw; }); $$('.chip', ans).forEach(function (c, k) { if (raws[k]) c.textContent = raws[k]; }); }
+        if (res.correct) { const raws = L.tokenize(ex.sentence).map(function (t) { return t.raw; }); $$('.chip', ans).forEach(function (c, k) { if (raws[k]) c.textContent = raws[k]; }); starrableChips(ls, ans); pool.remove(); }
       };
     } else if (ex.type === 'missing') {
       body.appendChild(starredSentence(ls, d.tokens.filter(function (t, i) { return i !== d.missingIndex; })));
@@ -1745,9 +1895,11 @@
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
       body.appendChild(inp);
       getAnswer = function () { return inp.value; };
+      giveHint = function () { return sameWord(inp.value, d.answer) ? false : revealLetter(inp, d.answer); };
       markResult = function (res) {
         inp.classList.toggle('ok', res.correct); inp.classList.toggle('bad', !res.correct);
         if (res.correct) {
+          inp.remove();   // la parola è già nella frase sopra, evidenziata: il campo non serve più
           const sdiv = body.querySelector('.sentence');
           if (sdiv) {
             sdiv.style.color = 'var(--ok)';
@@ -1778,6 +1930,17 @@
       render();
       body.appendChild(list);
       getAnswer = function () { return selected; };
+      const eliminated = new Set();
+      giveHint = function () {
+        const cands = (d.options || []).map(function (o, k) { return k; }).filter(function (k) { return d.options[k] && k !== d.correct && !eliminated.has(k); });
+        if (cands.length <= 1) return false;   // resta sempre almeno una sbagliata
+        const pick = cands.filter(function (k) { return k !== d.tricky; })[0] != null ? cands.filter(function (k) { return k !== d.tricky; })[0] : cands[0];
+        eliminated.add(pick); if (selected === pick) selected = -1; render();
+        return true;
+      };
+      const renderBase = render;
+      const renderElim = function () { renderBase(); $$('.mc-opt', list).forEach(function (b, k) { if (eliminated.has(k)) { b.classList.add('elim'); b.disabled = true; } }); };
+      list.innerHTML = ''; renderElim();
       markResult = function (res) {
         $$('.mc-opt', list).forEach(function (b, k) { if (res.correct && k === d.correct) b.classList.add('good'); else if (k === selected && !res.correct) { b.classList.add('wrongpick'); setTimeout(function () { b.classList.remove('wrongpick'); }, 900); } });
       };
@@ -1796,6 +1959,21 @@
       body.appendChild(chips);
       if (ex.type === 'wrong') body.appendChild(corr);
       getAnswer = function () { return ex.type === 'extra' ? selected : { index: selected, correction: corr.value }; };
+      const dimmed = new Set();
+      giveHint = function () {
+        const target = ex.type === 'extra' ? d.extraIndex : d.wrongIndex;
+        if (ex.type === 'wrong' && selected === target) return sameWord(corr.value, d.answer) ? false : revealLetter(corr, d.answer);
+        // si sbiadiscono alcune parole sicuramente giuste (un terzo alla volta); l'ultimo aiuto lascia solo quella da trovare
+        const rest = d.shown.map(function (w, i) { return i; }).filter(function (i) { return i !== target && !dimmed.has(i); });
+        if (!rest.length) { if (ex.type === 'wrong') { selected = target; render(); corr.style.display = ''; corr.focus(); return true; } return false; }
+        const n = Math.max(1, Math.ceil(d.shown.length / 3));
+        EX.shuffle(rest, L.rng(Date.now() % 7919)).slice(0, n).forEach(function (i) { dimmed.add(i); });
+        render();
+        return true;
+      };
+      const renderBase2 = render;
+      const renderDim = function () { renderBase2(); $$('.chip', chips).forEach(function (c, i) { if (dimmed.has(i)) c.classList.add('dim'); }); };
+      chips.innerHTML = ''; renderDim();
       markResult = function (res) {
         const all = $$('.chip', chips);
         const c = all[selected];
@@ -1803,9 +1981,15 @@
           // tutte verdi tranne la parola in più / sbagliata: rossa e barrata (per "sbagliata" accanto compare quella giusta)
           all.forEach(function (x, i) {
             x.classList.remove('sel');
-            if (i === selected) { x.classList.add('struck'); if (ex.type === 'wrong' && !x.querySelector('.fix')) x.appendChild(el('span', { class: 'fix', text: ' → ' + d.answer })); }
+            if (i === selected) {
+              x.classList.add('struck');
+              if (!x.querySelector('.bad-w')) { const bw = el('span', { class: 'bad-w', text: x.textContent }); x.textContent = ''; x.appendChild(bw); }   // barrata SOLO la parola sbagliata
+              if (ex.type === 'wrong' && !x.querySelector('.fix')) x.appendChild(el('span', { class: 'fix', text: ' → ' + d.answer }));
+            }
             else x.classList.add('good');
           });
+          starrableChips(ls, chips);
+          if (ex.type === 'wrong') corr.remove();   // la parola giusta è già accanto a quella barrata
         }
         else if (c) { c.classList.add('wrongpick'); setTimeout(function () { c.classList.remove('wrongpick'); }, 900); }
         if (ex.type === 'wrong') { corr.classList.toggle('ok', !!(res.detail && res.detail.word)); corr.classList.toggle('bad', !(res.detail && res.detail.word)); }
@@ -1813,6 +1997,13 @@
     }
 
     let solved = false;
+    if (!giveHint) hintBtn.style.display = 'none';
+    hintBtn.addEventListener('click', function () {
+      if (solved || !giveHint) return;
+      if (!giveHint()) { toast('Nessun altro aiuto possibile: controlla la risposta'); return; }
+      if (opts.hints) opts.hints[ex.id] = (opts.hints[ex.id] || 0) + 1;
+      fb.textContent = '';
+    });
     const continueLabel = preview ? 'Chiudi anteprima' : 'Continua ▶';
     const onContinue = function () { if (preview) { if (opts.onClose) opts.onClose(); } else if (opts.onContinue) opts.onContinue(); };
     // a esercizio finito: la frase completa, con le parole cliccabili per la stella
@@ -1834,9 +2025,11 @@
         fb.textContent = '✓ Giusto!'; fb.style.color = 'var(--ok)';
         if (!ls.options || ls.options.fx !== false) celebrate(p, fb);
         if (opts.onDone) opts.onDone(true);
-        checkBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';
+        checkBtn.style.display = 'none'; hintBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';
         actions.appendChild(el('button', { class: 'primary', text: continueLabel, onclick: onContinue }));
-        showFull();
+        // la frase completa in più solo se sopra non c'è (scelta multipla); negli altri tipi le parole sopra sono già cliccabili per la stella
+        if (ex.type === 'mc') showFull();
+        else { const ins = p.querySelector('.instr'); if (ins && ins.textContent.indexOf('★') === -1) ins.textContent += ' · Clicca una parola per la stella ★.'; }
       } else {
         fb.textContent = '✗ Non ancora. Riascolta e riprova.'; fb.style.color = 'var(--bad)';
         if (attempts[ex.id] >= 2 || preview) solBtn.style.display = '';
@@ -1846,7 +2039,7 @@
       solved = true;
       fb.textContent = 'Soluzione: ' + EX.solution(ex); fb.style.color = 'var(--muted)';
       if (opts.onDone) opts.onDone(false);
-      checkBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';
+      checkBtn.style.display = 'none'; hintBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';
       actions.appendChild(el('button', { class: 'primary', text: continueLabel, onclick: onContinue }));
       showFull();
     });
@@ -1931,6 +2124,70 @@
   });
   $('#stars-close').addEventListener('click', function () { $('#dlg-stars').close(); updateStarCount(); });
   /** Parola cliccabile: un clic mette/toglie la stella. */
+  /**
+   * Correzione al volo di una parola durante la lezione (⌘/Alt + clic sulla parola): cambia la frase dell'esercizio
+   * tenendo la struttura (stessi spazi, stessa parola in più/sbagliata/mancante) e salva la lezione.
+   */
+  function quickEditWord(ls, ex, node, panel) {
+    const clicked = L.tokenize(node.textContent || '')[0];
+    if (!clicked || !clicked.core) return;
+    const core = clicked.core;
+    const d = ex.data || {};
+    const sameCore = function (a, b) { return L.normalize(a) === L.normalize(b); };
+    // parola "artificiale" (in più / sostituita): si corregge quella, non la frase
+    const isExtra = ex.type === 'extra' && sameCore(core, d.extraWord) && !L.tokenize(ex.sentence).some(function (t) { return sameCore(t.core, core); });
+    const isSwap = ex.type === 'wrong' && sameCore(core, d.wrongWord) && !L.tokenize(ex.sentence).some(function (t) { return sameCore(t.core, core); });
+    const nw = prompt('Correggi la parola "' + core + '"' + (isExtra ? ' (parola in più)' : isSwap ? ' (parola sostituita)' : '') + ':', core);
+    if (nw == null) return;
+    const clean = nw.trim();
+    if (!clean || clean === core) return;
+    const choices = {};
+    let sentence = ex.sentence;
+    if (!isExtra && !isSwap) {
+      // quale occorrenza? la k-esima tra gli elementi con la stessa parola nel pannello = la k-esima nella frase
+      const els = $$('.w, .chip', panel).filter(function (e) { const t = L.tokenize(e.textContent || '')[0]; return t && sameCore(t.core, core); });
+      const k = Math.max(0, els.indexOf(node));
+      const toks = L.tokenize(sentence);
+      const cand = toks.map(function (t, i) { return { t: t, i: i }; }).filter(function (x) { return sameCore(x.t.core, core); });
+      const target = cand[Math.min(k, cand.length - 1)];
+      if (!target) return toast('Parola non trovata nella frase');
+      toks[target.i].core = clean;
+      sentence = toks.map(function (t) { return t.pre + t.core + t.post; }).join(' ');
+    }
+    const fix = function (w) { return sameCore(w, core) && !isExtra && !isSwap ? clean : w; };
+    if (ex.type === 'gap' || ex.type === 'gapbank') {
+      choices.gapWords = (d.answers || []).map(fix);
+      if (ex.type === 'gapbank' && Array.isArray(d.wordBank)) choices.distractors = d.wordBank.filter(function (w) { return !(d.answers || []).some(function (a) { return sameCore(a, w); }); });
+    } else if (ex.type === 'missing') choices.missingWord = fix(d.answer || '');
+    else if (ex.type === 'extra') { choices.extraWord = isExtra ? clean : d.extraWord; choices.extraAfter = Math.max(0, (d.extraIndex | 0) - 1); }
+    else if (ex.type === 'wrong') { choices.wrongWord = fix(d.answer || ''); choices.wrongReplacement = isSwap ? clean : d.wrongWord; }
+    else if (ex.type === 'mc') { choices.question = d.question; choices.options = d.options; choices.correct = d.correct; choices.tricky = d.tricky; }
+    const built = EX.buildExercise(ex.type, sentence, { lang: ls.lang, seed: Date.now() % 100000, choices: choices, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 });
+    if (!built) return toast('Con questa correzione l\'esercizio non si può ricostruire: usa "Modifica"');
+    ex.sentence = sentence; ex.type = built.type; ex.data = built.data;
+    if (S.lessons[ls.id]) touch(ls);
+    toast('Parola corretta: "' + core + '" → "' + clean + '"' + (S.lessons[ls.id] ? ' (lezione salvata)' : ''));
+    return true;
+  }
+  /** Più parole (es. uno spazio unito) → uno starSpan per parola. */
+  function starSpans(ls, text) {
+    const frag = document.createDocumentFragment();
+    const parts = String(text || '').split(/\s+/).filter(Boolean);
+    parts.forEach(function (w, i) { frag.appendChild(starSpan(ls, w)); if (i < parts.length - 1) frag.appendChild(document.createTextNode(' ')); });
+    return frag;
+  }
+  /** A esercizio risolto i chip della frase diventano parole cliccabili per la stella (copia senza i vecchi gestori). */
+  function starrableChips(ls, container) {
+    $$('.chip', container).forEach(function (c) {
+      if (c.classList.contains('struck')) { const fix = c.querySelector('.fix'); if (fix) { const word = fix.textContent.replace(/^\s*→\s*/, ''); const nf = el('span', { class: 'fix' }, [document.createTextNode(' → '), starSpan(ls, word)]); fix.replaceWith(nf); } return; }
+      const word = c.textContent.trim();
+      const w = cleanWord(word);
+      const n = c.cloneNode(false);
+      n.textContent = word;
+      if (w) { n.classList.add('w'); n.setAttribute('data-w', L.normalize(w)); if (isStarred(ls, w)) n.classList.add('starred'); n.title = 'Clicca per mettere una stella (parola da ripassare)'; n.addEventListener('click', function (e) { e.stopPropagation(); toggleStar(ls, w); }); }
+      c.replaceWith(n);
+    });
+  }
   function starSpan(ls, word) {
     const w = cleanWord(word);
     if (!w) return document.createTextNode(word);
@@ -2174,7 +2431,7 @@
     const list = el('div');
     ls.exercises.forEach(function (e, i) {
       const r = st.results[e.id];
-      list.appendChild(el('div', { class: 'notice ' + (r && r.correct ? 'ok' : 'bad'), text: (i + 1) + '. ' + EX.LABELS[e.type] + ' — ' + (r && r.correct ? 'giusto' : 'da rivedere') + (r && r.attempts > 1 ? ' (' + r.attempts + ' tentativi)' : '') + ' · soluzione: ' + EX.solution(e) }));
+      list.appendChild(el('div', { class: 'notice ' + (r && r.correct ? 'ok' : 'bad'), text: (i + 1) + '. ' + EX.LABELS[e.type] + ' — ' + (r && r.correct ? 'giusto' : 'da rivedere') + (r && r.attempts > 1 ? ' (' + r.attempts + ' tentativi)' : '') + (r && r.hints ? ' (' + r.hints + (r.hints === 1 ? ' aiuto' : ' aiuti') + ')' : '') + ' · soluzione: ' + EX.solution(e) }));
     });
     p.appendChild(list);
     renderWordList(p, ls, st.stars);

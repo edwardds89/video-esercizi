@@ -278,7 +278,7 @@
   function solution(exercise) {
     const d = exercise.data;
     switch (exercise.type) {
-      case 'gap': case 'gapbank': return d.answers.join(', ');
+      case 'gap': case 'gapbank': return gapRuns(d).map(function (r) { return r.answer; }).join(', ');   // uno spazio unito = una voce ("i nostri oceani, solamente una nostra")
       case 'scramble': return d.words.join(' ');
       case 'missing': return d.answer;
       case 'mc': return d.options[d.correct];
