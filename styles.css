@@ -248,27 +248,30 @@ button.star.on { color: #e0a800; }
 .mpair .mchip:last-child { border-radius: 0 10px 10px 0; border-left-color: transparent; }
 .mpair .mchip button.star { pointer-events: auto; }
 .mchip[data-flip] { will-change: transform; }
-.mchip { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--chip); border: 2px solid var(--line); border-radius: 10px; padding: 6px 10px; cursor: pointer; font-size: 18px; min-height: 44px; user-select: none; }
+.mchip { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--chip); border: 2px solid var(--line); border-radius: 10px; padding: 6px 10px; cursor: pointer; font-size: 18px; min-height: var(--rowh, 44px); user-select: none; }
 .mchip:hover { border-color: #b9c2cc; }
 .mchip.sel { border-color: var(--marker); background: #ffe8cc; }
 .mchip.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); cursor: default; }
 .mchip.wrongpick { border-color: var(--bad); background: var(--bad-bg); }
 .mchip.target { justify-content: center; }
 .back { display: flex; align-items: center; gap: 8px; justify-content: center; }
-.back img { max-height: 56px; max-width: 120px; border-radius: 6px; object-fit: cover; }
+.mchip.target .back { width: 100%; }
+.back img { max-height: calc(var(--rowh, 56px) - 12px); min-height: 44px; max-width: 100%; border-radius: 6px; object-fit: cover; cursor: zoom-in; }
 .back .tr { font-size: 18px; }
 .back.big { flex-direction: column; }
-.back.big img { max-height: 180px; max-width: 100%; }
-.back.big .tr { font-size: 26px; font-weight: 600; }
+.back.big img { max-height: calc(var(--cardh, 250px) - 80px); max-width: 100%; }
+.back.big .tr { font-size: clamp(26px, calc(var(--cardh, 250px) * .14), 46px); font-weight: 600; }
 
 /* flashcard che si gira */
-.flashcard { position: relative; width: min(100%, 520px); height: 250px; margin: 8px auto; perspective: 1000px; cursor: pointer; }
+.flashcard { position: relative; width: min(100%, calc(var(--cardh, 250px) * 1.9), 900px); height: var(--cardh, 250px); margin: 8px auto; perspective: 1000px; cursor: pointer; }
+.fc-nav { justify-content: center; gap: 12px; margin-top: 10px; }
+.fc-nav button.primary.big { font-size: 18px; padding: 10px 26px; }
 .flashcard .face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px solid var(--line); border-radius: 14px; background: #fff; backface-visibility: hidden; -webkit-backface-visibility: hidden; transition: transform .5s; box-shadow: 0 4px 14px rgba(0,0,0,.08); padding: 12px; }
 .flashcard .face.back { transform: rotateY(180deg); background: #fffbea; border-color: #f5c400; }
 .flashcard.flipped .face.front { transform: rotateY(180deg); }
 .flashcard.flipped .face.back { transform: rotateY(360deg); }
-.flashcard .word { font-size: 34px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-.flashcard .tr { font-size: 18px; color: var(--muted); }
+.flashcard .word { font-size: clamp(34px, calc(var(--cardh, 250px) * .16), 54px); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.flashcard .tr { font-size: clamp(18px, calc(var(--cardh, 250px) * .09), 28px); color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .flashcard .face { transition: none; } }
 
 /* riepilogo: parole */
@@ -321,6 +324,9 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .mc-opt.elim { opacity: .35; text-decoration: line-through; pointer-events: none; }
 .chip.dim { opacity: .3; pointer-events: none; }
 .sentence .filled .w { background: #fff1c2; box-shadow: 0 -2px 0 0 #f5c400 inset; font-weight: 700; color: #0f5a27; padding: 0 3px; }   /* parole scritte negli spazi, a risposta giusta */
+.answer-row .chip.sel { cursor: grab; touch-action: none; }
+.answer-row .chip.dragging { cursor: grabbing; opacity: .9; box-shadow: 0 6px 16px rgba(0,0,0,.25); transform: scale(1.05); }
+.answer-row .chip.placeholder { background: #ffe8cc; border: 2px dashed var(--marker); opacity: .7; }
 .chip.w { cursor: pointer; }
 .chip.w.starred { box-shadow: 0 -3px 0 0 #f5c400 inset; }
 .w.insert-in { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: bottom; background: #fff1c2; box-shadow: 0 -2px 0 0 #f5c400 inset; font-weight: 700; color: #0f5a27; animation: word-in .8s cubic-bezier(.2, 1.2, .4, 1) both; }

@@ -628,7 +628,6 @@
     $('#e-strict').checked = !!ls.options.strict;
     $('#e-fx').checked = ls.options.fx !== false;
     $('#e-lock').checked = !!ls.options.lock;
-    $('#e-showreplay').checked = !!ls.options.showDuringReplay;
     $('#e-cover').checked = !!coverState(ls).on;
     createPlayer($('#e-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 5000); } })
       .then(function () { startLoop(); renderCover($('#e-player'), ls); })
@@ -643,7 +642,6 @@
   }
   $('#e-strict').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.strict = $('#e-strict').checked; touch(ls); } });
   $('#e-lock').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.lock = $('#e-lock').checked; touch(ls); } });
-  $('#e-showreplay').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.showDuringReplay = $('#e-showreplay').checked; touch(ls); } });
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
   $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
@@ -1564,7 +1562,7 @@
   (function () {
     // qualunque cambiamento nel pop (risposta, "Giusto!", frase completa, traduzione) rimisura lo stage
     let raf = 0;
-    const schedule = function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; $$('.stage.docked').forEach(fitStage); }); };
+    const schedule = function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; $$('.stage.docked').forEach(fitStage); const ls = S.student ? S.student.lesson : current(); if (ls) refreshStarMarks(ls); }); };
     if (window.MutationObserver) {
       const mo = new MutationObserver(schedule);
       ['#s-panel', '#e-pop'].forEach(function (sel) { const n = $(sel); if (n) mo.observe(n, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'style'] }); });
@@ -1732,8 +1730,8 @@
     const actions = el('div', { class: 'actions' });
     const replayBtn = el('button', { text: '🔁 Riascolta', onclick: function () { if (opts.replay) opts.replay(ex); } });
     // "con la frase": se spuntato, durante il riascolto lo schermo resta così (frase visibile); di default il video torna grande.
-    // Vale SOLO per questo esercizio: a ogni esercizio riparte dal valore scelto dall'insegnante (di norma spento)
-    S.withText = !!(ls.options && ls.options.showDuringReplay);
+    // Vale SOLO per questo esercizio: a ogni esercizio riparte SEMPRE spenta (richiesta esplicita di Edoardo)
+    S.withText = false;
     const withText = el('input', { type: 'checkbox', title: 'Riascolta senza ingrandire il video: la frase resta visibile (solo per questo esercizio)' });
     withText.checked = S.withText;
     withText.addEventListener('change', function () { S.withText = withText.checked; });
@@ -1840,9 +1838,10 @@
       }
       getAnswer = function () { return inputs.map(function (i) { return i.value; }); };
       giveHint = function () {
-        const k = inputs.findIndex(function (inp, i) { return !sameWord(inp.value, d.answers[i]); });
+        // uno spazio unito = una risposta di più parole (runs), non la k-esima parola singola
+        const k = inputs.findIndex(function (inp, i) { return !sameWord(inp.value, runs[i].answer); });
         if (k === -1) return false;
-        return revealLetter(inputs[k], d.answers[k]);
+        return revealLetter(inputs[k], runs[k].answer);
       };
       markResult = function (res) {
         inputs.forEach(function (inp, k) { inp.classList.toggle('ok', !!res.detail[k]); inp.classList.toggle('bad', !res.detail[k]); });
@@ -1865,9 +1864,44 @@
           pool.appendChild(el('span', { class: 'chip', text: w, onclick: function () { chosen.push(i); render(); } }));
         });
         chosen.forEach(function (i, k) {
-          ans.appendChild(el('span', { class: 'chip sel', text: d.shuffled[i], onclick: function () { chosen.splice(k, 1); render(); } }));
+          const c = el('span', { class: 'chip sel', text: d.shuffled[i], 'data-i': String(i), title: 'Trascina per spostare, tocca per togliere' });
+          // trascinamento per riordinare (mouse e touch); un tocco senza spostamento toglie la parola
+          // NB: il chip trascinato non si sposta nel DOM (spostarlo farebbe perdere la cattura del puntatore): segue il dito
+          // con position:fixed, mentre un segnaposto (ph) mostra dove finirà
+          let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, active = false, ph = null;
+          c.addEventListener('pointerdown', function (e) { if (e.button && e.button !== 0) return; const r = c.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; dx = e.clientX - r.left; dy = e.clientY - r.top; dragging = false; active = true; try { c.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } });
+          c.addEventListener('pointermove', function (e) {
+            if (!active) return;
+            if (!dragging) {
+              if (Math.hypot(e.clientX - sx, e.clientY - sy) < 6) return;
+              dragging = true;
+              const r = c.getBoundingClientRect();
+              ph = el('span', { class: 'chip placeholder', style: 'width:' + r.width + 'px;height:' + r.height + 'px' });
+              ans.insertBefore(ph, c);
+              c.classList.add('dragging'); c.style.position = 'fixed'; c.style.zIndex = '60'; c.style.pointerEvents = 'none'; c.style.width = r.width + 'px';
+            }
+            c.style.left = (e.clientX - dx) + 'px'; c.style.top = (e.clientY - dy) + 'px';
+            const others = $$('.chip', ans).filter(function (x) { return x !== c && x !== ph; });
+            let idx = others.length;
+            for (let j = 0; j < others.length; j++) { const r = others[j].getBoundingClientRect(); if (e.clientY < r.top - 4 || (e.clientY <= r.bottom + 4 && e.clientX < r.left + r.width / 2)) { idx = j; break; } }
+            const ref = others[idx] || null;
+            if (ref) { if (ph.nextSibling !== ref) ans.insertBefore(ph, ref); } else if (ans.lastElementChild !== ph) ans.appendChild(ph);
+          });
+          const finish = function (e) {
+            if (!active) return;
+            active = false;
+            try { c.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+            if (!dragging) { chosen.splice(chosen.indexOf(i), 1); render(); return; }   // tocco senza spostamento: toglie
+            dragging = false;
+            const order = $$('.chip', ans).filter(function (x) { return x !== c; }).map(function (x) { return x === ph ? i : parseInt(x.getAttribute('data-i'), 10); });
+            chosen.length = 0; order.forEach(function (x) { chosen.push(x); });
+            render();
+          };
+          c.addEventListener('pointerup', finish);
+          c.addEventListener('pointercancel', function () { active = false; dragging = false; render(); });
+          ans.appendChild(c);
         });
-        if (!chosen.length) ans.appendChild(el('span', { class: 'hint', text: 'Tocca le parole qui sotto nell\'ordine giusto' }));
+        if (!chosen.length) ans.appendChild(el('span', { class: 'hint', text: 'Tocca le parole qui sotto nell\'ordine giusto (poi puoi trascinarle per spostarle)' }));
       };
       render();
       body.appendChild(ans); body.appendChild(pool);
@@ -2107,10 +2141,63 @@
     const k = L.normalize(w), stars = starStore(ls);
     if (stars[k]) delete stars[k]; else stars[k] = { word: w, translation: translationFor(ls, w) };
     saveStars(ls, stars);
-    $$('.w[data-w="' + k + '"]').forEach(function (e) { e.classList.toggle('starred', !!stars[k]); });
+    refreshStarMarks(ls);
     updateStarCount();
     if (stars[k]) toast('★ "' + w + '" segnata: la ritrovi nel pulsante ★ in basso e nel riepilogo finale', 2500);
     return !!stars[k];
+  }
+  /**
+   * Stella su una parola dentro una frase: parole stellate ADIACENTI diventano un'unica voce ("si stanno realmente
+   * riscaldando"), non quattro voci separate. Togliendo la stella a una parola in mezzo, i pezzi ai lati restano.
+   */
+  function starClick(ls, span) {
+    const parent = span.parentElement; if (!parent) return toggleStar(ls, span.textContent);
+    const spans = $$('.w', parent).filter(function (x) { return x.parentElement === parent; });
+    const idx = spans.indexOf(span); if (idx === -1) return toggleStar(ls, span.textContent);
+    const norms = spans.map(function (x) { return x.getAttribute('data-w') || ''; });
+    const on = spans.map(function (x) { return x.classList.contains('starred'); });
+    const stars = starStore(ls);
+    let a = idx, b = idx;
+    while (a > 0 && on[a - 1] && norms[a - 1]) a--;
+    while (b < spans.length - 1 && on[b + 1] && norms[b + 1]) b++;
+    const keyOf = function (from, to) { return norms.slice(from, to + 1).join(' '); };
+    const textOf = function (from, to) { return spans.slice(from, to + 1).map(function (x) { return cleanWord(x.textContent); }).join(' '); };
+    // via tutte le voci che sono un pezzo contiguo della sequenza [a..b] (vecchie parole singole o frasi parziali)
+    const seq = norms.slice(a, b + 1);
+    Object.keys(stars).forEach(function (key) {
+      const kw = key.split(' ');
+      for (let i = 0; i + kw.length <= seq.length; i++) { if (kw.every(function (w, j) { return w === seq[i + j]; })) { delete stars[key]; break; } }
+    });
+    let added = null;
+    if (on[idx]) {
+      if (a < idx) stars[keyOf(a, idx - 1)] = { word: textOf(a, idx - 1), translation: translationFor(ls, textOf(a, idx - 1)) };
+      if (b > idx) stars[keyOf(idx + 1, b)] = { word: textOf(idx + 1, b), translation: translationFor(ls, textOf(idx + 1, b)) };
+    } else {
+      added = textOf(a, b);
+      stars[keyOf(a, b)] = { word: added, translation: translationFor(ls, added) };
+    }
+    saveStars(ls, stars);
+    refreshStarMarks(ls);
+    updateStarCount();
+    if (added) toast('★ "' + added + '" segnata: la ritrovi nel pulsante ★ in basso e nel riepilogo finale', 2500);
+    return !!added;
+  }
+  /** Segna come stellate le parole (o sequenze di parole) presenti nella lista, in tutte le frasi visibili. Idempotente. */
+  function refreshStarMarks(ls) {
+    if (!ls) return;
+    const stars = starStore(ls);
+    const keys = Object.keys(stars).map(function (k) { return k.split(' '); });
+    const parents = new Set();
+    $$('.w').forEach(function (x) { if (x.parentElement) parents.add(x.parentElement); });
+    parents.forEach(function (parent) {
+      const spans = $$('.w', parent).filter(function (x) { return x.parentElement === parent; });
+      const norms = spans.map(function (x) { return x.getAttribute('data-w') || ''; });
+      const want = spans.map(function () { return false; });
+      keys.forEach(function (kw) {
+        for (let i = 0; i + kw.length <= norms.length; i++) { if (kw.every(function (w, j) { return w === norms[i + j]; })) { for (let j = 0; j < kw.length; j++) want[i + j] = true; } }
+      });
+      spans.forEach(function (x, i) { if (x.classList.contains('starred') !== want[i]) x.classList.toggle('starred', want[i]); });
+    });
   }
   function updateStarCount() {
     const b = $('#btn-stars'); if (!b || !S.student) return;
@@ -2184,7 +2271,7 @@
       const w = cleanWord(word);
       const n = c.cloneNode(false);
       n.textContent = word;
-      if (w) { n.classList.add('w'); n.setAttribute('data-w', L.normalize(w)); if (isStarred(ls, w)) n.classList.add('starred'); n.title = 'Clicca per mettere una stella (parola da ripassare)'; n.addEventListener('click', function (e) { e.stopPropagation(); toggleStar(ls, w); }); }
+      if (w) { n.classList.add('w'); n.setAttribute('data-w', L.normalize(w)); if (isStarred(ls, w)) n.classList.add('starred'); n.title = 'Clicca per mettere una stella (parola da ripassare); parole vicine stellate insieme = una frase'; n.addEventListener('click', function (e) { e.stopPropagation(); starClick(ls, n); }); }
       c.replaceWith(n);
     });
   }
@@ -2192,7 +2279,9 @@
     const w = cleanWord(word);
     if (!w) return document.createTextNode(word);
     const k = L.normalize(w);
-    return el('span', { class: 'w' + (isStarred(ls, w) ? ' starred' : ''), 'data-w': k, text: word, title: 'Clicca per mettere una stella (parola da ripassare)', onclick: function (e) { e.stopPropagation(); toggleStar(ls, w); } });
+    const sp = el('span', { class: 'w' + (isStarred(ls, w) ? ' starred' : ''), 'data-w': k, text: word, title: 'Clicca per mettere una stella (parola da ripassare); parole vicine stellate insieme = una frase' });
+    sp.addEventListener('click', function (e) { e.stopPropagation(); starClick(ls, sp); });
+    return sp;
   }
   function starredSentence(ls, tokens) {
     const d = el('div', { class: 'sentence full' });
@@ -2224,6 +2313,11 @@
       const img = el('img', { src: w.image, alt: '', referrerpolicy: 'no-referrer' });
       img.addEventListener('error', textBack);
       d.appendChild(img);
+      if (!big) {
+        // scheda abbinamento: al passaggio del mouse la foto si vede grande (senza didascalia: la parola è da indovinare)
+        d.addEventListener('mouseenter', function () { showImgPreview(d, w.image, ''); });
+        d.addEventListener('mouseleave', hideImgPreview);
+      }
     } else textBack();
     return d;
   }
@@ -2328,6 +2422,16 @@
       grid.appendChild(left); grid.appendChild(right);
       p.appendChild(done); p.appendChild(grid); p.appendChild(fb);
       const foot = cardFooter(p, st);
+      // le righe usano tutta l'altezza disponibile (foto più grandi), mai sotto 44 px né sopra 150 px
+      const sizeRows = function () {
+        if (!p.isConnected) return;
+        const avail = p.clientHeight - (grid.getBoundingClientRect().top - p.getBoundingClientRect().top) - fb.offsetHeight - foot.offsetHeight - 28;
+        const rowh = Math.max(44, Math.min(150, Math.floor(avail / words.length) - 6));
+        p.style.setProperty('--rowh', rowh + 'px');
+      };
+      sizeRows();
+      setTimeout(sizeRows, 50);
+      window.addEventListener('resize', sizeRows);
     };
     playRound();
   }
@@ -2362,11 +2466,22 @@
         setTimeout(function () { inp.focus(); }, 50);
       }
       p.appendChild(fb);
-      const foot = cardFooter(p, st);
-      const nav = el('div', { class: 'row', style: 'margin-top:8px' });
+      // Indietro / Avanti centrati SOTTO la carta (non a sinistra, in fondo)
+      const nav = el('div', { class: 'row fc-nav' });
       nav.appendChild(el('button', { class: 'small', text: '◀ Indietro', disabled: i === 0 ? 'disabled' : null, onclick: function () { if (i > 0) { i--; show(); } } }));
-      nav.appendChild(el('button', { class: 'primary', text: i + 1 < deck.length ? 'Avanti ▶' : 'Continua ▶', onclick: function () { if (i + 1 < deck.length) { i++; show(); } else nextCard(); } }));
-      foot.insertBefore(nav, foot.firstChild);
+      nav.appendChild(el('button', { class: 'primary big', text: i + 1 < deck.length ? 'Avanti ▶' : 'Continua ▶', onclick: function () { if (i + 1 < deck.length) { i++; show(); } else nextCard(); } }));
+      p.appendChild(nav);
+      const foot = cardFooter(p, st);
+      // la carta usa l'altezza disponibile (mai sotto 250 px, mai sopra 560 px)
+      const sizeCard = function () {
+        if (!p.isConnected) return;
+        const used = (card.getBoundingClientRect().top - p.getBoundingClientRect().top) + nav.offsetHeight + fb.offsetHeight + foot.offsetHeight + (write ? 60 : 0) + 40;
+        const h = Math.max(250, Math.min(560, p.clientHeight - used));
+        p.style.setProperty('--cardh', h + 'px');
+      };
+      sizeCard();
+      setTimeout(sizeCard, 50);
+      window.addEventListener('resize', sizeCard);
     };
     show();
   }

@@ -108,14 +108,9 @@
 
     if (type === 'scramble') {
       if (tokens.length > 24) return null;
-      // la prima parola tiene la maiuscola e l'ultima il punto (o ? !): sono suggerimenti voluti su inizio e fine della frase;
-      // la punteggiatura interna (virgole) resta fuori e ricompare a risposta giusta
-      const last = tokens.length - 1;
-      const words = tokens.map(function (t, i) {
-        let w = t.core;
-        if (i === last && /[.!?…]$/.test(t.post || '')) w += (t.post.match(/[.!?…]+$/) || [''])[0];
-        return w;
-      }).filter(Boolean);
+      // le parole restano come nella frase: maiuscola iniziale, virgole e punto finale attaccati (suggerimenti voluti:
+      // Edoardo li vuole visibili già nelle parole da toccare); la correzione ignora comunque punteggiatura e maiuscole
+      const words = tokens.map(function (t) { return t.raw; }).filter(function (w) { return L.normalize(w); });
       if (words.length < 3) return null;
       let sh = shuffle(words, rand), tries = 0;
       while (sameSeq(sh, words) && tries++ < 10) sh = shuffle(words, rand);
