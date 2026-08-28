@@ -188,12 +188,31 @@ test('passaggi di lunghezza scelta: 20-30 e 30-40 parole, esercizi nell\'interva
   });
 });
 
+test('lunghezza consigliata ("smart"): fill the gaps su 22-32 parole con ≥3 spazi, frasi complete con maiuscola, gapbank con distrattori', function () {
+  const d = G.generateDraft({ chunks: realChunks, lines: real.lines, duration: 719, n: 10, target: 719, lang: 'it', seed: 5, range: 'smart', types: ['gap', 'gapbank', 'scramble', 'missing', 'extra', 'wrong'] });
+  assert.strictEqual(d.exercises.length, 10);
+  d.exercises.forEach(function (e) {
+    const wc = e.sentence.split(/\s+/).length;
+    assert.ok(/^[^\p{L}]*\p{Lu}/u.test(e.sentence), 'maiuscola: ' + e.sentence);
+    if (e.type === 'gap') { assert.ok(wc >= 22 && wc <= 32, 'gap ' + wc + ' parole'); assert.ok(e.data.gapIndices.length >= 3, 'almeno 3 spazi'); assert.ok(!e.data.wordBank, 'niente parole date'); }
+    if (e.type === 'gapbank') { assert.ok(e.data.wordBank.length > e.data.answers.length, 'distrattori presenti'); assert.ok(e.data.gapIndices.length >= 3); }
+    if (e.type === 'scramble') assert.ok(wc <= 14, 'scramble corto: ' + wc);
+  });
+  const complete = d.exercises.filter(function (e) { return /[.!?…]["'»)]*$/.test(e.sentence); }).length;
+  assert.ok(complete >= 8, 'frasi complete: ' + complete + '/10');
+});
+
 console.log('Esercizi');
 const S = 'Il cervello umano contiene circa ottantasei miliardi di neuroni.';
 test('gap fill: costruzione e correzione', function () {
   const ex = EX.buildExercise('gap', S, { lang: 'it', seed: 5 });
   assert.strictEqual(ex.type, 'gap');
-  assert.ok(ex.data.gapIndices.length >= 1 && ex.data.gapIndices.length <= 3);
+  assert.ok(ex.data.gapIndices.length >= 3 && ex.data.gapIndices.length <= 6, 'spazi: ' + ex.data.gapIndices.length);
+  assert.ok(ex.data.gapIndices.indexOf(0) === -1, 'mai la prima parola');
+  const gb = EX.buildExercise('gapbank', S, { lang: 'it', seed: 5, vocab: ['fluoro', 'smalto', 'saliva', 'batteri'] });
+  assert.strictEqual(gb.data.distractors.length, 2);
+  assert.strictEqual(gb.data.wordBank.length, gb.data.answers.length + 2);
+  assert.ok(EX.check(gb, gb.data.answers).correct);
   ex.data.answers.forEach(function (a) { assert.ok(L.isContent(a, 'it'), 'parola piena: ' + a); });
   assert.ok(EX.check(ex, ex.data.answers.map(function (a) { return a.toUpperCase(); })).correct, 'maiuscole ignorate');
   assert.ok(!EX.check(ex, ex.data.answers.map(function () { return 'xyz'; })).correct);

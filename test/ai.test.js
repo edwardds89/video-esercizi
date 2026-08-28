@@ -91,7 +91,7 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(e5 && e5.type === 'wrong' && e5.data.wrongWord === 'prima' && L.normalize(e5.data.answer) === 'dopo');
     assert.ok(!applied.exercises.some(function (e) { return e.chunkId === 'c9999'; }));
     const eMed = applied.exercises.find(function (e) { return e.chunkId === cMed.id; });
-    assert.ok(eMed && eMed.sentence === cMed.text, 'frase non trovata → chunk intero');
+    assert.ok(eMed && L.normalize(eMed.sentence) === L.normalize(cMed.text), 'frase non trovata → chunk intero (con iniziale maiuscola)');
     assert.ok(applied.warnings.some(function (w) { return /inesistente/.test(w); }));
   });
   await test('completamento a n con le regole e ordinamento', function () {

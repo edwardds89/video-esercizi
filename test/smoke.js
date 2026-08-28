@@ -31,7 +31,7 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
 
   console.log('2. editor: cambio tipo, toggle gap, altra frase, aggiungi/rimuovi taglio');
   const firstType = await page.$eval('#e-exercises .ex-card:first-child select', function (s) { return s.value; });
-  const newType = firstType === 'gap' ? 'missing' : 'gap';
+  const newType = firstType === 'missing' ? 'gap' : 'missing';
   await page.selectOption('#e-exercises .ex-card:first-child select', newType);
   await page.waitForTimeout(150);
   assert.strictEqual(await page.$eval('#e-exercises .ex-card:first-child select', function (s) { return s.value; }), newType);
@@ -56,6 +56,47 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   await page.click('#e-cuts .cut-row:last-child button:has-text("Rimuovi")');
   await page.waitForTimeout(100);
   assert.strictEqual(await page.$$eval('#e-cuts .cut-row', function (els) { return els.length; }), cutsBefore);
+  // anteprima nell'area del video: clic sul segnaposto 2
+  await page.locator('#e-timeline .marker').nth(1).click();
+  await page.waitForTimeout(400);
+  assert.ok(await page.$('#e-stage.docked'), 'anteprima aperta');
+  const rp = await page.evaluate(function () { const s = window.VLApp.S; const e = Object.values(s.lessons)[0].exercises[1]; return { replay: !!s.editor.replay, t: s.player.time(), seg: e.segment, playing: s.player.state() === 1 }; });
+  assert.ok(rp.replay && rp.playing && rp.t >= rp.seg.start - 1 && rp.t <= rp.seg.end + 1, 'il clic sul segnaposto riproduce la frase: ' + JSON.stringify(rp));
+  await page.waitForFunction(function () { return !window.VLApp.S.editor.replay; }, null, { timeout: 20000 });
+  const stopped = await page.evaluate(function () { const s = window.VLApp.S; const e = Object.values(s.lessons)[0].exercises[1]; return { t: s.player.time(), end: e.segment.end, paused: s.player.state() === 2 }; });
+  assert.ok(stopped.paused && Math.abs(stopped.t - stopped.end) < 2.5, 'si ferma a fine frase: ' + JSON.stringify(stopped));
+  assert.ok(/^Anteprima · /.test(await page.$eval('#e-pop h3', function (h) { return h.textContent; })), 'titolo anteprima = tipo di esercizio');
+  assert.ok(/^2 di \d+$/.test(await page.$eval('#e-pop .ex-head .badge', function (b) { return b.textContent; })), 'anteprima esercizio 2 (badge)');
+  // pulsante ▶ accanto ai tempi: riproduce la frase e si ferma da solo
+  await page.click('#e-exercises .ex-card:nth-child(2) button.play');
+  await page.waitForTimeout(300);
+  assert.ok(await page.evaluate(function () { return !!window.VLApp.S.editor.replay && window.VLApp.S.player.state() === 1; }), '▶ riproduce');
+  await page.waitForFunction(function () { return !window.VLApp.S.editor.replay; }, null, { timeout: 20000 });
+  // frecce sul campo tempo: +0,1 s e il fuoco resta sul campo
+  const startInp = '#e-exercises .ex-card:nth-child(2) input[data-key$=":start"]';
+  const v0 = await page.$eval(startInp, function (i) { return i.value; });
+  await page.focus(startInp);
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(200);
+  const v1 = await page.$eval(startInp, function (i) { return i.value; });
+  assert.notStrictEqual(v0, v1, 'freccia su cambia il tempo');
+  assert.ok(await page.evaluate(function (sel) { return document.activeElement === document.querySelector(sel); }, startInp), 'il fuoco resta sul campo');
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(200);
+  assert.strictEqual(await page.$eval(startInp, function (i) { return i.value; }), v0, 'freccia giù ripristina');
+  await page.click('#e-pop button:has-text("Chiudi anteprima")');
+  await page.waitForTimeout(200);
+  assert.ok(!(await page.$('#e-stage.docked')), 'anteprima chiusa');
+  // pulsante Anteprima nella scheda + "= fine frase"
+  await page.click('#e-exercises .ex-card:first-child button:has-text("Anteprima")');
+  await page.waitForTimeout(300);
+  assert.ok(await page.$('#e-stage.docked'), 'anteprima dalla scheda');
+  const mk = await page.$$eval('#e-exercises .ex-card:first-child .head input.short', function (is) { return is.map(function (i) { return i.value; }); });
+  assert.strictEqual(mk.length, 3, 'tre tempi: inizio, fine, stop');
+  await page.click('#e-exercises .ex-card:first-child button:has-text("= fine frase")');
+  await page.waitForTimeout(200);
+  const ex0 = await page.evaluate(function () { const ls = Object.values(window.VLApp.S.lessons)[0]; const e = ls.exercises[0]; return { m: e.markerTime, end: e.segment.end }; });
+  assert.ok(Math.abs(ex0.m - ex0.end - 0.1) < 0.06, 'marker allineato a fine frase');
   // persistenza
   await page.reload();
   await page.waitForSelector('#view-home.active');
@@ -72,14 +113,33 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   await page.click('#s-panel button:has-text("Inizia")');
   const lesson = await page.evaluate(function () { return JSON.parse(JSON.stringify(window.VLApp.S.student.lesson)); });
   const samples = [];
+  const tStart = Date.now();
   const sampler = setInterval(async function () {
-    try { samples.push(await page.evaluate(function () { const p = window.VLApp.S.player; return p ? { t: p.time(), st: p.state(), blocked: window.VLApp.S.student.blocked } : null; })); } catch (e) { /* ignore */ }
+    try { const smp = await page.evaluate(function () { const p = window.VLApp.S.player; return p ? { t: p.time(), st: p.state(), blocked: window.VLApp.S.student.blocked, replay: !!window.VLApp.S.student.replay } : null; }); samples.push(smp); if (process.env.SMOKE_TRACE && smp && samples.length % 10 === 0) console.log('   trace', ((Date.now() - tStart) / 1000).toFixed(1) + 's', 't=' + smp.t.toFixed(1), 'st=' + smp.st, 'blocked=' + smp.blocked, 'replay=' + smp.replay); } catch (e) { /* ignore */ }
   }, 150);
   for (let k = 0; k < lesson.exercises.length; k++) {
-    await page.waitForSelector('#s-panel button:has-text("Controlla")', { timeout: 60000 });
+    try { await page.waitForSelector('#s-panel button:has-text("Controlla")', { timeout: 60000 }); }
+    catch (e) {
+      console.log('DIAG', await page.evaluate(function () { const s = window.VLApp.S; return JSON.stringify({ t: s.player && s.player.time(), state: s.player && s.player.state(), blocked: s.student.blocked, started: s.student.started, replay: s.student.replay, ended: s.student.ended, done: Array.from(s.student.done), panel: document.querySelector('#s-panel').innerText.slice(0, 80), markers: s.student.lesson.exercises.map(function (e) { return Math.round(e.markerTime); }) }); }));
+      throw e;
+    }
     const ex = lesson.exercises[k];
+    if (k === 0) {
+      // pop-up nell'area del video: stage "docked", player ridotto ma mai sotto 200x200 e mai coperto
+      assert.ok(await page.$('#s-stage.docked'), 'stage docked');
+      const box = await page.$eval('#s-player', function (e) { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height }; });
+      assert.ok(box.w >= 200 && box.h >= 200, 'player ridotto ' + JSON.stringify(box));
+      const overlap = await page.evaluate(function () {
+        const p = document.getElementById('s-player').getBoundingClientRect();
+        const el = document.elementFromPoint(p.left + p.width / 2, p.top + p.height / 2);
+        return el ? (el.closest('#s-player') ? 'player' : el.tagName + '.' + el.className) : 'none';
+      });
+      assert.strictEqual(overlap, 'player', 'niente sopra il player: ' + overlap);
+    }
+    const shownBadge = await page.$eval('#s-panel .ex-head .badge', function (b) { return b.textContent; });
+    assert.ok(shownBadge.indexOf((k + 1) + ' di ') === 0, 'ordine esercizi: ' + shownBadge);
     const shownTitle = await page.$eval('#s-panel h3', function (h) { return h.textContent; });
-    assert.ok(shownTitle.indexOf('Esercizio ' + (k + 1) + ' ') === 0, 'ordine esercizi: ' + shownTitle);
+    assert.ok(shownTitle.indexOf(ex.type === 'gap' ? 'Completa' : '') === 0 && shownTitle.length > 5, 'titolo = tipo: ' + shownTitle);
     const t = await page.evaluate(function () { return window.VLApp.S.player.time(); });
     assert.ok(Math.abs(t - ex.markerTime) < 2.5, 'fermato vicino al marker: ' + t.toFixed(1) + ' vs ' + ex.markerTime.toFixed(1));
     // riascolta una volta
@@ -87,7 +147,7 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
     await page.waitForTimeout(300);
     await page.waitForFunction(function () { return !window.VLApp.S.student.replay; }, null, { timeout: 20000 });
     // risposta sbagliata poi giusta
-    if (ex.type === 'gap') {
+    if (ex.type === 'gap' || ex.type === 'gapbank') {
       const inputs = await page.$$('#s-panel input.gap');
       for (const inp of inputs) await inp.fill('zzz');
       await page.click('#s-panel button:has-text("Controlla")');
@@ -113,7 +173,9 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
     await page.click('#s-panel button:has-text("Controlla")');
     const fb = await page.$eval('#s-panel .feedback', function (f) { return f.textContent; });
     assert.ok(/Giusto/.test(fb), 'esercizio ' + (k + 1) + ' (' + ex.type + '): ' + fb);
+    if (k === 0) { assert.ok(await page.$('#s-panel .fx-burst .fx-piece'), 'coriandoli'); assert.ok(await page.$('#s-panel .feedback.win'), 'feedback animato'); }
     await page.click('#s-panel button:has-text("Continua")');
+    if (k === 0) { await page.waitForTimeout(200); assert.ok(!(await page.$('#s-stage.docked')), 'stage torna pieno dopo Continua'); }
   }
   await page.waitForSelector('#s-panel h2:has-text("Fine!")', { timeout: 90000 });
   clearInterval(sampler);
@@ -122,14 +184,46 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   assert.ok(/8 su 8/.test(summary));
   // i tagli sono stati saltati: nessun campione "in riproduzione" dentro un taglio per più di un tick
   let inCut = 0;
-  samples.filter(Boolean).forEach(function (s) { if (s.st === 1 && lesson.cuts.some(function (c) { return s.t > c.start + 0.4 && s.t < c.end - 0.4; })) inCut++; });
+  const cleanCuts = lesson.cuts.filter(function (c) { return !lesson.exercises.some(function (e) { return e.markerTime >= c.start && e.markerTime <= c.end; }); });
+  samples.filter(Boolean).forEach(function (s) { if (s.st === 1 && !s.replay && cleanCuts.some(function (c) { return s.t > c.start + 0.4 && s.t < c.end - 0.4; })) inCut++; });
   console.log('   campioni in riproduzione dentro un taglio:', inCut, 'su', samples.length);
   assert.ok(inCut <= 2, 'tagli saltati');
   await page.screenshot({ path: 'test/shot-student.png', fullPage: true });
 
-  console.log('4. link con dati inclusi');
+  console.log('3b. barra libera, blocco, clic sui numeri');
   await page.click('#s-panel button:has-text("Ricomincia")');
   await page.waitForSelector('#s-panel button:has-text("Inizia")');
+  assert.ok(!(await page.$eval('#s-lock', function (c) { return c.checked; })), 'barra libera di default');
+  await page.click('#s-panel button:has-text("Inizia")');
+  await page.waitForTimeout(300);
+  const exs = lesson.exercises;
+  // salto in avanti oltre gli esercizi 1 e 2: nessun esercizio compare e il video NON torna indietro
+  await page.evaluate(function (t) { window.VLApp.S.player.seek(t); }, exs[2].markerTime - 24);   // (a velocità ×8: 0,8 s reali = 6,4 s di video)
+  await page.waitForTimeout(800);
+  const free = await page.evaluate(function () { const s = window.VLApp.S; return { t: s.player.time(), blocked: s.student.blocked }; });
+  assert.ok(!free.blocked && free.t > exs[1].markerTime, 'barra libera: ' + JSON.stringify(free));
+  await page.waitForSelector('#s-panel button:has-text("Controlla")', { timeout: 30000 });
+  assert.ok(/^3 di /.test(await page.$eval('#s-panel .ex-head .badge', function (b) { return b.textContent; })), 'esercizio 3 raggiunto guardando');
+  await page.click('#s-panel button:has-text("Salta")');
+  await page.waitForTimeout(300);
+  // blocco attivo: andando oltre un esercizio da fare si torna indietro (il primo non fatto è l'1)
+  await page.check('#s-lock');
+  await page.evaluate(function (t) { window.VLApp.S.player.seek(t); }, exs[5].markerTime - 5);
+  await page.waitForSelector('#s-panel button:has-text("Controlla")', { timeout: 30000 });   // riportato indietro, arriva all'esercizio 1
+  const locked = await page.evaluate(function () { return window.VLApp.S.player.time(); });
+  assert.ok(locked < exs[0].markerTime + 1, 'barra bloccata → torna al primo esercizio da fare: ' + locked.toFixed(1));
+  assert.ok(/^1 di /.test(await page.$eval('#s-panel .ex-head .badge', function (b) { return b.textContent; })), 'esercizio 1 dopo il blocco');
+  await page.uncheck('#s-lock');
+  // clic sul numero 5: parte dall'inizio della frase e l'esercizio 5 compare al segnaposto
+  await page.locator('#s-timeline .marker').nth(4).click();
+  await page.waitForTimeout(150);
+  const jump = await page.evaluate(function () { const s = window.VLApp.S; return { t: s.player.time(), playing: s.player.state() === 1 }; });
+  assert.ok(jump.playing && jump.t >= exs[4].segment.start - 2 && jump.t < exs[4].markerTime, 'clic sul numero: ' + JSON.stringify(jump));
+  await page.waitForSelector('#s-panel button:has-text("Controlla")', { timeout: 30000 });
+  assert.ok(/^5 di /.test(await page.$eval('#s-panel .ex-head .badge', function (b) { return b.textContent; })), 'esercizio 5 aperto dal numero');
+  await page.evaluate(function () { window.VLApp.S.player.pause(); });
+
+  console.log('4. link con dati inclusi');
   const link = await page.evaluate(function () {
     const ls = window.VLApp.S.student.lesson;
     const payload = JSON.stringify({ v: 1, id: ls.id, title: ls.title, videoId: ls.videoId, lang: ls.lang, duration: ls.duration, exercises: ls.exercises, cuts: ls.cuts, options: ls.options, lines: ls.lines });
@@ -181,18 +275,22 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   const before6 = await page.$eval(firstCard + ' textarea', function (t) { return t.value; });
   await rangeSel.selectOption('20-30');
   await page.waitForTimeout(300);
-  const after6 = await page.$eval(firstCard + ' textarea', function (t) { return t.value; });
-  const wc6 = after6.split(/\s+/).length;
-  assert.ok(wc6 >= 20 && wc6 <= 30, 'frase di 20-30 parole: ' + wc6 + ' (' + after6.slice(0, 40) + ')');
-  assert.notStrictEqual(before6, after6);
-  const helperText = await page.$eval(firstCard + ' select[title^="Frasi adatte"] option:first-child', function (o) { return o.textContent; });
+  // l'esercizio può cambiare posizione (le schede sono in ordine di tempo): lo ritroviamo dal suo intervallo
+  const changed = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; const e = ls.exercises.find(function (x) { return Array.isArray(x.range) && x.range[0] === 20; }); return e ? { id: e.id, sentence: e.sentence, wc: e.sentence.split(/\s+/).length } : null; });
+  if (!changed) console.log('DIAG6b', await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return JSON.stringify(ls.exercises.map(function (e) { return [e.type, e.range, e.sentence.split(/\s+/).length]; })); }), 'toast:', await page.$eval('#toast', function (t) { return t.textContent; }));
+  assert.ok(changed, 'esercizio con intervallo 20-30');
+  assert.ok(changed.wc >= 20 && changed.wc <= 30, 'frase di 20-30 parole: ' + changed.wc + ' (' + changed.sentence.slice(0, 40) + ')');
+  assert.notStrictEqual(before6, changed.sentence);
+  const card6 = '#ex-' + changed.id;
+  const helperText = await page.$eval(card6 + ' select[title^="Frasi adatte"] option:first-child', function (o) { return o.textContent; });
   assert.ok(/20-30 parole nel video: \d+/.test(helperText), helperText);
-  const nOpts = await page.$$eval(firstCard + ' select[title^="Frasi adatte"] option', function (os) { return os.length; });
+  const nOpts = await page.$$eval(card6 + ' select[title^="Frasi adatte"] option', function (os) { return os.length; });
   assert.ok(nOpts > 5, 'helper con frasi: ' + nOpts);
-  await page.selectOption(firstCard + ' select[title^="Frasi adatte"]', '3');
+  const pickIdx = await page.$$eval(card6 + ' select[title^="Frasi adatte"] option', function (os) { for (let i = 1; i < os.length; i++) if (os[i].textContent.indexOf('attuale') === -1) return os[i].value; return '1'; });
+  await page.selectOption(card6 + ' select[title^="Frasi adatte"]', pickIdx);
   await page.waitForTimeout(300);
-  const after6b = await page.$eval(firstCard + ' textarea', function (t) { return t.value; });
-  assert.notStrictEqual(after6b, after6, 'frase scelta dall\'helper applicata');
+  const after6b = await page.evaluate(function (id) { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; const e = ls.exercises.find(function (x) { return x.id === id; }); return e.sentence; }, changed.id);
+  assert.notStrictEqual(after6b, changed.sentence, 'frase scelta dall\'helper applicata');
   await page.screenshot({ path: 'test/shot-range.png' });
 
   console.log('7. video senza trascrizione → avviso chiaro; generazione senza trascrizione → errore');
