@@ -439,9 +439,14 @@ async function startVideo(page) {
   await page.screenshot({ path: 'test/shot-student.png', fullPage: true });
 
   console.log('3b. barra libera, blocco, clic sui numeri');
+  assert.ok(Object.keys(await page.evaluate(function () { return window.VLApp.S.student.stars; })).length >= 1, 'stelle presenti a fine sessione');
   await page.click('#s-panel button:has-text("Ricomincia")');
   await page.waitForSelector('#btn-start:visible');
   assert.ok(!(await page.$eval('#s-lock', function (c) { return c.checked; })), 'barra libera di default');
+  // le stelle valgono per la sessione: riaprendo il video si riparte da zero, e nella lezione salvata non restano
+  assert.strictEqual(Object.keys(await page.evaluate(function () { return window.VLApp.S.student.stars; })).length, 0, 'stelle azzerate alla riapertura');
+  assert.strictEqual(await page.$eval('#btn-stars', function (b) { return b.textContent.trim(); }), '★ 0', 'contatore stelle a zero');
+  assert.ok(!(await page.evaluate(function () { const l = JSON.parse(localStorage.getItem('vle.lessons'))[window.VLApp.S.student.lesson.id]; return l.vocab && l.vocab.starred && l.vocab.starred.length; })), 'niente stelle salvate nella lezione');
   await startVideo(page);
   await page.waitForTimeout(300);
   const exs = lesson.exercises;
