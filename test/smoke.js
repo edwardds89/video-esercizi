@@ -57,6 +57,24 @@ async function startVideo(page) {
   await page.waitForTimeout(150);
   const sentences = await page.$$eval('#e-exercises .ex-card textarea', function (ts) { return ts.map(function (t) { return t.value; }); });
   assert.ok(sentences.indexOf(sentenceBefore) === -1 || sentences.length === 8, 'altra frase applicata');
+  // modifica a mano della frase: tolte le prime 3 parole → inizio ricalcolato sulle parole; solo punteggiatura → tempi invariati
+  const card4 = '#e-exercises .ex-card:nth-child(4)';
+  const seg0 = await page.evaluate(function () { const e = Object.values(window.VLApp.S.lessons)[0].exercises[3]; return { start: e.segment.start, end: e.segment.end, sentence: e.sentence, marker: e.markerTime }; });
+  const ws = seg0.sentence.split(/\s+/);
+  await page.fill(card4 + ' textarea.sentence-edit', ws.slice(3).join(' '));
+  await page.dispatchEvent(card4 + ' textarea.sentence-edit', 'change');
+  await page.waitForTimeout(200);
+  const seg1 = await page.evaluate(function (s) { const e = Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.sentence === s; }); return e ? { start: e.segment.start, end: e.segment.end, marker: e.markerTime } : null; }, ws.slice(3).join(' '));
+  assert.ok(seg1, 'frase modificata salvata');
+  assert.ok(seg1.start > seg0.start + 0.3 && seg1.start < seg0.end, 'inizio spostato in avanti sulle parole: ' + seg0.start + ' → ' + seg1.start);
+  assert.ok(Math.abs(seg1.end - seg0.end) < 0.6, 'fine invariata: ' + seg0.end + ' → ' + seg1.end);
+  assert.ok(/Tempi ricalcolati/.test(await page.$eval('#toast', function (t) { return t.textContent; })), 'avviso tempi ricalcolati');
+  const cardEdited = '#ex-' + await page.evaluate(function (s) { return Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.sentence === s; }).id; }, ws.slice(3).join(' '));
+  await page.fill(cardEdited + ' textarea.sentence-edit', ws.slice(3).join(' ') + '!');
+  await page.dispatchEvent(cardEdited + ' textarea.sentence-edit', 'change');
+  await page.waitForTimeout(200);
+  const seg2 = await page.evaluate(function (id) { const e = Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.id === id; }); return { start: e.segment.start, end: e.segment.end }; }, cardEdited.slice(4));
+  assert.strictEqual(seg2.start, seg1.start, 'solo punteggiatura: tempi invariati');
   const cutsBefore = await page.$$eval('#e-cuts .cut-row', function (els) { return els.length; });
   await page.click('#btn-add-cut');
   await page.waitForTimeout(100);
@@ -148,10 +166,19 @@ async function startVideo(page) {
   const img1 = await page.evaluate(function () { const w = Object.values(window.VLApp.S.lessons)[0].vocab.words[0]; return { word: w.word, image: w.image }; });
   assert.strictEqual(img1.word, 'mare', 'parola aggiornata prima della ricerca');
   assert.strictEqual(img1.image, 'https://upload.example/mare-1.jpg', 'prima foto (la disambigua è saltata)');
+  // anteprima grande al passaggio del mouse; resta aperta e si aggiorna cliccando "↻ Altra"
+  await page.hover('#e-vocab .vocab-row:first-child .v-img img');
+  await page.waitForTimeout(100);
+  assert.strictEqual(await page.$eval('.img-preview.show img', function (i) { return i.getAttribute('src'); }), 'https://upload.example/mare-1.jpg', 'anteprima grande della foto');
   await page.click('#e-vocab .vocab-row:first-child button:has-text("Altra")');
   await page.waitForTimeout(200);
   const img2 = await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].vocab.words[0].image; });
   assert.strictEqual(img2, 'https://upload.example/mare-2.jpg', 'altra foto');
+  assert.strictEqual(await page.$eval('.img-preview.show img', function (i) { return i.getAttribute('src'); }), 'https://upload.example/mare-2.jpg', 'anteprima aggiornata');
+  assert.ok(/2\/3/.test(await page.$eval('.img-preview.show .cap', function (c) { return c.textContent; })), 'didascalia n/N');
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(100);
+  assert.ok(!(await page.$('.img-preview.show')), 'anteprima chiusa uscendo col mouse');
   await page.click('#e-vocab .vocab-row:first-child button:has-text("Altra")');
   await page.waitForTimeout(200);
   assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].vocab.words[0].image; }), 'https://upload.example/onde.jpg', 'poi Commons');
@@ -450,6 +477,21 @@ async function startVideo(page) {
   await page.waitForTimeout(300);
   const after6b = await page.evaluate(function (id) { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; const e = ls.exercises.find(function (x) { return x.id === id; }); return e.sentence; }, changed.id);
   assert.notStrictEqual(after6b, changed.sentence, 'frase scelta dall\'helper applicata');
+  // scelta multipla: cambiando frase (helper, "Altra frase") il tipo resta "mc", non diventa un fill the gaps
+  await page.selectOption(card6 + ' select[title^="Tipo"]', 'mc');
+  await page.waitForTimeout(300);
+  const mcState = await page.evaluate(function (id) { const e = window.VLApp.S.lessons[window.VLApp.S.currentId].exercises.find(function (x) { return x.id === id; }); return { type: e.type, q: e.data.question, n: e.data.options.length }; }, changed.id);
+  assert.strictEqual(mcState.type, 'mc'); assert.strictEqual(mcState.n, 4);
+  const pickIdx2 = await page.$$eval(card6 + ' select[title^="Frasi adatte"] option', function (os) { for (let i = 1; i < os.length; i++) if (os[i].textContent.indexOf('attuale') === -1) return os[i].value; return '1'; });
+  await page.selectOption(card6 + ' select[title^="Frasi adatte"]', pickIdx2);
+  await page.waitForTimeout(300);
+  const mcAfter = await page.evaluate(function (id) { const e = window.VLApp.S.lessons[window.VLApp.S.currentId].exercises.find(function (x) { return x.id === id; }); return { type: e.type, sentence: e.sentence, hasQ: 'question' in e.data }; }, changed.id);
+  assert.strictEqual(mcAfter.type, 'mc', 'resta scelta multipla dopo il cambio di frase');
+  assert.ok(mcAfter.hasQ, 'dati mc');
+  assert.notStrictEqual(mcAfter.sentence, after6b, 'frase cambiata');
+  await page.click(card6 + ' button:has-text("Altra frase")');
+  await page.waitForTimeout(300);
+  assert.strictEqual(await page.evaluate(function (id) { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises.find(function (x) { return x.id === id; }).type; }, changed.id), 'mc', 'resta mc anche con "Altra frase"');
   await page.screenshot({ path: 'test/shot-range.png' });
 
   console.log('7. video senza trascrizione → avviso chiaro; generazione senza trascrizione → errore');

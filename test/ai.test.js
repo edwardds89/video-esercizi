@@ -158,8 +158,19 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
       const text = isTricky ? '{"index":2,"option":"Le sinapsi rallentano la memoria"}' : '{"question":"Cosa sono le sinapsi?","options":["Punti di contatto tra neuroni","Cellule del sangue","Ormoni","Ossa del cranio"],"correct":0,"tricky":null}';
       return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 300, output_tokens: 60 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
     };
-    const mc = await AI.generateMC({ sentence: cSin.text, context: '', lang: 'it', apiKey: 'k', fetchImpl: fakeFetch });
+    const mc = await AI.generateMC({ sentence: cSin.text, context: '', lang: 'it', apiKey: 'k', fetchImpl: fakeFetch, shuffle: false });
     assert.strictEqual(mc.options.length, 4); assert.strictEqual(mc.correct, 0); assert.strictEqual(mc.tricky, null);
+    // di default le risposte vengono mescolate e la giusta non è mai "sempre la prima"
+    let firsts = 0;
+    for (let k = 0; k < 40; k++) {
+      const m = await AI.generateMC({ sentence: cSin.text, context: '', lang: 'it', apiKey: 'k', fetchImpl: fakeFetch });
+      assert.strictEqual(m.options[m.correct], 'Punti di contatto tra neuroni', 'indice della giusta rimappato');
+      assert.deepStrictEqual(m.options.slice().sort(), mc.options.slice().sort(), 'stesse opzioni');
+      if (m.correct === 0) firsts++;
+    }
+    assert.ok(firsts === 0, 'la giusta non resta in prima posizione');
+    const sh = AI.shuffleMC(['a', 'b', 'c', 'd'], 0, 2, function () { return 0.99; });
+    assert.strictEqual(sh.options[sh.correct], 'a'); assert.strictEqual(sh.options[sh.tricky], 'c');
     const tr = await AI.makeTricky({ question: mc.question, options: mc.options, correct: 0, sentence: cSin.text, lang: 'it', apiKey: 'k', fetchImpl: fakeFetch });
     assert.strictEqual(tr.index, 2); assert.ok(/rallentano/.test(tr.option));
     const built = EX.buildExercise('mc', cSin.text, { choices: { question: mc.question, options: mc.options, correct: 0, tricky: 2 } });

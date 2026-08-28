@@ -307,4 +307,34 @@ test('modalità automatica: circa un esercizio ogni 40 s, distanza minima, solo 
   assert.ok(d2.exercises.length >= 10, 'senza punteggiatura: ' + d2.exercises.length);
 });
 
+test('tagli: l\'introduzione del tema e la conclusione restano, i saluti iniziali si tagliano, "oggi parliamo" non è CTA', function () {
+  const fs = require('fs');
+  const txt = fs.readFileSync(__dirname + '/fixture-neuralink.txt', 'utf8');
+  const pl = G.parseTranscript(txt).lines;
+  const d = G.generateDraft({ lines: pl, duration: 717, n: 'auto', target: 420, lang: 'it', range: 'smart' });
+  const first = d.chunks.filter(function (c) { return !c.silence && !c.cta; })[0];
+  assert.ok(!L.hasCTA('Oggi parliamo della tecnologia dietro Neuralink', 'it'), '"oggi parliamo" introduce il tema');
+  assert.ok(!G.inCut(d.cuts, first.start + 5) && !G.inCut(d.cuts, first.start + 30), 'i primi 40 s di contenuto non sono tagliati');
+  const last = d.chunks.filter(function (c) { return !c.silence && !c.cta; }).slice(-1)[0];
+  assert.ok(!G.inCut(d.cuts, last.end - 5), 'la conclusione resta');
+  assert.ok(Math.abs(d.stats.effective - 420) <= 25, 'target rispettato: ' + Math.round(d.stats.effective));
+  // saluto iniziale della demo (CTA) tagliato quando serve spazio
+  const yt = F.youtubeTranscript(); const l2 = G.parseTranscript(yt.text).lines;
+  const d2 = G.generateDraft({ lines: l2, duration: yt.duration, n: 'auto', target: 420, lang: 'it', range: 'smart' });
+  assert.ok(G.inCut(d2.cuts, 5), 'saluti iniziali tagliati');
+  d2.cuts.forEach(function (c) { d2.chunks.forEach(function (ch) { if (ch.silence) return; assert.ok(!(ch.start < c.start && ch.end > c.start + 0.6) && !(ch.start < c.end - 0.6 && ch.end > c.end), 'taglio a metà frase ' + Math.round(c.start) + '-' + Math.round(c.end)); }); });
+});
+
+test('scelta multipla: cambiando frase resta "mc" (domanda vuota da compilare), mai un fill the gaps al suo posto', function () {
+  const near = G.passagesNear(realChunks, 300, { range: 'smart', lang: 'it', type: 'mc', exclude: new Set() });
+  assert.ok(near.length >= 1);
+  const ex = G.makeExerciseFromPassage(near[0], 'mc', { lang: 'it', seed: 3, range: 'smart' });
+  assert.ok(ex && ex.type === 'mc', 'tipo conservato');
+  assert.strictEqual(ex.data.question, ''); assert.strictEqual(ex.data.options.length, 4);
+  const ex2 = G.makeExercise(realChunks.find(function (c) { return !c.silence && c.wordCount > 8; }), 'mc', { lang: 'it', seed: 3 });
+  assert.ok(ex2 && ex2.type === 'mc');
+  const withQ = G.makeExerciseFromPassage(near[0], 'gap', { lang: 'it', seed: 3, range: 'smart' });
+  assert.strictEqual(withQ.type, 'gap');
+});
+
 console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
