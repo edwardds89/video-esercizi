@@ -321,6 +321,24 @@
     return { question: String(j.question).trim(), options: options, correct: Math.max(0, Math.min(options.length - 1, j.correct | 0)), tricky: (j.tricky == null || j.tricky === j.correct) ? null : Math.max(0, Math.min(options.length - 1, j.tricky | 0)), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
+  /** Su richiesta: sostituisce una risposta sbagliata con una "tricky". params: { question, options, correct, sentence, context, lang, level, apiKey, model, fetchImpl } → { index, option } */
+  async function makeTricky(params) {
+    const lang = params.lang || 'it';
+    const opts = (params.options || []).map(function (x) { return String(x || '').trim(); });
+    const wrongIdx = opts.map(function (o, i) { return i; }).filter(function (i) { return i !== (params.correct | 0) && opts[i]; });
+    if (!wrongIdx.length) throw new Error('Servono almeno due risposte');
+    const system = 'You write comprehension questions for language students. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['LANGUAGE: ' + lang + '   STUDENT LEVEL: ' + (params.level || 'B1'),
+      'Below is a multiple-choice question about a SENTENCE the student has listened to. Replace ONE of the wrong options (indices ' + wrongIdx.join(', ') + ') with a "tricky" wrong option: it must echo words that really occur in the sentence, or be a near-synonym with the wrong nuance, so that a careless student picks it — but it must be clearly wrong on a careful listening. Keep it short, same style as the others. Never touch the correct option (index ' + (params.correct | 0) + ').',
+      'SCHEMA: {"index":1,"option":"..."}', '',
+      'QUESTION: ' + String(params.question || ''), 'OPTIONS: ' + JSON.stringify(opts), '', 'SENTENCE: ' + String(params.sentence || ''), '', 'CONTEXT:', String(params.context || '').slice(0, 2000)].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    const index = j.index | 0;
+    if (wrongIdx.indexOf(index) === -1 || !j.option) throw new Error('Il modello non ha restituito una risposta tricky valida');
+    return { index: index, option: String(j.option).trim(), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
   /** Traduzione (parziale o totale) di una frase, in inglese britannico curato. params: { text, whole, context, lang, apiKey, model, fetchImpl } → { translation } */
   async function translateSentence(params) {
     const lang = params.lang || 'it';
@@ -374,5 +392,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, translateSentence: translateSentence };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, makeTricky: makeTricky, translateSentence: translateSentence };
 });

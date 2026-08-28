@@ -1053,25 +1053,29 @@
         const radio = el('input', { type: 'radio', name: 'mc-' + ex.id, title: 'Risposta giusta' }); radio.checked = k === d.correct;
         radio.addEventListener('change', function () { d.correct = k; if (d.tricky === k) d.tricky = null; touch(ls); renderEditorBody(); });
         const inp = el('input', { type: 'text', value: o, placeholder: 'Opzione ' + (k + 1) });
-        inp.addEventListener('change', function () { d.options[k] = inp.value.trim(); touch(ls); renderEditorBody(); });
-        const tr = el('input', { type: 'checkbox', title: 'Tricky: risposta ingannevole' }); tr.checked = d.tricky === k;
-        tr.addEventListener('change', function () { if (k === d.correct) { tr.checked = false; return toast('La risposta giusta non può essere tricky'); } d.tricky = tr.checked ? k : null; touch(ls); renderEditorBody(); });
-        list.appendChild(el('div', { class: 'mc-row' }, radio, inp, el('label', { class: 'chip', style: 'margin:0', title: 'Risposta ingannevole' }, tr, ' tricky')));
+        inp.addEventListener('change', function () { d.options[k] = inp.value.trim(); if (d.tricky === k) d.tricky = null; touch(ls); renderEditorBody(); });
+        list.appendChild(el('div', { class: 'mc-row' }, radio, inp, d.tricky === k ? el('span', { class: 'badge', title: 'Risposta ingannevole scritta dal modello', text: 'tricky' }) : el('span')));
       });
       wrap.appendChild(list);
       const genRow = el('div', { class: 'row', style: 'margin-top:6px' });
       if (S.settings.apiKey) {
-        const trickyCb = el('input', { type: 'checkbox' }); trickyCb.checked = !!ex.wantTricky;
+        const context = (ls.chunks || []).filter(function (c) { return Math.abs((c.start + c.end) / 2 - ex.markerTime) < 60; }).map(function (c) { return c.text; }).join(' ');
         genRow.appendChild(el('button', { class: 'small', text: '✨ Genera domanda e risposte (AI)', onclick: function (e) {
           e.target.disabled = true; e.target.textContent = '… chiedo al modello';
-          const context = (ls.chunks || []).filter(function (c) { return Math.abs((c.start + c.end) / 2 - ex.markerTime) < 60; }).map(function (c) { return c.text; }).join(' ');
-          AI.generateMC({ sentence: ex.sentence, context: context, lang: ls.lang, level: ls.level, tricky: trickyCb.checked, apiKey: S.settings.apiKey, model: S.settings.model })
-            .then(function (r) { d.question = r.question; d.options = r.options; d.correct = r.correct; d.tricky = r.tricky; ex.wantTricky = trickyCb.checked; touch(ls); renderEditorBody(); toast('Domanda generata' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '')); })
+          AI.generateMC({ sentence: ex.sentence, context: context, lang: ls.lang, level: ls.level, tricky: false, apiKey: S.settings.apiKey, model: S.settings.model })
+            .then(function (r) { d.question = r.question; d.options = r.options; d.correct = r.correct; d.tricky = null; touch(ls); renderEditorBody(); toast('Domanda generata' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '')); })
             .catch(function (err) { toast('AI: ' + err.message, 6000); renderEditorBody(); });
         } }));
-        genRow.appendChild(el('label', { class: 'chip', style: 'margin:0', title: 'Una delle risposte sbagliate è fatta apposta per confondere' }, trickyCb, ' con risposta "tricky"'));
+        // su richiesta: il modello sostituisce una risposta sbagliata con una ingannevole
+        genRow.appendChild(el('button', { class: 'small', text: '😈 Aggiungi una risposta tricky (AI)', title: 'Il modello sostituisce una delle risposte sbagliate con una fatta apposta per confondere', onclick: function (e) {
+          if (!d.question || d.options.filter(Boolean).length < 2) return toast('Prima serve una domanda con le risposte');
+          e.target.disabled = true; e.target.textContent = '… chiedo al modello';
+          AI.makeTricky({ question: d.question, options: d.options, correct: d.correct, sentence: ex.sentence, context: context, lang: ls.lang, level: ls.level, apiKey: S.settings.apiKey, model: S.settings.model })
+            .then(function (r) { d.options[r.index] = r.option; d.tricky = r.index; touch(ls); renderEditorBody(); toast('Risposta tricky inserita al posto della ' + (r.index + 1) + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '')); })
+            .catch(function (err) { toast('AI: ' + err.message, 6000); renderEditorBody(); });
+        } }));
       } else {
-        genRow.appendChild(el('span', { class: 'hint', text: 'Con una chiave API (Impostazioni AI) il modello scrive domanda e risposte.' }));
+        genRow.appendChild(el('span', { class: 'hint', text: 'Con una chiave API (Impostazioni AI) il modello scrive domanda e risposte, e su richiesta una risposta "tricky".' }));
       }
       wrap.appendChild(genRow);
       if (!d.question || d.options.filter(Boolean).length < 2) wrap.appendChild(el('div', { class: 'notice warn', text: 'Scrivi la domanda e almeno due risposte: finché mancano, lo studente non vedrà questo esercizio.' }));
@@ -1136,11 +1140,11 @@
       if (best) ex = G.makeExerciseFromPassage(best, type === 'mc' ? 'gap' : type, { lang: ls.lang, seed: Date.now() % 1000, range: range, vocab: lessonVocab(ls), distractors: 2, source: 'rules' });
       if (ex && type === 'mc') {
         // scelta multipla: la frase è scelta, domanda e risposte le scrive il modello (o l'insegnante)
-        ex.type = 'mc'; ex.data = { question: '', options: ['', '', '', ''], correct: 0, tricky: null }; ex.wantTricky = !!(ls.params && ls.params.tricky);
+        ex.type = 'mc'; ex.data = { question: '', options: ['', '', '', ''], correct: 0, tricky: null };
         if (S.settings.apiKey) {
           const context = (ls.chunks || []).filter(function (c) { return Math.abs((c.start + c.end) / 2 - t) < 60; }).map(function (c) { return c.text; }).join(' ');
           const target = ex;
-          AI.generateMC({ sentence: ex.sentence, context: context, lang: ls.lang, level: ls.level, tricky: target.wantTricky, apiKey: S.settings.apiKey, model: S.settings.model })
+          AI.generateMC({ sentence: ex.sentence, context: context, lang: ls.lang, level: ls.level, tricky: !!(ls.params && ls.params.tricky), apiKey: S.settings.apiKey, model: S.settings.model })
             .then(function (r) { target.data = { question: r.question, options: r.options, correct: r.correct, tricky: r.tricky }; touch(ls); if (S.view === 'editor') renderEditorBody(); toast('Domanda a scelta multipla generata'); })
             .catch(function (err) { toast('AI: ' + err.message, 6000); });
         }
