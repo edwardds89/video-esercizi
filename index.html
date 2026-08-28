@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg">
-<link rel="stylesheet" href="styles.css?v=20260828-16">
+<link rel="stylesheet" href="styles.css?v=20260828-17">
 </head>
 <body>
 <header class="topbar">
@@ -213,10 +213,18 @@
         <label id="s-cover-label" class="chip right" style="margin:0" title="Per i video con i sottotitoli stampati nell'immagine: una fascia sfocata sopra il video, da spostare e ridimensionare col mouse (resta dove la metti)"><input type="checkbox" id="s-cover"> ▬ Copri sottotitoli</label>
         <label id="s-lock-label" class="chip" style="margin:0" title="Se attivo, non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="s-lock"> 🔒 Blocca la barra</label>
         <button id="btn-fullscreen" class="small" title="Video e esercizi a tutto schermo (Esc per uscire)">⛶ Schermo intero</button>
+        <button id="btn-stars" class="small" title="Le parole con la stella: si ritrovano qui e nel riepilogo finale, pronte per Quizlet">★ 0</button>
       </div>
     </div>
   </section>
 </main>
+
+<dialog id="dlg-stars">
+  <h2>★ Parole con la stella</h2>
+  <p class="hint">Le parole segnate durante la lezione (schede iniziali e frasi degli esercizi). Le ritrovi anche nel riepilogo finale; da qui puoi già copiarle per Quizlet.</p>
+  <div id="stars-body"></div>
+  <div class="row" style="margin-top:12px"><button id="stars-close">Chiudi</button></div>
+</dialog>
 
 <dialog id="dlg-settings">
   <h2>Impostazioni AI</h2>
@@ -288,12 +296,12 @@
 <div id="overlay"><div><div class="spinner"></div><div id="overlay-text">Generazione in corso…</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260828-16"></script>
-<script src="exercises.js?v=20260828-16"></script>
-<script src="generator.js?v=20260828-16"></script>
-<script src="ai.js?v=20260828-16"></script>
-<script src="demo-data.js?v=20260828-16"></script>
-<script src="bookmarklet.js?v=20260828-16"></script>
-<script src="app.js?v=20260828-16"></script>
+<script src="lang.js?v=20260828-17"></script>
+<script src="exercises.js?v=20260828-17"></script>
+<script src="generator.js?v=20260828-17"></script>
+<script src="ai.js?v=20260828-17"></script>
+<script src="demo-data.js?v=20260828-17"></script>
+<script src="bookmarklet.js?v=20260828-17"></script>
+<script src="app.js?v=20260828-17"></script>
 </body>
 </html>

@@ -1303,6 +1303,7 @@
     $('#s-lock-label').style.display = S.standalone ? 'none' : '';
     $('#s-cover').checked = !!coverState(ls).on;
     $('#s-cover-label').style.display = S.standalone ? 'none' : '';
+    updateStarCount();
     renderStudentTimeline();
     renderProgress();
     createPlayer($('#s-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
@@ -1495,20 +1496,32 @@
       document.createTextNode(paren === -1 ? label : label.slice(0, paren)),
       paren === -1 ? null : el('span', { class: 'sub', text: ' ' + label.slice(paren + 1) })
     ]);
+    // in alto solo "N di M" (e in anteprima il pulsante di chiusura); il titolo del tipo sta sopra la consegna, con un'animazione che attira l'occhio
     p.appendChild(el('div', { class: 'row ex-head' },
-      h,
       el('span', { class: 'badge right', text: (opts.index + 1) + ' di ' + opts.total }),
       preview ? el('button', { class: 'small', text: '✕ Chiudi anteprima', onclick: function () { if (opts.onClose) opts.onClose(); } }) : null));
+    h.classList.add('ex-type-title');
+    p.appendChild(h);
     p.appendChild(el('div', { class: 'instr', text: EX.INSTRUCTIONS[ex.type] }));
     const body = el('div');
     p.appendChild(body);
     const fb = el('div', { class: 'feedback' });
     const actions = el('div', { class: 'actions' });
     const replayBtn = el('button', { text: '🔁 Riascolta', onclick: function () { if (opts.replay) opts.replay(ex); } });
+    // "con la frase": se spuntato, durante il riascolto lo schermo resta così (frase visibile); di default il video torna grande
+    const withText = el('input', { type: 'checkbox', title: 'Riascolta senza ingrandire il video: la frase resta visibile' });
+    withText.checked = !!(ls.options && ls.options.showDuringReplay);
+    withText.addEventListener('change', function () {
+      if (!ls.options) ls.options = {};
+      ls.options.showDuringReplay = withText.checked;
+      if (S.lessons[ls.id]) touch(ls);
+      const eb = $('#e-showreplay'); if (eb) eb.checked = withText.checked;
+    });
+    const withTextLbl = el('label', { class: 'chip withtext', style: 'margin:0', title: 'Riascolta senza ingrandire il video: la frase resta visibile' }, withText, ' con la frase');
     const checkBtn = el('button', { class: 'primary', text: 'Controlla' });
     const solBtn = el('button', { class: 'link', text: 'Mostra soluzione', style: 'display:none' });
     const skipBtn = el('button', { class: 'link', text: 'Salta', style: preview ? 'display:none' : '' });
-    actions.appendChild(replayBtn); actions.appendChild(checkBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
+    actions.appendChild(replayBtn); actions.appendChild(withTextLbl); actions.appendChild(checkBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
     if (S.settings.apiKey) {
       // traduzione con l'AI (inglese britannico): tutta la frase, oppure solo le parole selezionate col mouse
       const trBtn = el('button', { class: 'small', text: '🌐 Traduci', title: 'Traduzione in inglese britannico: seleziona alcune parole per tradurre solo quelle, altrimenti tutta la frase' });
@@ -1583,14 +1596,35 @@
       render();
       body.appendChild(ans); body.appendChild(pool);
       getAnswer = function () { return chosen.map(function (i) { return d.shuffled[i]; }); };
-      markResult = function (res) { $$('.chip', ans).forEach(function (c, k) { c.classList.toggle('good', !!res.detail[k]); c.classList.toggle('wrongpick', !res.detail[k]); }); };
+      markResult = function (res) {
+        $$('.chip', ans).forEach(function (c, k) { c.classList.toggle('good', !!res.detail[k]); c.classList.toggle('wrongpick', !res.detail[k]); });
+        // a frase giusta, i chip ritrovano maiuscole e punteggiatura originali (virgole, punto interrogativo)
+        if (res.correct) { const raws = L.tokenize(ex.sentence).map(function (t) { return t.raw; }); $$('.chip', ans).forEach(function (c, k) { if (raws[k]) c.textContent = raws[k]; }); }
+      };
     } else if (ex.type === 'missing') {
       body.appendChild(starredSentence(ls, d.tokens.filter(function (t, i) { return i !== d.missingIndex; })));
       const inp = el('input', { type: 'text', placeholder: 'Parola mancante', autocomplete: 'off', autocapitalize: 'off', style: 'margin-top:10px;max-width:16em' });
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
       body.appendChild(inp);
       getAnswer = function () { return inp.value; };
-      markResult = function (res) { inp.classList.toggle('ok', res.correct); inp.classList.toggle('bad', !res.correct); if (res.correct) { const sdiv = body.querySelector('.sentence'); if (sdiv) sdiv.style.color = 'var(--ok)'; } };
+      markResult = function (res) {
+        inp.classList.toggle('ok', res.correct); inp.classList.toggle('bad', !res.correct);
+        if (res.correct) {
+          const sdiv = body.querySelector('.sentence');
+          if (sdiv) {
+            sdiv.style.color = 'var(--ok)';
+            // la parola mancante entra nella frase con un'animazione che sposta il resto per farle spazio
+            if (!sdiv.querySelector('.insert-in')) {
+              const spans = $$('.w', sdiv);
+              const ins = starSpan(ls, d.tokens[d.missingIndex]);
+              ins.classList.add('insert-in');
+              const at = spans[d.missingIndex];
+              if (at) { sdiv.insertBefore(ins, at); sdiv.insertBefore(document.createTextNode(' '), at); }
+              else { sdiv.appendChild(document.createTextNode(' ')); sdiv.appendChild(ins); }
+            }
+          }
+        }
+      };
       if (!preview) setTimeout(function () { inp.focus(); }, 50);
     } else if (ex.type === 'mc') {
       let selected = -1;
@@ -1627,7 +1661,14 @@
       markResult = function (res) {
         const all = $$('.chip', chips);
         const c = all[selected];
-        if (res.correct) all.forEach(function (x) { x.classList.add('good'); x.classList.remove('sel'); });
+        if (res.correct) {
+          // tutte verdi tranne la parola in più / sbagliata: rossa e barrata (per "sbagliata" accanto compare quella giusta)
+          all.forEach(function (x, i) {
+            x.classList.remove('sel');
+            if (i === selected) { x.classList.add('struck'); if (ex.type === 'wrong' && !x.querySelector('.fix')) x.appendChild(el('span', { class: 'fix', text: ' → ' + d.answer })); }
+            else x.classList.add('good');
+          });
+        }
         else if (c) { c.classList.add('wrongpick'); setTimeout(function () { c.classList.remove('wrongpick'); }, 900); }
         if (ex.type === 'wrong') { corr.classList.toggle('ok', !!(res.detail && res.detail.word)); corr.classList.toggle('bad', !(res.detail && res.detail.word)); }
       };
@@ -1736,8 +1777,21 @@
     if (stars[k]) delete stars[k]; else stars[k] = { word: w, translation: translationFor(ls, w) };
     saveStars(ls, stars);
     $$('.w[data-w="' + k + '"]').forEach(function (e) { e.classList.toggle('starred', !!stars[k]); });
+    updateStarCount();
+    if (stars[k]) toast('★ "' + w + '" segnata: la ritrovi nel pulsante ★ in basso e nel riepilogo finale', 2500);
     return !!stars[k];
   }
+  function updateStarCount() {
+    const b = $('#btn-stars'); if (!b || !S.student) return;
+    b.textContent = '★ ' + Object.keys(S.student.stars || {}).length;
+  }
+  $('#btn-stars').addEventListener('click', function () {
+    const st = S.student; if (!st) return;
+    const box = $('#stars-body'); box.innerHTML = '';
+    renderWordList(box, st.lesson, st.stars);
+    $('#dlg-stars').showModal();
+  });
+  $('#stars-close').addEventListener('click', function () { $('#dlg-stars').close(); updateStarCount(); });
   /** Parola cliccabile: un clic mette/toglie la stella. */
   function starSpan(ls, word) {
     const w = cleanWord(word);
