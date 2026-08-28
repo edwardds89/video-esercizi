@@ -60,6 +60,8 @@
   const saveDebounced = (function () { let t; return function () { clearTimeout(t); t = setTimeout(function () { saveLessons(); const s = $('#e-saved'); if (s) { s.textContent = 'Salvato'; setTimeout(function () { s.textContent = ''; }, 1500); } }, 400); }; })();
   function current() { return S.lessons[S.currentId]; }
   function touch(lesson) { lesson.updatedAt = new Date().toISOString(); saveDebounced(); }
+  // chiusura/ricarica della pagina: salva subito quello che il debounce non ha ancora scritto
+  window.addEventListener('pagehide', function () { try { saveLessons(); } catch (e) { /* ignore */ } });
 
   function studentPayload(lesson) {
     return { v: 1, id: lesson.id, title: lesson.title, videoId: lesson.videoId, lang: lesson.lang, duration: lesson.duration,
@@ -159,7 +161,9 @@
           events: {
             onReady: function (e) { hideCaptions(e.target); const w = wrapYT(e.target); S.player = w; resolve(w); },
             onError: function (e) { if (opts.onError) opts.onError(e.data); },
-            onStateChange: function (e) { if (e.data === 1) hideCaptions(e.target); if (opts.onState) opts.onState(e.data); }
+            onStateChange: function (e) { if (e.data === 1) hideCaptions(e.target); if (opts.onState) opts.onState(e.data); },
+            // il modulo sottotitoli viene caricato (o ricaricato) dal player quando vuole: è il momento sicuro per spegnerlo
+            onApiChange: function (e) { captionsOff(e.target); }
           }
         });
         setTimeout(function () { if (!S.player) { const w = wrapYT(p); S.player = w; resolve(w); } }, 8000);
@@ -167,17 +171,26 @@
     });
   }
   /**
-   * Sottotitoli di YouTube spenti: sono esercizi di ascolto. Si azzera la traccia con setOption (il modo previsto dall'API),
-   * più volte dopo l'avvio perché il modulo sottotitoli viene caricato solo quando il video parte.
-   * (unloadModule non va usato: lascia il pulsante CC in uno stato incoerente e i sottotitoli possono restare visibili.)
+   * Sottotitoli di YouTube spenti: sono esercizi di ascolto.
+   * Il modulo "captions" esiste solo dopo che il player lo ha caricato (evento onApiChange, o poco dopo il PLAYING):
+   * prima di allora setOption non fa nulla. Quindi: si spegne in onApiChange, si ripete dopo ogni PLAYING e ogni ~2 s
+   * durante la riproduzione (la preferenza "CC attivi" dell'utente di YouTube può riaccenderli, ad es. dopo un seek).
+   * Se la traccia resta impostata nonostante setOption, come ultima risorsa si scarica il modulo.
    */
+  function captionsOff(p) {
+    try {
+      const mods = p.getOptions ? p.getOptions() : null;
+      if (!mods || mods.indexOf('captions') === -1) return false;   // modulo non ancora caricato
+      p.setOption('captions', 'track', {});
+      let tr = null;
+      try { tr = p.getOption('captions', 'track'); } catch (e) { /* ignore */ }
+      if (tr && tr.languageCode) { try { p.unloadModule('captions'); } catch (e) { /* ignore */ } }
+      return true;
+    } catch (e) { return false; }
+  }
   function hideCaptions(p) {
-    const off = function () {
-      try { p.setOption('captions', 'track', {}); } catch (e) { /* ignore */ }
-      try { p.setOption('cc', 'track', {}); } catch (e) { /* ignore */ }
-    };
-    off();
-    [300, 1000, 2500, 5000].forEach(function (ms) { setTimeout(off, ms); });
+    captionsOff(p);
+    [300, 1000, 2500, 5000, 9000].forEach(function (ms) { setTimeout(function () { captionsOff(p); }, ms); });
   }
   function ytErrorText(code) {
     if (code === 2) return 'ID del video non valido.';
@@ -187,11 +200,69 @@
     return 'Errore YouTube ' + code;
   }
 
+  // ---------- fascia copri-sottotitoli ----------
+  // Alcuni video hanno i sottotitoli stampati nell'immagine (non sono i CC di YouTube: non si possono spegnere).
+  // Opzione per lezione: una fascia sfocata sopra il player, in percentuale del player (così segue anche il player ridotto
+  // nell'angolo e lo schermo intero), trascinabile e ridimensionabile; la posizione viene salvata con la lezione.
+  // NB: è un elemento sopra il player incorporato, che le regole per gli sviluppatori di YouTube non consentono: resta
+  // un'opzione esplicita, spenta di default, per l'uso personale in classe.
+  const COVER_DEFAULT = { x: 12, y: 71, w: 76, h: 13 };
+  function coverState(ls) {
+    if (!ls.options) ls.options = {};
+    if (!ls.options.cover) ls.options.cover = Object.assign({ on: false }, COVER_DEFAULT);
+    return ls.options.cover;
+  }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function renderCover(box, ls) {
+    if (!box) return;
+    const old = box.querySelector('.cover'); if (old) old.remove();
+    const c = coverState(ls);
+    if (!c.on) return;
+    const d = el('div', { class: 'cover', title: 'Copre i sottotitoli stampati nel video: trascina per spostare, angolo in basso a destra per ridimensionare' });
+    const grip = el('div', { class: 'grip' });
+    d.appendChild(el('span', { class: 'lbl', text: '▬ sottotitoli coperti' }));
+    d.appendChild(grip);
+    const apply = function () { d.style.left = c.x + '%'; d.style.top = c.y + '%'; d.style.width = c.w + '%'; d.style.height = c.h + '%'; };
+    apply();
+    let drag = null;
+    d.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      const r = box.getBoundingClientRect();
+      drag = { mode: e.target === grip ? 'resize' : 'move', sx: e.clientX, sy: e.clientY, x: c.x, y: c.y, w: c.w, h: c.h, rw: r.width || 1, rh: r.height || 1 };
+      try { d.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      box.classList.add('dragging');
+      e.preventDefault();
+    });
+    d.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      const dx = 100 * (e.clientX - drag.sx) / drag.rw, dy = 100 * (e.clientY - drag.sy) / drag.rh;
+      if (drag.mode === 'move') { c.x = clamp(drag.x + dx, 0, 100 - c.w); c.y = clamp(drag.y + dy, 0, 100 - c.h); }
+      else { c.w = clamp(drag.w + dx, 10, 100 - c.x); c.h = clamp(drag.h + dy, 4, 100 - c.y); }
+      apply();
+    });
+    const end = function () { if (!drag) return; drag = null; box.classList.remove('dragging'); c.x = Math.round(c.x * 10) / 10; c.y = Math.round(c.y * 10) / 10; c.w = Math.round(c.w * 10) / 10; c.h = Math.round(c.h * 10) / 10; touch(ls); };
+    d.addEventListener('pointerup', end);
+    d.addEventListener('pointercancel', end);
+    box.appendChild(d);
+  }
+  function setCover(ls, on, box, checkboxIds) {
+    coverState(ls).on = !!on; touch(ls);
+    renderCover(box, ls);
+    (checkboxIds || []).forEach(function (id) { const cb = $(id); if (cb) cb.checked = !!on; });
+  }
+  $('#e-cover').addEventListener('change', function () { const ls = current(); if (ls) setCover(ls, $('#e-cover').checked, $('#e-player'), ['#s-cover']); });
+  $('#s-cover').addEventListener('change', function () { const ls = S.student && S.student.lesson; if (ls) setCover(ls, $('#s-cover').checked, $('#s-player'), ['#e-cover']); });
+
   // ---------- loop ----------
   function startLoop() { stopLoop(); S.loop = setInterval(tick, 200); }
   function stopLoop() { if (S.loop) { clearInterval(S.loop); S.loop = null; } }
   function tick() {
     if (!S.player) return;
+    // controllo periodico: sottotitoli sempre spenti durante la riproduzione
+    if (S.player.kind === 'yt' && S.player.state() === 1) {
+      const now = Date.now();
+      if (!S.capAt || now - S.capAt > 2000) { S.capAt = now; captionsOff(S.player.raw); }
+    }
     if (S.view === 'editor') editorTick();
     else if (S.view === 'student') studentTick();
   }
@@ -481,8 +552,9 @@
     $('#e-strict').checked = !!ls.options.strict;
     $('#e-fx').checked = ls.options.fx !== false;
     $('#e-lock').checked = !!ls.options.lock;
+    $('#e-cover').checked = !!coverState(ls).on;
     createPlayer($('#e-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 5000); } })
-      .then(function () { startLoop(); })
+      .then(function () { startLoop(); renderCover($('#e-player'), ls); })
       .catch(function (e) { toast('Player non disponibile: ' + e.message, 6000); });
     renderEditorBody();
   }
@@ -934,10 +1006,12 @@
     $('#btn-edit').style.display = (!S.standalone && S.lessons[ls.id]) ? '' : 'none';
     $('#s-lock').checked = S.student.lock;
     $('#s-lock-label').style.display = S.standalone ? 'none' : '';
+    $('#s-cover').checked = !!coverState(ls).on;
+    $('#s-cover-label').style.display = S.standalone ? 'none' : '';
     renderStudentTimeline();
     renderProgress();
     createPlayer($('#s-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
-      .then(function () { startLoop(); renderStart(); })
+      .then(function () { startLoop(); renderStart(); renderCover($('#s-player'), ls); })
       .catch(function (e) { $('#s-panel').innerHTML = ''; $('#s-panel').appendChild(el('div', { class: 'notice bad', text: e.message })); });
   }
   $('#btn-edit').addEventListener('click', function () { if (S.player) S.player.pause(); openEditor(S.currentId); });
@@ -984,21 +1058,26 @@
     });
   }
   function dock(stageSel, on) { const st = $(stageSel); if (st) st.classList.toggle('docked', !!on); }
+  /** Schermata iniziale: il video resta grande; "▶ Inizia" (o il play del player) fa partire la lezione. */
   function renderStart() {
     const st = S.student; const p = $('#s-panel'); p.innerHTML = '';
     const ls = st.lesson;
-    dock('#s-stage', true);
-    p.appendChild(el('h2', { text: ls.exercises.length + ' esercizi · ' + fmtMin(G.effectiveDuration(ls.cuts, ls.duration)) + ' di video' }));
-    p.appendChild(el('p', { class: 'muted', text: 'Il video si ferma da solo a ogni esercizio: l\'esercizio compare qui, il video resta nell\'angolo e puoi riascoltare la frase quante volte vuoi. Cliccando un numero sulla linea del tempo vai subito a quell\'esercizio.' }));
-    p.appendChild(el('button', { class: 'primary big', text: '▶ Inizia', onclick: function () {
-      st.started = true;
-      const c = G.inCut(ls.cuts, 0);
-      if (c) S.player.seek(c.end + 0.05);
-      S.player.play();
-      p.innerHTML = '';
-      dock('#s-stage', false);
-    } }));
+    dock('#s-stage', false);
+    const b = $('#btn-start');
+    b.style.display = '';
+    b.textContent = '▶ Inizia · ' + ls.exercises.length + ' esercizi · ' + fmtMin(G.effectiveDuration(ls.cuts, ls.duration));
+    b.title = 'Il video si ferma da solo a ogni esercizio: l\'esercizio compare al posto del video, che resta nell\'angolo. Cliccando un numero vai subito a quell\'esercizio.';
   }
+  function startPlayback() {
+    const st = S.student; if (!st || !S.player) return;
+    const ls = st.lesson;
+    st.started = true; st.lastT = null;
+    $('#btn-start').style.display = 'none';
+    const c = G.inCut(ls.cuts, S.player.time());
+    if (c && !ls.exercises.some(function (e) { return !st.done.has(e.id) && e.markerTime >= c.start && e.markerTime <= c.end; })) S.player.seek(c.end + 0.05);
+    S.player.play();
+  }
+  $('#btn-start').addEventListener('click', startPlayback);
   function studentTick() {
     const st = S.student; if (!st || !S.player) return;
     const ls = st.lesson;
@@ -1012,7 +1091,11 @@
       return;
     }
     if (st.blocked) { st.lastT = null; return; }
-    if (!st.started) { st.lastT = null; return; }
+    if (!st.started) {
+      st.lastT = null;
+      if (S.player.state() === 1) startPlayback();   // play premuto direttamente sul video
+      return;
+    }
     // Un esercizio scatta solo se il suo segnaposto viene attraversato guardando (tra il tick precedente e questo),
     // non se lo si supera trascinando la barra: il tempo del video deve essere avanzato quanto il tempo reale.
     const now = Date.now();

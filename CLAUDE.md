@@ -10,9 +10,11 @@
 - generator.js ha due modalità di chunk: "sentences" (trascrizioni con punteggiatura, tempi per parola interpolati) e "pauses" (sottotitoli automatici senza punteggiatura).
 - "Durata circa N minuti" = target con tolleranza 10% (params.tolerance): il piano dei tagli smette di tagliare contenuto vero quando è dentro la tolleranza.
 - Deploy su GitHub Pages: i tag <script>/<link> in index.html hanno `?v=DATA-N` per aggirare la cache CDN (10 min): a ogni upload di JS/CSS aumentare il numero.
-- Sottotitoli YouTube: spegnerli con `setOption('captions','track',{})` ripetuto dopo il PLAYING; mai `unloadModule` (pulsante CC incoerente, sottotitoli che restano).
+- Sottotitoli YouTube: `captionsOff()` = `setOption('captions','track',{})` SOLO quando `getOptions()` contiene 'captions' (modulo caricato): in `onApiChange`, dopo ogni PLAYING e ogni ~2 s nel tick; `unloadModule` solo come ultima risorsa se la traccia resta impostata.
 - Stage: il player non viene mai coperto; durante un esercizio si riduce nell'angolo (min 356×200) e l'esercizio occupa il resto dell'area (.stage.docked).
 - Studente: la barra è libera di default (chi guida il video decide); `options.lock` / checkbox "Blocca la barra" impedisce di superare un esercizio da fare. Un esercizio scatta solo se il segnaposto viene attraversato guardando (confronto col tick precedente e col tempo reale), non con un salto della barra. Clic su un numero (timeline o pallini) = vai a quell'esercizio.
 - Editor: campi tempo con frecce ↑↓ (±0,1 s, Maiusc ±1 s) e fuoco mantenuto dopo il ridisegno (`S.editor.focusKey`); "▶" accanto ai tempi riproduce esattamente da inizio a fine.
 - Non usare la classe `.right` (margin-left:auto) per stati: la classe di "risposta giusta" sui chip è `.good`.
 - Annunci YouTube: il player incorporato mostra pre-roll/mid-roll dei video monetizzati; l'app non può bloccarli (termini YouTube). Senza annunci solo con YouTube Premium nel browser o con il YouTube Player for Education (programma a licenza per piattaforme).
+- Sottotitoli STAMPATI nel video (es. Geopop): non sono CC, non si spengono. Opzione per lezione `options.cover {on,x,y,w,h}` (% del player): fascia sfocata trascinabile/ridimensionabile sopra il player (renderCover). È un overlay sul player incorporato, non ammesso dalle policy per sviluppatori di YouTube: opzione esplicita, spenta di default, per uso personale.
+- Salvataggio: debounce 400 ms + flush su `pagehide`.

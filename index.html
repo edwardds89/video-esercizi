@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg">
-<link rel="stylesheet" href="styles.css?v=20260828-11">
+<link rel="stylesheet" href="styles.css?v=20260828-13">
 </head>
 <body>
 <header class="topbar">
@@ -158,6 +158,7 @@
             <label class="chip" style="margin:0"><input type="checkbox" id="e-strict"> Accenti obbligatori</label>
             <label class="chip" style="margin:0"><input type="checkbox" id="e-fx" checked> Animazione quando la risposta è giusta</label>
             <label class="chip" style="margin:0" title="Con la barra bloccata non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="e-lock"> 🔒 Barra bloccata (non si possono saltare gli esercizi)</label>
+            <label class="chip" style="margin:0" title="Per i video con i sottotitoli stampati nell'immagine: fascia sfocata sopra il video, spostabile e ridimensionabile col mouse; la posizione viene salvata con la lezione"><input type="checkbox" id="e-cover"> ▬ Copri i sottotitoli stampati nel video</label>
           </div>
         </div>
       </div>
@@ -185,8 +186,10 @@
       </div>
       <div id="s-timeline" class="timeline"></div>
       <div class="row s-controls">
+        <button id="btn-start" class="primary" style="display:none">▶ Inizia</button>
         <div id="s-progress" class="progress"></div>
-        <label id="s-lock-label" class="chip right" style="margin:0" title="Se attivo, non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="s-lock"> 🔒 Blocca la barra</label>
+        <label id="s-cover-label" class="chip right" style="margin:0" title="Per i video con i sottotitoli stampati nell'immagine: una fascia sfocata sopra il video, da spostare e ridimensionare col mouse (resta dove la metti)"><input type="checkbox" id="s-cover"> ▬ Copri sottotitoli</label>
+        <label id="s-lock-label" class="chip" style="margin:0" title="Se attivo, non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="s-lock"> 🔒 Blocca la barra</label>
         <button id="btn-fullscreen" class="small" title="Video e esercizi a tutto schermo (Esc per uscire)">⛶ Schermo intero</button>
       </div>
     </div>
@@ -259,12 +262,12 @@
 <div id="overlay"><div><div class="spinner"></div><div id="overlay-text">Generazione in corso…</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260828-11"></script>
-<script src="exercises.js?v=20260828-11"></script>
-<script src="generator.js?v=20260828-11"></script>
-<script src="ai.js?v=20260828-11"></script>
-<script src="demo-data.js?v=20260828-11"></script>
-<script src="bookmarklet.js?v=20260828-11"></script>
-<script src="app.js?v=20260828-11"></script>
+<script src="lang.js?v=20260828-13"></script>
+<script src="exercises.js?v=20260828-13"></script>
+<script src="generator.js?v=20260828-13"></script>
+<script src="ai.js?v=20260828-13"></script>
+<script src="demo-data.js?v=20260828-13"></script>
+<script src="bookmarklet.js?v=20260828-13"></script>
+<script src="app.js?v=20260828-13"></script>
 </body>
 </html>

@@ -179,3 +179,9 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 @keyframes fx-flash { 0% { box-shadow: inset 0 0 0 0 rgba(26,127,55,0); } 30% { box-shadow: inset 0 0 0 6px rgba(26,127,55,.35); } 100% { box-shadow: inset 0 0 0 0 rgba(26,127,55,0); } }
 .progress .dot.ok.just { animation: fx-pop .5s cubic-bezier(.2, 1.6, .4, 1); }
 @media (prefers-reduced-motion: reduce) { .fx-piece, .feedback.win, .ex-panel.win-flash, .progress .dot.ok.just { animation: none; } }
+
+/* fascia che copre i sottotitoli stampati nel video (opzionale, per lezione): sfocatura + velo scuro, trascinabile, ridimensionabile */
+.player-box .cover { position: absolute; z-index: 3; background: rgba(15, 18, 24, .6); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border: 1px dashed rgba(255,255,255,.4); border-radius: 6px; cursor: move; touch-action: none; user-select: none; }
+.player-box .cover .lbl { position: absolute; left: 8px; top: 2px; font-size: 11px; color: rgba(255,255,255,.75); pointer-events: none; white-space: nowrap; }
+.player-box .cover .grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 55%, rgba(255,255,255,.8) 55%); border-radius: 0 0 6px 0; }
+.player-box.dragging iframe, .player-box.dragging .mock { pointer-events: none; }
