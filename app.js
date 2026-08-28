@@ -156,14 +156,19 @@
         const p = new YT.Player(div, {
           width: '100%', height: '100%', videoId: videoId, playerVars: vars,
           events: {
-            onReady: function (e) { const w = wrapYT(e.target); S.player = w; resolve(w); },
+            onReady: function (e) { hideCaptions(e.target); const w = wrapYT(e.target); S.player = w; resolve(w); },
             onError: function (e) { if (opts.onError) opts.onError(e.data); },
-            onStateChange: function (e) { if (opts.onState) opts.onState(e.data); }
+            onStateChange: function (e) { if (e.data === 1) hideCaptions(e.target); if (opts.onState) opts.onState(e.data); }
           }
         });
         setTimeout(function () { if (!S.player) { const w = wrapYT(p); S.player = w; resolve(w); } }, 8000);
       });
     });
+  }
+  /** Sottotitoli di YouTube spenti: sono esercizi di ascolto (il modulo può ricaricarsi all'avvio, quindi si ripete al PLAYING). */
+  function hideCaptions(p) {
+    try { p.unloadModule('captions'); } catch (e) { /* ignore */ }
+    try { p.unloadModule('cc'); } catch (e) { /* ignore */ }
   }
   function ytErrorText(code) {
     if (code === 2) return 'ID del video non valido.';
@@ -219,19 +224,22 @@
     const list = $('#lesson-list');
     list.innerHTML = '';
     const items = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
-    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con "Nuova lezione" oppure prova la demo.' })); return; }
+    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con "Nuova lezione" (o con il pulsante per Chrome) oppure prova la demo.' })); return; }
     items.forEach(function (ls) {
       const eff = G.effectiveDuration(ls.cuts || [], ls.duration);
-      const item = el('div', { class: 'item' },
-        el('div', { class: 'grow' },
-          el('div', {}, el('b', { text: ls.title || '(senza titolo)' }), ' ', ls.ai && ls.ai.model ? el('span', { class: 'badge ai', text: 'AI' }) : null),
-          el('div', { class: 'hint', text: (ls.videoId === 'demo' ? 'demo · ' : 'youtube ' + ls.videoId + ' · ') + (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + ' su ' + fmtMin(ls.duration) + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleString('it-IT') : '') })),
-        el('button', { class: 'small', text: 'Editor', onclick: function () { openEditor(ls.id); } }),
-        el('button', { class: 'small primary', text: '▶ Studente', onclick: function () { openStudent(ls.id); } }),
-        el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
-        el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + ls.title + '"?')) { delete S.lessons[ls.id]; saveLessons(); renderHome(); } } })
-      );
-      list.appendChild(item);
+      const thumbStyle = ls.videoId && ls.videoId !== 'demo' ? 'background-image:url(https://i.ytimg.com/vi/' + ls.videoId + '/mqdefault.jpg)' : '';
+      const open = function () { openStudent(ls.id); };
+      const card = el('div', { class: 'lesson-card' },
+        el('div', { class: 'thumb', style: thumbStyle, onclick: open, title: 'Apri la lezione' }, el('div', { class: 'play', text: '▶' })),
+        el('div', { class: 'body' },
+          el('div', { class: 'title', text: ls.title || '(senza titolo)', onclick: open }),
+          el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+          el('div', { class: 'actions' },
+            el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
+            el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
+            el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
+            el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + ls.title + '"?')) { delete S.lessons[ls.id]; saveLessons(); renderHome(); } } }))));
+      list.appendChild(card);
     });
   }
   $('#import-file').addEventListener('change', function (e) {
@@ -273,6 +281,7 @@
   function generate(ls, useAI) {
     const p = ls.params;
     const duration = ls.duration;
+    if (ls.transcriptRaw) { const rp = G.parseTranscript(ls.transcriptRaw); if (rp.lines.length) ls.lines = rp.lines; }
     const chunks = G.annotate(G.buildChunks(ls.lines, { duration: duration, lang: ls.lang }), { lang: ls.lang, duration: duration });
     ls.chunks = chunks;
     const warnings = [];
@@ -487,6 +496,7 @@
   $('#e-wordbank').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.wordBank = $('#e-wordbank').checked; touch(ls); } });
   $('#e-strict').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.strict = $('#e-strict').checked; touch(ls); } });
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
+  $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
   $('#btn-delete').addEventListener('click', function () { const ls = current(); if (confirm('Eliminare "' + ls.title + '"?')) { delete S.lessons[ls.id]; saveLessons(); renderHome(); } });
   $('#btn-add-ex').addEventListener('click', function () {
@@ -787,14 +797,14 @@
     S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {} };
     show('student');
     $('#s-title').textContent = ls.title || '';
-    $('#btn-back-editor').style.display = (fromEditor && !S.standalone) ? '' : 'none';
+    $('#btn-edit').style.display = (!S.standalone && S.lessons[ls.id]) ? '' : 'none';
     renderTimeline($('#s-timeline'), ls, { done: S.student.done });
     renderProgress();
     createPlayer($('#s-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
       .then(function () { startLoop(); renderStart(); })
       .catch(function (e) { $('#s-panel').innerHTML = ''; $('#s-panel').appendChild(el('div', { class: 'notice bad', text: e.message })); });
   }
-  $('#btn-back-editor').addEventListener('click', function () { openEditor(S.currentId); });
+  $('#btn-edit').addEventListener('click', function () { if (S.player) S.player.pause(); openEditor(S.currentId); });
 
   function renderProgress() {
     const st = S.student; const box = $('#s-progress'); box.innerHTML = '';
@@ -1005,7 +1015,7 @@
     });
     p.appendChild(list);
     p.appendChild(el('div', { class: 'actions' },
-      el('button', { class: 'primary', text: 'Ricomincia', onclick: function () { openStudent(ls.id, $('#btn-back-editor').style.display !== 'none', ls); } })));
+      el('button', { class: 'primary', text: 'Ricomincia', onclick: function () { openStudent(ls.id, false, ls); } })));
   }
 
   // ---------- avvio ----------

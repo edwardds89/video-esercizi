@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20260828-5">
 </head>
 <body>
 <header class="topbar">
   <div class="brand">▶ Video Esercizi</div>
   <nav id="nav">
-    <button data-view="home">Le mie lezioni</button>
+    <button data-view="home">Portfolio</button>
     <button data-view="new" class="primary">Nuova lezione</button>
     <button id="btn-settings">Impostazioni AI</button>
   </nav>
@@ -19,16 +19,16 @@
 <main>
   <!-- HOME -->
   <section id="view-home" class="view">
-    <h1>Le mie lezioni</h1>
+    <h1>Il mio portfolio</h1>
     <div class="card">
-      <div id="lesson-list" class="lesson-list"></div>
+      <div id="lesson-list" class="lesson-grid"></div>
       <div class="row" style="margin-top:12px">
         <button data-view="new" class="primary">+ Nuova lezione</button>
         <label for="import-file" class="chip" style="margin:0">Importa JSON…</label>
         <input id="import-file" type="file" accept="application/json,.json" class="sr">
         <button id="btn-demo">Crea lezione demo (player finto)</button>
       </div>
-      <p class="hint">Le lezioni sono salvate in questo browser. Per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
+      <p class="hint">Aprendo una lezione dal portfolio vedi la versione pronta per la classe; "Modifica" apre l'editor. Le lezioni sono salvate in questo browser: per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
     </div>
     <div class="card" id="bookmarklet-card">
       <h2>Pulsante per Chrome: dal video alla bozza senza copia-incolla</h2>
@@ -110,41 +110,46 @@
 
   <!-- EDITOR -->
   <section id="view-editor" class="view">
-    <div class="editor-top">
-      <div class="row" style="margin-bottom:8px">
-        <input id="e-title" type="text" class="grow" style="font-size:18px;font-weight:600">
-        <button id="btn-student" class="primary">▶ Modalità studente</button>
-        <button id="btn-share">Link studente</button>
-        <button id="btn-export">Esporta JSON</button>
-        <button id="btn-regenerate">Rigenera bozza…</button>
-        <button id="btn-delete" class="danger">Elimina</button>
+    <div class="row editor-bar">
+      <input id="e-title" type="text" class="grow" style="font-size:18px;font-weight:600">
+      <button id="btn-save" class="primary">Salva</button>
+      <button id="btn-student">▶ Anteprima studente</button>
+      <button id="btn-share">Link studente</button>
+      <button id="btn-export">Esporta JSON</button>
+      <button id="btn-regenerate">Rigenera bozza…</button>
+      <button id="btn-delete" class="danger">Elimina</button>
+    </div>
+    <div class="editor-layout">
+      <div class="editor-left">
+        <div id="e-player" class="player-box"></div>
+        <div id="e-timeline" class="timeline"></div>
+        <div class="row">
+          <div id="e-stats" class="kv"></div>
+          <label class="chip right" style="margin:0"><input type="checkbox" id="e-skip" checked> Applica i tagli</label>
+          <span id="e-saved" class="hint"></span>
+        </div>
+        <div id="e-warnings"></div>
+        <div id="e-ai-notes"></div>
+        <div class="card">
+          <div class="row"><h3 style="margin:0">Parti tagliate (salti)</h3>
+            <button id="btn-add-cut" class="small right">+ Taglio dal tempo corrente</button></div>
+          <div id="e-cuts"></div>
+        </div>
+        <div class="card">
+          <h3>Opzioni per lo studente</h3>
+          <div class="row">
+            <label class="chip" style="margin:0"><input type="checkbox" id="e-wordbank" checked> Banca di parole negli spazi</label>
+            <label class="chip" style="margin:0"><input type="checkbox" id="e-strict"> Accenti obbligatori</label>
+          </div>
+        </div>
       </div>
-      <div id="e-player" class="player-box"></div>
-      <div id="e-timeline" class="timeline"></div>
-      <div class="row">
-        <div id="e-stats" class="kv"></div>
-        <label class="chip right" style="margin:0"><input type="checkbox" id="e-skip" checked> Applica i tagli in anteprima</label>
-        <span id="e-saved" class="hint"></span>
-      </div>
-    </div>
-    <div id="e-warnings"></div>
-    <div id="e-ai-notes"></div>
-    <div class="card">
-      <div class="row"><h2 style="margin:0">Esercizi</h2>
-        <button id="btn-add-ex" class="small right">+ Esercizio al tempo corrente</button></div>
-      <p class="hint">Trascina i numeri sulla linea del tempo per spostare i segnaposto. "Ascolta" riproduce solo la frase. "Altra frase" propone la successiva migliore vicino allo stesso punto.</p>
-      <div id="e-exercises"></div>
-    </div>
-    <div class="card">
-      <div class="row"><h2 style="margin:0">Parti tagliate (salti)</h2>
-        <button id="btn-add-cut" class="small right">+ Taglio dal tempo corrente</button></div>
-      <div id="e-cuts"></div>
-    </div>
-    <div class="card">
-      <h2>Opzioni per lo studente</h2>
-      <div class="row">
-        <label class="chip" style="margin:0"><input type="checkbox" id="e-wordbank" checked> Mostra la banca di parole negli spazi</label>
-        <label class="chip" style="margin:0"><input type="checkbox" id="e-strict"> Accenti obbligatori nelle risposte</label>
+      <div class="editor-right">
+        <div class="card">
+          <div class="row"><h2 style="margin:0">Esercizi</h2>
+            <button id="btn-add-ex" class="small right">+ Esercizio al tempo corrente</button></div>
+          <p class="hint">Trascina i numeri sulla linea del tempo per spostare i segnaposto. "Ascolta" riproduce solo la frase. "Altra frase" propone la successiva migliore vicino allo stesso punto.</p>
+          <div id="e-exercises"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -153,7 +158,7 @@
   <section id="view-student" class="view">
     <div class="row" style="margin-bottom:8px">
       <h1 id="s-title" style="margin:0" class="grow"></h1>
-      <button id="btn-back-editor" class="small">← Editor</button>
+      <button id="btn-edit" class="small">✎ Modifica</button>
     </div>
     <div class="student-layout">
       <div>
@@ -220,12 +225,12 @@
 <div id="overlay"><div><div class="spinner"></div><div id="overlay-text">Generazione in corso…</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js"></script>
-<script src="exercises.js"></script>
-<script src="generator.js"></script>
-<script src="ai.js"></script>
-<script src="demo-data.js"></script>
-<script src="bookmarklet.js"></script>
-<script src="app.js"></script>
+<script src="lang.js?v=20260828-5"></script>
+<script src="exercises.js?v=20260828-5"></script>
+<script src="generator.js?v=20260828-5"></script>
+<script src="ai.js?v=20260828-5"></script>
+<script src="demo-data.js?v=20260828-5"></script>
+<script src="bookmarklet.js?v=20260828-5"></script>
+<script src="app.js?v=20260828-5"></script>
 </body>
 </html>

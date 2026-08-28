@@ -85,8 +85,14 @@
       if (cur) lines.push(cur);
     }
 
-    lines = lines.filter(function (l) { return typeof l.start === 'number' && !isNaN(l.start); })
-      .sort(function (a, b) { return a.start - b.start; });
+    lines = lines.filter(function (l) { return typeof l.start === 'number' && !isNaN(l.start); });
+    // Trascrizione incollata (o letta) due volte di seguito: i tempi ripartono da capo → tieni la prima copia
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].start < lines[i - 1].start - 60 && i >= lines.length * 0.4 && lines[i].text === lines[0].text) { lines = lines.slice(0, i); break; }
+    }
+    lines.sort(function (a, b) { return a.start - b.start; });
+    // Righe identiche (stesso tempo, stesso testo) → una sola
+    lines = lines.filter(function (l, i) { return !(i > 0 && lines[i - 1].start === l.start && lines[i - 1].text === l.text); });
     // Velocità di parlato stimata sull'intera trascrizione (il pannello YouTube dà solo secondi interi e nessuna fine riga)
     let totalWords = 0;
     lines.forEach(function (l) { totalWords += L.words(l.text).length; });

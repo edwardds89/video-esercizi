@@ -6,19 +6,25 @@ window.VL_BOOKMARKLET = function (APP) {
   var id = null;
   try { id = new URL(location.href).searchParams.get('v'); } catch (e) { /* ignore */ }
   if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video), poi clicca il pulsante.'); return; }
-  var title = document.title.replace(/\s*-\s*YouTube\s*$/, '');
+  var title = document.title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube\s*$/, '');
   var video = document.querySelector('video');
   var duration = (video && video.duration) || 0;
   if (video) { try { video.pause(); } catch (e) { /* ignore */ } }
 
+  function dedupe(arr) {
+    // il DOM di YouTube può contenere ogni segmento due volte (pannello vecchio + nuovo): tieni una sola copia
+    var seen = {}, out = [];
+    for (var i = 0; i < arr.length; i++) { if (!seen[arr[i]]) { seen[arr[i]] = 1; out.push(arr[i]); } }
+    return out;
+  }
   function fromDom() {
     var segs = Array.prototype.slice.call(document.querySelectorAll('ytd-transcript-segment-renderer'));
     if (segs.length >= 3) {
-      return segs.map(function (s) {
+      return dedupe(segs.map(function (s) {
         var t = (s.querySelector('.segment-timestamp') || {}).textContent || '';
         var x = (s.querySelector('.segment-text') || {}).textContent || '';
         return t.trim() + ' ' + x.trim().replace(/\s+/g, ' ');
-      });
+      }));
     }
     var panels = Array.prototype.slice.call(document.querySelectorAll('ytd-engagement-panel-section-list-renderer'))
       .filter(function (p) { return p.getAttribute('visibility') === 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED'; });
@@ -33,7 +39,7 @@ window.VL_BOOKMARKLET = function (APP) {
           k = j;
         }
       }
-      if (out.length >= 3) return out;
+      if (out.length >= 3) return dedupe(out);
     }
     return null;
   }

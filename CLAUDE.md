@@ -9,3 +9,4 @@
 - Trascrizione: mai "scaricata" da server; arriva dal pannello di YouTube via bookmarklet (`#import=<base64url JSON {v,title,duration,transcript}>`) o incollata. Senza trascrizione → errore esplicito, il video non è utilizzabile.
 - generator.js ha due modalità di chunk: "sentences" (trascrizioni con punteggiatura, tempi per parola interpolati) e "pauses" (sottotitoli automatici senza punteggiatura).
 - "Durata circa N minuti" = target con tolleranza 10% (params.tolerance): il piano dei tagli smette di tagliare contenuto vero quando è dentro la tolleranza.
+- Deploy su GitHub Pages: i tag <script>/<link> in index.html hanno `?v=DATA-N` per aggirare la cache CDN (10 min): a ogni upload di JS/CSS aumentare il numero.

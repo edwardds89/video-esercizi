@@ -29,7 +29,7 @@ code, kbd { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-
 .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
 body.standalone .topbar nav { display: none; }
 @media (max-width: 640px) { .topbar { padding: 8px 12px; } .topbar nav button { padding: 6px 9px; font-size: 13px; } .brand { font-size: 16px; } main { padding: 12px; } h1 { font-size: 20px; } }
-main { max-width: 1100px; margin: 0 auto; padding: 18px; }
+main { max-width: 1320px; margin: 0 auto; padding: 18px; }
 .view { display: none; }
 .view.active { display: block; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
@@ -71,9 +71,12 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .timeline .labels { position: absolute; left: 0; right: 0; top: 38px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
 
 /* editor */
-.editor-top { position: sticky; top: 58px; z-index: 10; background: var(--bg); padding-bottom: 6px; }
-@media (max-width: 760px) { .editor-top { position: static; } }
-.editor-top .player-box { max-width: 720px; margin: 0 auto; }
+.editor-bar { margin-bottom: 10px; }
+.editor-layout { display: grid; grid-template-columns: minmax(320px, 5fr) minmax(360px, 6fr); gap: 16px; align-items: start; }
+.editor-left { position: sticky; top: 64px; max-height: calc(100vh - 76px); overflow-y: auto; padding-right: 2px; }
+.editor-left .card { padding: 12px 14px; }
+.editor-left .kv { flex: 1 1 100%; gap: 12px; }
+@media (max-width: 960px) { .editor-layout { grid-template-columns: 1fr; } .editor-left { position: static; max-height: none; overflow: visible; } }
 .ex-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; background: #fff; }
 .ex-card.rules { border-left: 4px solid #c9d2dd; }
 .ex-card.ai { border-left: 4px solid #8e7cf3; }
@@ -113,8 +116,14 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .big { font-size: 18px; padding: 12px 20px; }
 
 /* misc */
-.lesson-list .item { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.lesson-list .item:last-child { border-bottom: none; }
+.lesson-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.lesson-card { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+.lesson-card .thumb { aspect-ratio: 16 / 9; background: #10141a center / cover no-repeat; cursor: pointer; position: relative; }
+.lesson-card .thumb .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 40px; text-shadow: 0 2px 8px rgba(0,0,0,.6); opacity: .9; }
+.lesson-card .body { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.lesson-card .title { font-weight: 600; line-height: 1.3; cursor: pointer; }
+.lesson-card .meta { font-size: 12px; color: var(--muted); }
+.lesson-card .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
 dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; max-width: 560px; width: calc(100% - 32px); }
 dialog::backdrop { background: rgba(0,0,0,.35); }
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1c2330; color: #fff; padding: 10px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
