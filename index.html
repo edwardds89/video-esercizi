@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg">
-<link rel="stylesheet" href="styles.css?v=20260828-18">
+<link rel="stylesheet" href="styles.css?v=20260828-19">
 </head>
 <body>
 <header class="topbar">
@@ -108,8 +108,9 @@
           </div>
           <label>Indicazioni per l'AI (facoltative)</label>
           <input id="f-focus" type="text" placeholder="Es. privilegia il lessico del corpo umano; evita i numeri">
-          <label>Secondi di contesto da tenere prima di ogni frase (solo regole)</label>
+          <label>Secondi di video da tenere prima di ogni esercizio (i tagli automatici non li toccano; solo con le regole)</label>
           <input id="f-ctx" type="number" min="0" max="120" value="25" class="short">
+          <div class="hint">Es. 25 = i 25 secondi che precedono la frase dell'esercizio restano sempre nel video, così lo studente capisce di cosa si parla.</div>
         </div>
         <div>
           <div id="f-player" class="player-box"></div>
@@ -183,7 +184,7 @@
           </div>
           <div id="e-vocab"></div>
           <div class="row" style="margin-top:6px"><button id="btn-vocab-translate" class="small">🌐 Traduci le parole senza traduzione (AI)</button><span id="e-vocab-status" class="hint"></span></div>
-          <p class="hint">Seleziona le parole da usare nelle schede iniziali; ogni parola ha bisogno di una traduzione, una foto ("🔍 Foto" cerca su Wikipedia) o un'emoji. Le parole che compaiono nelle frasi degli esercizi sono segnate.</p>
+          <p class="hint">Seleziona le parole da usare nelle schede iniziali; ogni parola ha bisogno di una traduzione o di una foto ("🔍 Foto" cerca su Wikipedia e Wikimedia Commons; "↻ Altra" ne propone un'altra). Le parole che compaiono nelle frasi degli esercizi sono segnate.</p>
         </div>
         <div class="card">
           <div class="row"><h2 style="margin:0">Esercizi</h2>
@@ -296,12 +297,12 @@
 <div id="overlay"><div><div class="spinner"></div><div id="overlay-text">Generazione in corso…</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260828-18"></script>
-<script src="exercises.js?v=20260828-18"></script>
-<script src="generator.js?v=20260828-18"></script>
-<script src="ai.js?v=20260828-18"></script>
-<script src="demo-data.js?v=20260828-18"></script>
-<script src="bookmarklet.js?v=20260828-18"></script>
-<script src="app.js?v=20260828-18"></script>
+<script src="lang.js?v=20260828-19"></script>
+<script src="exercises.js?v=20260828-19"></script>
+<script src="generator.js?v=20260828-19"></script>
+<script src="ai.js?v=20260828-19"></script>
+<script src="demo-data.js?v=20260828-19"></script>
+<script src="bookmarklet.js?v=20260828-19"></script>
+<script src="app.js?v=20260828-19"></script>
 </body>
 </html>

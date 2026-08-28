@@ -200,13 +200,12 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 
 /* parole utili: editor */
 .vocab-table { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.vocab-row { display: grid; grid-template-columns: 22px minmax(90px, 1.2fr) minmax(90px, 1.2fr) 3.2em auto auto auto; gap: 6px; align-items: center; }
+.vocab-row { display: grid; grid-template-columns: 22px minmax(90px, 1.2fr) minmax(90px, 1.2fr) auto auto auto; gap: 6px; align-items: center; }
 .vocab-row.off input[type=text] { opacity: .55; }
 .vocab-row input[type=text] { padding: 4px 8px; }
-.vocab-row .v-emoji { text-align: center; }
 .vocab-row .v-img { display: flex; gap: 4px; align-items: center; }
 .vocab-row .v-img img { width: 44px; height: 32px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid var(--line); }
-@media (max-width: 640px) { .vocab-row { grid-template-columns: 22px 1fr 1fr; } .vocab-row .v-emoji, .vocab-row .badge { display: none; } }
+@media (max-width: 640px) { .vocab-row { grid-template-columns: 22px 1fr 1fr; } .vocab-row .badge { display: none; } }
 
 /* stelle sulle parole */
 .w { cursor: pointer; border-radius: 4px; padding: 0 1px; }
@@ -229,11 +228,9 @@ button.star.on { color: #e0a800; }
 .mchip.target { justify-content: center; }
 .back { display: flex; align-items: center; gap: 8px; justify-content: center; }
 .back img { max-height: 56px; max-width: 120px; border-radius: 6px; object-fit: cover; }
-.back .emoji { font-size: 26px; }
 .back .tr { font-size: 18px; }
 .back.big { flex-direction: column; }
 .back.big img { max-height: 180px; max-width: 100%; }
-.back.big .emoji { font-size: 64px; }
 .back.big .tr { font-size: 26px; font-weight: 600; }
 
 /* flashcard che si gira */

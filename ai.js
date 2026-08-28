@@ -52,10 +52,10 @@
     lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student whose own language is "' + sup + '" must learn to understand the video, in "vocab". ' +
       'Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (e.g. Italian "globale" ≈ English "global", "informazione" ≈ "information"), basic words a ' + (p.level || 'B1') + ' student already knows, proper names and numbers. ' +
       'Prioritize words that occur in the exercise sentences you chose (mark them with "inExercise": true), then other key words of the video. Use the dictionary form as it appears in the video (singular noun, infinitive verb, masculine adjective) ' +
-      'and give the translation in language "' + sup + '" ("translation"). For concrete words add one emoji that pictures the meaning ("emoji"); leave it empty for abstract words.');
+      'and give the translation in language "' + sup + '" ("translation").');
     lines.push('');
     lines.push('OUTPUT SCHEMA (JSON only):');
-    lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"vocab":[{"word":"smalto","translation":"enamel","emoji":"🦷","inExercise":true}],"notes":"..."}');
+    lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"vocab":[{"word":"smalto","translation":"enamel","inExercise":true}],"notes":"..."}');
     lines.push('Include only the fields relevant to each exercise type.');
     lines.push('');
     lines.push('TRANSCRIPT CHUNKS (id|start|end|text):');
@@ -276,7 +276,7 @@
     };
   }
 
-  /** Normalizza la lista di parole utili restituita dal modello: [{word, translation, emoji, inExercise}], senza doppioni. */
+  /** Normalizza la lista di parole utili restituita dal modello: [{word, translation, inExercise}], senza doppioni. */
   function cleanVocab(list) {
     const out = [], seen = {};
     (Array.isArray(list) ? list : []).forEach(function (v) {
@@ -286,7 +286,7 @@
       const k = L.normalize(word);
       if (!k || seen[k]) return;
       seen[k] = 1;
-      out.push({ word: word, translation: String(v.translation || '').trim(), emoji: String(v.emoji || '').trim().slice(0, 4), inExercise: !!v.inExercise });
+      out.push({ word: word, translation: String(v.translation || '').trim(), inExercise: !!v.inExercise });
     });
     return out;
   }
@@ -299,9 +299,9 @@
     const system = 'You help a language teacher prepare vocabulary for a video lesson. Output ONLY a JSON object, no prose, no markdown fences.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + (params.level || 'B1') + '   TRANSLATION LANGUAGE: ' + sup,
       'List ' + (params.n || 14) + ' words (or short fixed expressions) a ' + (params.level || 'B1') + ' student whose own language is ' + sup + ' must LEARN to understand the video. Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (e.g. Italian "globale" ≈ English "global"), basic words a ' + (params.level || 'B1') + ' student already knows, proper names and numbers. Prioritize words that occur in the EXERCISE SENTENCES (mark "inExercise": true), then other key words of the video. ' +
-      'Dictionary form as used in the video (singular noun, infinitive verb, masculine adjective); "translation" in ' + sup + '; "emoji": one emoji picturing the meaning for concrete words, empty for abstract ones.' +
+      'Dictionary form as used in the video (singular noun, infinitive verb, masculine adjective); "translation" in ' + sup + '.' +
       (params.exclude && params.exclude.length ? ' Do NOT include: ' + params.exclude.join(', ') + '.' : ''),
-      'SCHEMA: {"vocab":[{"word":"...","translation":"...","emoji":"","inExercise":true}]}', '',
+      'SCHEMA: {"vocab":[{"word":"...","translation":"...","inExercise":true}]}', '',
       'EXERCISE SENTENCES:', sentences || '(none)', '', 'VIDEO TEXT:', text].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
@@ -363,16 +363,16 @@
     const words = (params.words || []).map(function (w) { return String(w).trim(); }).filter(Boolean);
     if (!words.length) return { translations: {}, ai: null };
     const system = 'You are a bilingual dictionary for language teachers. Output ONLY a JSON object, no prose, no markdown fences.';
-    const user = ['Translate each ' + lang + ' word into ' + sup + ' with the meaning it has in this context (one or two words each; keep the dictionary form). Also give one emoji for concrete words (empty for abstract).',
-      'SCHEMA: {"vocab":[{"word":"...","translation":"...","emoji":""}]}', '',
+    const user = ['Translate each ' + lang + ' word into ' + sup + ' with the meaning it has in this context (one or two words each; keep the dictionary form).',
+      'SCHEMA: {"vocab":[{"word":"...","translation":"..."}]}', '',
       'WORDS: ' + words.join(', '), '', 'CONTEXT:', String(params.context || '').slice(0, 6000)].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1200, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    const map = {}, emo = {};
-    cleanVocab(plan.vocab).forEach(function (v) { map[L.normalize(v.word)] = v.translation; if (v.emoji) emo[L.normalize(v.word)] = v.emoji; });
-    const translations = {}, emojis = {};
-    words.forEach(function (w) { const k = L.normalize(w); if (map[k]) translations[w] = map[k]; if (emo[k]) emojis[w] = emo[k]; });
-    return { translations: translations, emojis: emojis, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+    const map = {};
+    cleanVocab(plan.vocab).forEach(function (v) { map[L.normalize(v.word)] = v.translation; });
+    const translations = {};
+    words.forEach(function (w) { const k = L.normalize(w); if (map[k]) translations[w] = map[k]; });
+    return { translations: translations, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /** Flusso completo: prompt → modello → piano applicato. params: { chunks, lines, duration, target, n, types, lang, level, focus, apiKey, model, fetchImpl } */

@@ -54,7 +54,8 @@
     try { Object.assign(S.settings, JSON.parse(localStorage.getItem('vle.settings') || '{}') || {}); } catch (e) { /* ignore */ }
   }
   function saveLessons() {
-    try { localStorage.setItem('vle.lessons', JSON.stringify(S.lessons)); } catch (e) { toast('Impossibile salvare nel browser: ' + e.message); }
+    // i campi che iniziano con "_" sono cache di sessione (candidati foto, lessico): non si salvano
+    try { localStorage.setItem('vle.lessons', JSON.stringify(S.lessons, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })); } catch (e) { toast('Impossibile salvare nel browser: ' + e.message); }
   }
   function saveSettings() { try { localStorage.setItem('vle.settings', JSON.stringify(S.settings)); } catch (e) { /* ignore */ } }
   const saveDebounced = (function () { let t; return function () { clearTimeout(t); t = setTimeout(function () { saveLessons(); const s = $('#e-saved'); if (s) { s.textContent = 'Salvato'; setTimeout(function () { s.textContent = ''; }, 1500); } }, 400); }; })();
@@ -64,7 +65,7 @@
   window.addEventListener('pagehide', function () { try { saveLessons(); } catch (e) { /* ignore */ } });
 
   function studentPayload(lesson) {
-    const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }) } : undefined;
+    const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }).map(function (w) { return { id: w.id, word: w.word, translation: w.translation, image: w.image, selected: true, inExercise: w.inExercise }; }) } : undefined;
     return { v: 1, id: lesson.id, title: lesson.title, videoId: lesson.videoId, lang: lesson.lang, duration: lesson.duration,
       exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb, lines: lesson.videoId === 'demo' ? lesson.lines : undefined };
   }
@@ -399,8 +400,8 @@
       ls.stats = r.stats;
       // parole utili: dal modello (con traduzioni) o dalle regole (da tradurre nell'editor)
       const vb = vocabState(ls);
-      const proposed = (r.vocab && r.vocab.length) ? r.vocab.map(function (v) { return { word: v.word, translation: v.translation, emoji: v.emoji, inExercise: v.inExercise, source: 'ai' }; })
-        : G.vocabCandidates(chunks, ls.exercises, { lang: ls.lang, n: 14, support: vb.support, level: ls.level }).map(function (v) { return { word: v.word, translation: '', emoji: '', inExercise: v.inExercises, source: 'rules' }; });
+      const proposed = (r.vocab && r.vocab.length) ? r.vocab.map(function (v) { return { word: v.word, translation: v.translation, inExercise: v.inExercise, source: 'ai' }; })
+        : G.vocabCandidates(chunks, ls.exercises, { lang: ls.lang, n: 14, support: vb.support, level: ls.level }).map(function (v) { return { word: v.word, translation: '', inExercise: v.inExercises, source: 'rules' }; });
       vb.words = proposed.map(function (v) { return Object.assign({ id: uid(), image: '', selected: true }, v); });
       touch(ls);
       saveLessons();
@@ -409,7 +410,7 @@
   }
 
   // ---------- parole utili (modello dati) ----------
-  /** ls.vocab = { support, words:[{id, word, translation, emoji, image, selected, inExercise, source}], cards:{matching, flashcards, write}, starred:[{word, translation}] } */
+  /** ls.vocab = { support, words:[{id, word, translation, image, selected, inExercise, source}], cards:{matching, flashcards, write}, starred:[{word, translation}] } */
   function vocabState(ls) {
     if (!ls.vocab) ls.vocab = { support: ls.lang === 'en' ? 'it' : 'en', words: [], cards: { matching: true, flashcards: true, write: false }, starred: [] };
     if (!ls.vocab.cards) ls.vocab.cards = { matching: true, flashcards: true, write: false };
@@ -419,8 +420,8 @@
     return ls.vocab;
   }
   function selectedVocab(ls) { return vocabState(ls).words.filter(function (w) { return w.selected && w.word; }); }
-  /** Parole con qualcosa sul "retro" (traduzione, foto o emoji): solo queste possono stare nelle schede. */
-  function cardVocab(ls) { return selectedVocab(ls).filter(function (w) { return w.translation || w.image || w.emoji; }); }
+  /** Parole con qualcosa sul "retro" (traduzione o foto): solo queste possono stare nelle schede. */
+  function cardVocab(ls) { return selectedVocab(ls).filter(function (w) { return w.translation || w.image; }); }
 
   // ---------- NUOVA LEZIONE ----------
   const N = { videoId: null, duration: 0, ok: false };
@@ -737,22 +738,24 @@
       wi.addEventListener('change', function () { w.word = wi.value.trim(); touch(ls); refreshHint(); });
       const ti = el('input', { type: 'text', value: w.translation || '', placeholder: 'traduzione', class: 'v-tr' });
       ti.addEventListener('change', function () { w.translation = ti.value.trim(); touch(ls); refreshHint(); });
-      const ei = el('input', { type: 'text', value: w.emoji || '', placeholder: '😀', class: 'v-emoji', title: 'Emoji (facoltativa)' });
-      ei.addEventListener('change', function () { w.emoji = ei.value.trim(); touch(ls); refreshHint(); });
+
       const img = el('div', { class: 'v-img' });
+      const syncWord = function () { const v = wi.value.trim(); if (v && v !== w.word) { w.word = v; touch(ls); } };   // la ricerca usa sempre la parola scritta ora
       const renderImg = function () {
         img.innerHTML = '';
         if (w.image) {
-          const im = el('img', { src: w.image, alt: '', title: w.image + ' (clic per togliere)', referrerpolicy: 'no-referrer', onclick: function () { if (confirm('Togliere la foto?')) { w.image = ''; touch(ls); renderImg(); } } });
-          im.addEventListener('error', function () { im.replaceWith(el('span', { class: 'notice bad', style: 'padding:2px 6px;font-size:12px', text: 'foto non caricabile: toglila', title: w.image, onclick: function () { w.image = ''; touch(ls); renderImg(); } })); });
+          const im = el('img', { src: w.image, alt: '', title: w.image, referrerpolicy: 'no-referrer' });
+          im.addEventListener('error', function () { im.replaceWith(el('span', { class: 'notice bad', style: 'padding:2px 6px;font-size:12px', text: 'non caricabile', title: w.image })); });
           img.appendChild(im);
+          img.appendChild(el('button', { class: 'small', text: '↻ Altra', title: 'Cerca un\'altra foto per questa parola', onclick: function () { syncWord(); findImage(ls, w, renderImg, true); } }));
+          img.appendChild(el('button', { class: 'small', text: '✕', title: 'Togli la foto', onclick: function () { w.image = ''; touch(ls); renderImg(); } }));
         } else {
-          img.appendChild(el('button', { class: 'small', text: '🔍 Foto', title: 'Cerca una foto su Wikipedia', onclick: function () { findImage(ls, w, renderImg); } }));
+          img.appendChild(el('button', { class: 'small', text: '🔍 Foto', title: 'Cerca una foto (Wikipedia e Wikimedia Commons) per la parola scritta qui a sinistra', onclick: function () { syncWord(); findImage(ls, w, renderImg, false); } }));
           img.appendChild(el('button', { class: 'small', text: 'URL', title: 'Incolla l\'indirizzo di un\'immagine', onclick: function () { const u = prompt('Indirizzo dell\'immagine (https://…)'); if (u && /^https?:\/\//.test(u.trim())) { w.image = u.trim(); touch(ls); renderImg(); } } }));
         }
       };
       renderImg();
-      row.appendChild(cb); row.appendChild(wi); row.appendChild(ti); row.appendChild(ei); row.appendChild(img);
+      row.appendChild(cb); row.appendChild(wi); row.appendChild(ti); row.appendChild(img);
       row.appendChild(el('span', { class: 'badge', text: w.inExercise ? 'negli esercizi' : (w.source === 'ai' ? 'AI' : ''), style: w.inExercise || w.source === 'ai' ? '' : 'visibility:hidden' }));
       row.appendChild(el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { vb.words = vb.words.filter(function (x) { return x !== w; }); touch(ls); renderVocabEditor(ls); } }));
       table.appendChild(row);
@@ -762,13 +765,13 @@
   }
   function readyText(ls) {
     const ready = cardVocab(ls).length;
-    return selectedVocab(ls).length + ' selezionate, ' + ready + ' pronte per le schede (con traduzione, foto o emoji)' + (ready < 3 ? ' — ne servono almeno 3 per la scheda di abbinamento' : '');
+    return selectedVocab(ls).length + ' selezionate, ' + ready + ' pronte per le schede (con traduzione o foto)' + (ready < 3 ? ' — ne servono almeno 3 per la scheda di abbinamento' : '');
   }
   function proposeVocabRules(ls) {
     const vb = vocabState(ls);
     const have = new Set(vb.words.map(function (w) { return L.normalize(w.word); }));
     const cands = G.vocabCandidates(ls.chunks || [], ls.exercises, { lang: ls.lang, n: 20, support: vb.support, level: ls.level }).filter(function (c) { return !have.has(L.normalize(c.word)); });
-    cands.slice(0, 14).forEach(function (c) { vb.words.push({ id: uid(), word: c.word, translation: '', emoji: '', image: '', selected: true, inExercise: c.inExercises, source: 'rules' }); });
+    cands.slice(0, 14).forEach(function (c) { vb.words.push({ id: uid(), word: c.word, translation: '', image: '', selected: true, inExercise: c.inExercises, source: 'rules' }); });
     touch(ls); renderVocabEditor(ls);
     toast(cands.length ? cands.slice(0, 14).length + ' parole aggiunte (senza traduzione)' : 'Nessuna nuova parola trovata');
   }
@@ -780,7 +783,7 @@
       .then(function (r) {
         const have = new Set(vb.words.map(function (w) { return L.normalize(w.word); }));
         let added = 0;
-        r.vocab.forEach(function (v) { if (have.has(L.normalize(v.word))) return; vb.words.push({ id: uid(), word: v.word, translation: v.translation, emoji: v.emoji, image: '', selected: true, inExercise: v.inExercise, source: 'ai' }); added++; });
+        r.vocab.forEach(function (v) { if (have.has(L.normalize(v.word))) return; vb.words.push({ id: uid(), word: v.word, translation: v.translation, image: '', selected: true, inExercise: v.inExercise, source: 'ai' }); added++; });
         touch(ls); renderVocabEditor(ls);
         st.textContent = added + ' parole aggiunte' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '');
       })
@@ -796,36 +799,74 @@
     AI.translateWords({ words: todo, lang: ls.lang, support: vb.support, context: context, apiKey: S.settings.apiKey, model: S.settings.model })
       .then(function (r) {
         let n = 0;
-        vb.words.forEach(function (w) { if (!w.translation && r.translations[w.word]) { w.translation = r.translations[w.word]; n++; } if (!w.emoji && r.emojis && r.emojis[w.word]) w.emoji = r.emojis[w.word]; });
+        vb.words.forEach(function (w) { if (!w.translation && r.translations[w.word]) { w.translation = r.translations[w.word]; n++; } });
         touch(ls); renderVocabEditor(ls);
         st.textContent = n + ' traduzioni aggiunte' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '');
       })
       .catch(function (e) { st.textContent = '⚠ ' + e.message; });
   }
   /** Foto da Wikipedia (API REST, senza chiavi): prova la pagina della parola nella lingua del video, poi la traduzione in inglese. */
-  function findImage(ls, w, done) {
-    const tries = [[ls.lang, w.word]];
-    if (w.translation) tries.push(['en', w.translation]);
-    if (ls.lang !== 'it') tries.push(['it', w.word]);
-    const cap = function (t) { return t.charAt(0).toUpperCase() + t.slice(1); };
-    let i = 0;
-    const next = function () {
-      if (i >= tries.length) { toast('Nessuna foto trovata su Wikipedia per "' + w.word + '": incolla un URL'); return; }
-      const tr = tries[i++];
-      fetch('https://' + tr[0] + '.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(cap(tr[1].trim())) + '?redirect=true')
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) {
-          if (j && j.type !== 'disambiguation' && j.thumbnail && j.thumbnail.source) { w.image = j.thumbnail.source; touch(ls); done(); toast('Foto da Wikipedia: ' + (j.title || tr[1])); }
-          else next();
-        })
-        .catch(next);
+  /**
+   * Ricerca foto senza chiavi: Wikipedia (pagine con miniatura, ricerca a testo libero: trova "mare" anche da "mari")
+   * e Wikimedia Commons (file fotografici). Ritorna una lista di candidati [{url, title, source}] da scorrere con "Altra foto".
+   */
+  function singularGuesses(word, lang) {
+    const w = String(word || '').trim(); const out = [w];
+    if (lang === 'it' && w.length > 4) {
+      if (/i$/.test(w)) { out.push(w.slice(0, -1) + 'o'); out.push(w.slice(0, -1) + 'e'); }
+      if (/e$/.test(w)) out.push(w.slice(0, -1) + 'a');
+      if (/chi$/.test(w)) out.push(w.slice(0, -3) + 'co');
+      if (/ghi$/.test(w)) out.push(w.slice(0, -3) + 'go');
+    }
+    if (lang === 'en' && /s$/.test(w) && w.length > 4) out.push(w.replace(/(e|ie)?s$/, ''));
+    return out.filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+  }
+  function searchImages(lang, word, translation) {
+    const seen = new Set(), out = [];
+    const add = function (url, title, source) { if (url && !seen.has(url)) { seen.add(url); out.push({ url: url, title: title || '', source: source }); } };
+    const wikiSearch = function (lg, q) {
+      const u = 'https://' + lg + '.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=' + encodeURIComponent(q) + '&gsrlimit=6&gsrnamespace=0&prop=pageimages|pageprops&piprop=thumbnail&pithumbsize=400&ppprop=disambiguation';
+      return fetch(u).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        const pages = j && j.query && j.query.pages ? Object.values(j.query.pages) : [];
+        pages.sort(function (a, b) { return (a.index || 0) - (b.index || 0); });
+        pages.forEach(function (pg) { if (pg.pageprops && pg.pageprops.disambiguation !== undefined) return; if (pg.thumbnail && pg.thumbnail.source) add(pg.thumbnail.source, pg.title, lg + '.wikipedia'); });
+      }).catch(function () { /* ignore */ });
     };
-    next();
+    const commonsSearch = function (q) {
+      const u = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=' + encodeURIComponent(q) + '&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime&iiurlwidth=400';
+      return fetch(u).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        const pages = j && j.query && j.query.pages ? Object.values(j.query.pages) : [];
+        pages.sort(function (a, b) { return (a.index || 0) - (b.index || 0); });
+        pages.forEach(function (pg) { const ii = pg.imageinfo && pg.imageinfo[0]; if (!ii || !/^image\/(jpeg|png|webp)/.test(ii.mime || '')) return; add(ii.thumburl || ii.url, (pg.title || '').replace(/^File:/, ''), 'commons'); });
+      }).catch(function () { /* ignore */ });
+    };
+    const guesses = singularGuesses(word, lang);
+    const steps = [];
+    guesses.forEach(function (g) { steps.push(function () { return wikiSearch(lang, g); }); });
+    steps.push(function () { return commonsSearch(guesses[0]); });
+    if (translation) { steps.push(function () { return wikiSearch('en', translation); }); steps.push(function () { return commonsSearch(translation); }); }
+    return steps.reduce(function (p, f) { return p.then(f); }, Promise.resolve()).then(function () { return out; });
+  }
+  /** Prima foto per la parola (o la successiva, se "Altra foto"). */
+  function findImage(ls, w, done, next) {
+    const word = String(w.word || '').trim();
+    if (!word) return toast('Scrivi prima la parola');
+    const go = function () {
+      const list = w._imgs || [];
+      if (!list.length) { toast('Nessuna foto trovata per "' + word + '" (Wikipedia e Wikimedia Commons): prova a cambiare la parola o incolla un URL', 5000); return; }
+      w._imgIdx = next ? ((w._imgIdx || 0) + 1) % list.length : 0;
+      w.image = list[w._imgIdx].url;
+      touch(ls); done();
+      toast((w._imgIdx + 1) + '/' + list.length + ' · ' + list[w._imgIdx].title + ' (' + list[w._imgIdx].source + ')', 2500);
+    };
+    if (w._imgs && w._imgsFor === word) return go();
+    toast('Cerco foto per "' + word + '"…', 1500);
+    searchImages(ls.lang, word, w.translation).then(function (list) { w._imgs = list; w._imgsFor = word; w._imgIdx = -1; go(); });
   }
   $('#btn-vocab-rules').addEventListener('click', function () { const ls = current(); if (ls) proposeVocabRules(ls); });
   $('#btn-vocab-ai').addEventListener('click', function () { const ls = current(); if (ls) proposeVocabAI(ls); });
   $('#btn-vocab-translate').addEventListener('click', function () { const ls = current(); if (ls) translateMissing(ls); });
-  $('#btn-vocab-add').addEventListener('click', function () { const ls = current(); if (!ls) return; vocabState(ls).words.push({ id: uid(), word: '', translation: '', emoji: '', image: '', selected: true, inExercise: false, source: 'manual' }); touch(ls); renderVocabEditor(ls); const rows = $$('#e-vocab .vocab-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('.v-word').focus(); });
+  $('#btn-vocab-add').addEventListener('click', function () { const ls = current(); if (!ls) return; vocabState(ls).words.push({ id: uid(), word: '', translation: '', image: '', selected: true, inExercise: false, source: 'manual' }); touch(ls); renderVocabEditor(ls); const rows = $$('#e-vocab .vocab-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('.v-word').focus(); });
   $('#v-matching').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.matching = $('#v-matching').checked; touch(ls); } });
   $('#v-flash').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.flashcards = $('#v-flash').checked; touch(ls); } });
   $('#v-write').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.write = $('#v-write').checked; touch(ls); } });
@@ -1818,14 +1859,12 @@
     return out;
   }
   function backOf(w, big) {
-    // "retro" della parola: SOLO la foto se c'è (niente traduzione), altrimenti emoji + traduzione;
-    // se la foto non si carica, si ripiega su emoji + traduzione
+    // "retro" della parola: SOLO la foto se c'è (niente traduzione), altrimenti la traduzione;
+    // se la foto non si carica, si ripiega sulla traduzione
     const d = el('div', { class: 'back' + (big ? ' big' : '') });
     const textBack = function () {
       d.innerHTML = '';
-      if (w.emoji) d.appendChild(el('div', { class: 'emoji', text: w.emoji }));
-      if (w.translation) d.appendChild(el('div', { class: 'tr', text: w.translation }));
-      if (!w.emoji && !w.translation) d.appendChild(el('div', { class: 'tr', text: '?' }));
+      d.appendChild(el('div', { class: 'tr', text: w.translation || '?' }));
     };
     if (w.image) {
       const img = el('img', { src: w.image, alt: '', referrerpolicy: 'no-referrer' });
