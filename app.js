@@ -46,7 +46,7 @@
   const S = {
     lessons: {}, currentId: null, view: 'home', player: null, loop: null, mock: false, speed: 1, standalone: false,
     settings: { apiKey: '', model: AI.DEFAULT_MODEL },
-    editor: { replay: null, drag: null, altIdx: {} },
+    editor: { replay: null, altIdx: {} },
     student: null
   };
   function loadState() {
@@ -446,27 +446,8 @@
     container.appendChild(track);
     (lesson.exercises || []).forEach(function (ex, i) {
       const m = el('div', { class: 'marker' + (o.done && o.done.has(ex.id) ? ' done' : '') + (o.activeId === ex.id ? ' active' : ''), text: String(i + 1), style: 'left:' + (100 * ex.markerTime / D) + '%', title: fmt(ex.markerTime) + ' · ' + EX.LABELS[ex.type] });
-      if (o.editable) {
-        m.addEventListener('pointerdown', function (e) {
-          e.preventDefault();
-          S.editor.drag = { ex: ex, node: m, track: track };
-          m.setPointerCapture(e.pointerId);
-        });
-        m.addEventListener('pointermove', function (e) {
-          const d = S.editor.drag; if (!d || d.node !== m) return;
-          const r = d.track.getBoundingClientRect();
-          const t = Math.max(0, Math.min(D, D * (e.clientX - r.left) / r.width));
-          m.style.left = (100 * t / D) + '%';
-          m.title = fmt(t);
-          d.t = t;
-        });
-        m.addEventListener('pointerup', function () {
-          const d = S.editor.drag; if (!d || d.node !== m) return;
-          S.editor.drag = null;
-          if (d.t != null) { ex.markerTime = Math.round(d.t * 10) / 10; sortExercises(lesson); touch(lesson); renderEditorBody(); }
-        });
-        m.addEventListener('click', function () { if (o.onMarker) o.onMarker(ex); });
-      } else if (o.onMarker) m.addEventListener('click', function () { o.onMarker(ex); });
+      // I segnaposto non si trascinano (troppo facile spostarli per sbaglio): l'orario si cambia nel campo "ferma il video a" della scheda.
+      if (o.onMarker) m.addEventListener('click', function (e) { e.stopPropagation(); o.onMarker(ex); });
       container.appendChild(m);
     });
     container.appendChild(el('div', { class: 'cursor', style: 'left:0%' }));
@@ -546,7 +527,10 @@
 
   function renderEditorBody() {
     const ls = current(); if (!ls) return;
-    renderTimeline($('#e-timeline'), ls, { editable: true, onSeek: function (t) { if (S.player) S.player.seek(t); }, onMarker: function (ex) { const card = $('#ex-' + ex.id); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+    renderTimeline($('#e-timeline'), ls, { editable: true, onSeek: function (t) { if (S.player) S.player.seek(t); }, onMarker: function (ex) {
+      const card = $('#ex-' + ex.id);
+      if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(function () { card.classList.remove('flash'); }, 1500); }
+    } });
     const eff = G.effectiveDuration(ls.cuts, ls.duration);
     $('#e-stats').innerHTML = '';
     $('#e-stats').appendChild(el('span', { html: 'Video: <b>' + fmtMin(ls.duration) + '</b>' }));

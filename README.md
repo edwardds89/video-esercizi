@@ -23,7 +23,7 @@ Aprire `index.html` direttamente dal disco (file://) funziona solo in parte: il 
 **Poi, in entrambi i casi:**
 3. Scegli numero di esercizi, durata per lo studente ("circa 10 minuti" = tolleranza del 10%, così non vengono tagliate parti utili per guadagnare pochi secondi; oppure tutto il video o una durata precisa), tipi, lingua, livello.
 4. **Genera la bozza** → si apre l'editor:
-   - trascina i numeri sulla linea del tempo per spostare i segnaposto;
+   - i numeri sulla linea del tempo portano alla scheda dell'esercizio (non si trascinano: l'orario si cambia nel campo "ferma il video a");
    - per ogni esercizio: cambia tipo, frase, parole nascoste / mancanti / in più / sbagliate, intervallo di ascolto ("Ascolta" riproduce solo quella frase);
    - "Altra frase" propone la migliore alternativa vicino allo stesso punto; "Rigenera" cambia la variante;
    - i tagli si modificano, si aggiungono ("+ Taglio dal tempo corrente") e si eliminano; "Anteprima" riproduce da 3 secondi prima del taglio.
