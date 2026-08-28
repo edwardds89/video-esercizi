@@ -224,8 +224,12 @@ test('gap fill: costruzione e correzione', function () {
 test('scrambled: mescolata diversa dall\'originale, correzione per sequenza', function () {
   const ex = EX.buildExercise('scramble', 'Oggi gioca a scacchi usando soltanto la mente.', { lang: 'it', seed: 2 });
   assert.notDeepStrictEqual(ex.data.shuffled, ex.data.words);
-  assert.strictEqual(ex.data.words[0], 'oggi', 'iniziale minuscola');
+  assert.strictEqual(ex.data.words[0], 'Oggi', 'la prima parola tiene la maiuscola (suggerimento)');
+  assert.strictEqual(ex.data.words[ex.data.words.length - 1], 'mente.', 'il punto resta attaccato all\'ultima parola (suggerimento)');
   assert.ok(EX.check(ex, ex.data.words).correct);
+  assert.ok(EX.check(ex, ex.data.words.map(function (w) { return w.toLowerCase().replace(/[.!?]$/, ''); })).correct, 'corretta anche senza maiuscola e punto');
+  const ex2 = EX.buildExercise('scramble', 'Chi ha visto, ieri sera, il film?', { lang: 'it', seed: 3 });
+  assert.strictEqual(ex2.data.words[ex2.data.words.length - 1], 'film?'); assert.strictEqual(ex2.data.words[2], 'visto', 'virgola interna tolta');
   assert.ok(!EX.check(ex, ex.data.shuffled).correct);
   assert.strictEqual(EX.buildExercise('scramble', S + ' ' + S + ' ' + S, { lang: 'it' }), null, 'troppo lunga');
 });

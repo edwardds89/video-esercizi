@@ -250,14 +250,22 @@ async function startVideo(page) {
   const wrongTr = vwords.find(function (w) { return w.id !== firstId; }).tr;
   await page.click('#s-panel .match .col:last-child .mchip:has-text("' + wrongTr + '")');
   assert.ok(/Non è questa/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })), 'errore segnalato');
+  // prima coppia: parola poi traduzione; seconda: traduzione poi parola (vale anche al contrario); le coppie salgono in alto legate
+  let k = 0;
   for (const w of vwords) {
-    await page.click('#s-panel .match .col:first-child .mchip[data-id="' + w.id + '"]');
-    await page.click('#s-panel .match .col:last-child .mchip:has-text("' + w.tr + '")');
+    if (k % 2 === 0) { await page.click('#s-panel .match .col:first-child .mchip[data-id="' + w.id + '"]'); await page.click('#s-panel .match .col:last-child .mchip:has-text("' + w.tr + '")'); }
+    else { await page.click('#s-panel .match .col:last-child .mchip:has-text("' + w.tr + '")'); await page.click('#s-panel .match .col:first-child .mchip[data-id="' + w.id + '"]'); }
+    k++;
+    await page.waitForTimeout(80);
+    assert.strictEqual(await page.$$eval('#s-panel .match-done .mpair', function (r) { return r.length; }), k, 'coppie in alto: ' + k);
+    assert.strictEqual(await page.$$eval('#s-panel .match .col:first-child .mchip', function (r) { return r.length; }), vwords.length - k, 'parole rimaste sotto');
   }
   assert.ok(/Tutte abbinate/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })), 'abbinamento completato');
-  // stella sulla prima parola della scheda
-  await page.click('#s-panel .match .col:first-child .mchip[data-id="' + vwords[0].id + '"] button.star');
-  assert.ok(await page.$('#s-panel .match button.star.on'), 'stella accesa');
+  assert.strictEqual(await page.$eval('#s-panel .match-done .mpair:first-child .mchip[data-id]', function (c) { return c.getAttribute('data-id'); }), vwords[0].id, 'la prima coppia abbinata sta in cima');
+  assert.ok(!(await page.$('#s-panel .mchip.pair-0')), 'niente colori per coppia');
+  // stella sulla prima parola della scheda (nella riga abbinata)
+  await page.click('#s-panel .match-done .mpair .mchip[data-id="' + vwords[0].id + '"] button.star');
+  assert.ok(await page.$('#s-panel .match-done button.star.on'), 'stella accesa');
   await page.click('#s-panel button:has-text("Continua")');
   await page.waitForSelector('#s-panel .flashcard', { timeout: 5000 });
   // flashcards con scrittura: sbaglio, poi giusto, poi avanti fino alla fine
