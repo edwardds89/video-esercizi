@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
-<link rel="stylesheet" href="styles.css?v=20260828-5">
+<link rel="stylesheet" href="styles.css?v=20260828-6">
 </head>
 <body>
 <header class="topbar">
@@ -74,6 +74,17 @@
               <input id="f-target" type="text" placeholder="mm:ss" class="short" style="display:none;margin-top:6px">
               <div id="f-duration-hint" class="hint"></div></div>
           </div>
+          <label>Lunghezza delle frasi degli esercizi</label>
+          <select id="f-words">
+            <option value="auto">Automatica (frase singola, in base al tipo)</option>
+            <option value="5-10">5-10 parole</option>
+            <option value="10-15">10-15 parole</option>
+            <option value="15-20">15-20 parole</option>
+            <option value="20-30">20-30 parole</option>
+            <option value="30-40">30-40 parole</option>
+            <option value="40-60">40-60 parole</option>
+          </select>
+          <div class="hint">Si può cambiare esercizio per esercizio nell'editor, con l'elenco delle frasi adatte e i minuti.</div>
           <label>Tipi di esercizio</label>
           <div class="chips" id="f-types">
             <label class="chip"><input type="checkbox" value="gap" checked> Fill the gaps</label>
@@ -208,6 +219,16 @@
     <div><label>Numero di esercizi</label><input id="r-n" type="number" min="1" max="40" value="10"></div>
     <div><label>Durata finale (mm:ss)</label><input id="r-target" type="text"></div>
   </div>
+  <label>Lunghezza delle frasi</label>
+  <select id="r-words">
+    <option value="auto">Automatica</option>
+    <option value="5-10">5-10 parole</option>
+    <option value="10-15">10-15 parole</option>
+    <option value="15-20">15-20 parole</option>
+    <option value="20-30">20-30 parole</option>
+    <option value="30-40">30-40 parole</option>
+    <option value="40-60">40-60 parole</option>
+  </select>
   <label>Tipi</label>
   <div class="chips" id="r-types">
     <label class="chip"><input type="checkbox" value="gap" checked> Fill the gaps</label>
@@ -225,12 +246,12 @@
 <div id="overlay"><div><div class="spinner"></div><div id="overlay-text">Generazione in corso…</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260828-5"></script>
-<script src="exercises.js?v=20260828-5"></script>
-<script src="generator.js?v=20260828-5"></script>
-<script src="ai.js?v=20260828-5"></script>
-<script src="demo-data.js?v=20260828-5"></script>
-<script src="bookmarklet.js?v=20260828-5"></script>
-<script src="app.js?v=20260828-5"></script>
+<script src="lang.js?v=20260828-6"></script>
+<script src="exercises.js?v=20260828-6"></script>
+<script src="generator.js?v=20260828-6"></script>
+<script src="ai.js?v=20260828-6"></script>
+<script src="demo-data.js?v=20260828-6"></script>
+<script src="bookmarklet.js?v=20260828-6"></script>
+<script src="app.js?v=20260828-6"></script>
 </body>
 </html>

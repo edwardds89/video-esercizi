@@ -22,6 +22,7 @@
     const lines = [];
     lines.push('TRANSCRIPT LANGUAGE: ' + (p.lang || 'it') + '   STUDENT LEVEL (CEFR): ' + (p.level || 'B1'));
     lines.push('NUMBER OF EXERCISES: ' + n + '   ALLOWED TYPES: ' + types.join(', '));
+    if (p.range && p.range.length === 2) lines.push('SENTENCE LENGTH: between ' + p.range[0] + ' and ' + p.range[1] + ' words for every exercise (a passage may span several consecutive chunks; this overrides the per-type ranges below).');
     lines.push('VIDEO DURATION: ' + Math.round(p.duration) + 's   TARGET KEPT DURATION: ' + Math.round(p.target) + 's' +
       (p.target < p.duration - 5 ? ' (skip about ' + Math.round(p.duration - p.target) + 's)' : ' (no cuts needed)'));
     if (p.focus) lines.push('TEACHER NOTES / FOCUS: ' + p.focus);
@@ -99,11 +100,15 @@
   }
 
   /** Cerca la sequenza di parole della frase dentro un chunk (+ il successivo). Ritorna { chunkIds, tokens, times } o null. */
-  function locate(sentence, chunk, next) {
+  function locate(sentence, chunk, next, more) {
     const want = L.words(sentence);
     if (!want.length) return null;
     const pools = [[chunk]];
     if (next && !next.silence) pools.push([chunk, next]);
+    if (more && more.length) {
+      let pool = [chunk, next];
+      for (const m of more) { if (!m || m.silence) break; pool = pool.concat([m]); pools.push(pool.slice()); }
+    }
     for (const pool of pools) {
       const toks = [], times = [];
       pool.forEach(function (c) {
@@ -146,7 +151,7 @@
       const next = chunks[c._idx + 1];
       let type = TYPE_NAMES[String(pe.type || '').toLowerCase()] || types[exercises.length % types.length];
       if (types.indexOf(type) === -1) type = types[exercises.length % types.length];
-      let loc = pe.sentence ? locate(pe.sentence, c, next) : null;
+      let loc = pe.sentence ? locate(pe.sentence, c, next, [chunks[c._idx + 2], chunks[c._idx + 3]]) : null;
       let sentenceText;
       if (loc) {
         // usa la versione punteggiata del modello solo se le parole coincidono (già verificato da locate)
@@ -259,7 +264,7 @@
     const duration = params.duration;
     const chunks = params.chunks || G.annotate(G.buildChunks(params.lines, { duration: duration, lang: lang }), { lang: lang, duration: duration });
     const target = params.target && params.target > 0 ? Math.min(params.target, duration) : duration;
-    const msgs = buildMessages({ chunks: chunks, n: params.n, types: params.types, lang: lang, level: params.level, focus: params.focus, duration: duration, target: target });
+    const msgs = buildMessages({ chunks: chunks, n: params.n, types: params.types, lang: lang, level: params.level, focus: params.focus, duration: duration, target: target, range: params.range });
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: msgs.system, user: msgs.user, maxTokens: params.maxTokens, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
     const applied = applyPlan(plan, { chunks: chunks, lang: lang, duration: duration, target: target, n: params.n, types: params.types });

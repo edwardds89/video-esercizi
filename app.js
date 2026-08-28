@@ -288,7 +288,7 @@
     let promise;
     if (useAI && S.settings.apiKey) {
       overlay(true, 'Chiedo al modello AI (20-60 secondi)…');
-      promise = AI.generateWithAI({ chunks: chunks, duration: duration, target: p.target, n: p.n, types: p.types, lang: ls.lang, level: ls.level, focus: p.focus, apiKey: S.settings.apiKey, model: S.settings.model })
+      promise = AI.generateWithAI({ chunks: chunks, duration: duration, target: p.target, n: p.n, types: p.types, range: p.range, lang: ls.lang, level: ls.level, focus: p.focus, apiKey: S.settings.apiKey, model: S.settings.model })
         .then(function (r) {
           ls.ai = { model: r.ai.model, cost: r.ai.cost, usage: r.ai.usage, notes: r.notes, title: r.title, when: new Date().toISOString() };
           if (r.title && !ls.title) ls.title = r.title;
@@ -304,7 +304,7 @@
     }
     return promise.then(function (r) {
       if (!r) {
-        const d = G.generateDraft({ chunks: chunks, lines: ls.lines, duration: duration, n: p.n, target: p.target, tolerance: p.tolerance, types: p.types, lang: ls.lang, contextBefore: p.contextBefore, seed: (Date.now() % 100000) + 1 });
+        const d = G.generateDraft({ chunks: chunks, lines: ls.lines, duration: duration, n: p.n, target: p.target, tolerance: p.tolerance, types: p.types, range: p.range, lang: ls.lang, contextBefore: p.contextBefore, seed: (Date.now() % 100000) + 1 });
         r = { exercises: d.exercises, cuts: d.cuts, stats: d.stats, warnings: d.stats.shortfall > Math.max(5, p.tolerance || 0) ? ['Durata target non raggiungibile senza tagliare gli esercizi: mancano ' + Math.round(d.stats.shortfall) + 's.'] : [] };
         ls.ai = null;
       }
@@ -423,7 +423,7 @@
       title: $('#f-title').value.trim() || ('Lezione ' + new Date().toLocaleDateString('it-IT')),
       videoId: id, videoUrl: url, lang: $('#f-lang').value, level: $('#f-level').value, lines: parsed.lines, duration: duration, transcriptRaw: $('#f-transcript').value
     });
-    ls.params = { n: Math.max(1, parseInt($('#f-n').value, 10) || 10), target: target, tolerance: $('#f-range').value === 'custom' ? 0 : Math.round(target * 0.1), types: types, contextBefore: parseInt($('#f-ctx').value, 10) || 25, ai: $('#f-ai').checked, focus: $('#f-focus').value.trim() };
+    ls.params = { n: Math.max(1, parseInt($('#f-n').value, 10) || 10), target: target, tolerance: $('#f-range').value === 'custom' ? 0 : Math.round(target * 0.1), types: types, range: G.RANGES[$('#f-words').value] || null, contextBefore: parseInt($('#f-ctx').value, 10) || 25, ai: $('#f-ai').checked, focus: $('#f-focus').value.trim() };
     overlay(true, 'Genero la bozza…');
     generate(ls, ls.params.ai).then(function () { overlay(false); openEditor(ls.id); })
       .catch(function (e) { overlay(false); toast('Errore: ' + e.message); console.error(e); });
@@ -597,11 +597,39 @@
       if (!rebuildExercise(ls, ex, typeSel.value)) { toast('Questo tipo non è applicabile a questa frase'); typeSel.value = ex.type; return; }
       touch(ls); renderEditorBody();
     });
+    const rangeSel = el('select', { style: 'width:auto', title: 'Lunghezza della frase (parole)' });
+    [['auto', 'lunghezza: auto'], ['5-10', '5-10 parole'], ['10-15', '10-15 parole'], ['15-20', '15-20 parole'], ['20-30', '20-30 parole'], ['30-40', '30-40 parole'], ['40-60', '40-60 parole']].forEach(function (o) {
+      rangeSel.appendChild(el('option', { value: o[0], text: o[1], selected: rangeKey(ex.range) === o[0] ? 'selected' : null }));
+    });
+    rangeSel.addEventListener('change', function () {
+      ex.range = G.RANGES[rangeSel.value] || null;
+      // cerca subito la frase migliore di questa lunghezza vicino al punto attuale
+      const used = usedChunkIds(ls, ex);
+      let best = null;
+      if (ex.range) {
+        const near = G.passagesNear(ls.chunks || [], ex.markerTime, { exclude: used, type: ex.type, lang: ls.lang, window: 90, range: ex.range }).filter(function (p) { return !p.cta; });
+        best = near[0] || null;
+        if (!best) { const all = candidatesFor(ls, ex); if (all.length) best = all.reduce(function (a, b) { return Math.abs((b.start + b.end) / 2 - ex.markerTime) < Math.abs((a.start + a.end) / 2 - ex.markerTime) ? b : a; }); }
+      } else {
+        const alts = G.alternatives(ls.chunks || [], ex.markerTime, { exclude: used, type: ex.type, lang: ls.lang, window: 90 });
+        if (alts.length) best = { chunk: alts[0] };
+      }
+      if (!best) { touch(ls); renderEditorBody(); return toast('Nessuna frase di questa lunghezza in questo video'); }
+      applyCandidate(ls, ex, best);
+    });
+    const cands = candidatesFor(ls, ex);
+    const helperSel = el('select', { style: 'width:auto;max-width:420px', title: 'Frasi adatte in tutto il video' });
+    helperSel.appendChild(el('option', { value: '', text: (ex.range ? 'Frasi di ' + ex.range[0] + '-' + ex.range[1] + ' parole' : 'Frasi adatte') + ' nel video: ' + cands.length + ' — scegli…' }));
+    cands.forEach(function (p, k) {
+      helperSel.appendChild(el('option', { value: String(k), text: fmtMin(p.start) + ' · ' + p.wordCount + ' parole · ' + (p.text.length > 70 ? p.text.slice(0, 70) + '…' : p.text) }));
+    });
+    helperSel.addEventListener('change', function () { const k = parseInt(helperSel.value, 10); if (!isNaN(k) && cands[k]) applyCandidate(ls, ex, cands[k]); });
     const head = el('div', { class: 'head' },
       el('span', { class: 'num', text: String(i + 1) }),
       el('span', { class: 'hint', text: 'ferma il video a' }),
       timeInput(ex.markerTime, function (t) { ex.markerTime = t; sortExercises(ls); touch(ls); renderEditorBody(); }),
       typeSel,
+      rangeSel,
       el('button', { class: 'small', text: '▶ Ascolta', onclick: function () { playSegment(ex.segment); } }),
       el('button', { class: 'small', text: '↻ Altra frase', onclick: function () { altSentence(ls, ex); } }),
       el('button', { class: 'small', text: '⟳ Rigenera', onclick: function () { rebuildExercise(ls, ex, ex.type); touch(ls); renderEditorBody(); } }),
@@ -609,6 +637,7 @@
       el('button', { class: 'small danger right', text: 'Elimina', onclick: function () { ls.exercises = ls.exercises.filter(function (x) { return x !== ex; }); touch(ls); renderEditorBody(); } })
     );
     card.appendChild(head);
+    card.appendChild(el('div', { class: 'row', style: 'margin-top:6px' }, el('span', { class: 'hint', text: 'Helper:' }), helperSel));
     if (ex.note) card.appendChild(el('div', { class: 'hint', text: 'Perché: ' + ex.note }));
     const ta = el('textarea', { style: 'min-height:56px;margin-top:8px' }); ta.value = ex.sentence;
     ta.addEventListener('change', function () {
@@ -703,7 +732,48 @@
     return wrap;
   }
 
+  function rangeKey(range) {
+    if (!range) return 'auto';
+    for (const k in G.RANGES) { const r = G.RANGES[k]; if (r && r[0] === range[0] && r[1] === range[1]) return k; }
+    return 'auto';
+  }
+  function usedChunkIds(ls, except) {
+    const used = new Set();
+    ls.exercises.forEach(function (e) { if (e === except) return; (e.chunkIds || [e.chunkId]).forEach(function (id) { used.add(id); }); });
+    return used;
+  }
+  /** Candidati per un esercizio: passaggi nell'intervallo scelto, oppure chunk singoli (auto). Ordinati per tempo. */
+  function candidatesFor(ls, ex) {
+    const used = usedChunkIds(ls, ex);
+    if (ex.range) {
+      return G.passages(ls.chunks || [], { min: ex.range[0], max: ex.range[1], lang: ls.lang })
+        .filter(function (p) { return !p.cta && (p.startsSentence || p.endsSentence) && !p.chunkIds.some(function (id) { return used.has(id); }); })
+        .sort(function (a, b) { return b.score - a.score; }).slice(0, 60)
+        .sort(function (a, b) { return a.start - b.start; });
+    }
+    return (ls.chunks || []).filter(function (c) { return !c.silence && c.exScore > 0 && !c.cta && !used.has(c.id); })
+      .sort(function (a, b) { return b.exScore - a.exScore; }).slice(0, 60)
+      .sort(function (a, b) { return a.start - b.start; })
+      .map(function (c) { return { start: c.start, end: c.end, text: c.text, chunkIds: [c.id], wordCount: c.wordCount, chunk: c }; });
+  }
+  function applyCandidate(ls, ex, p) {
+    const nx = p.chunk ? G.makeExercise(p.chunk, ex.type, { lang: ls.lang, seed: Date.now() % 1000, source: 'rules' })
+      : G.makeExerciseFromPassage(p, ex.type, { lang: ls.lang, seed: Date.now() % 1000, source: 'rules', range: ex.range });
+    if (!nx) return toast('Frase non adatta a questo tipo di esercizio');
+    ex.chunkId = nx.chunkId; ex.chunkIds = nx.chunkIds || [nx.chunkId]; ex.sentence = nx.sentence; ex.segment = nx.segment; ex.markerTime = nx.markerTime; ex.type = nx.type; ex.data = nx.data; ex.source = 'rules'; ex.note = '';
+    sortExercises(ls); touch(ls); renderEditorBody();
+    const card = $('#ex-' + ex.id); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
   function altSentence(ls, ex) {
+    if (ex.range) {
+      const used = usedChunkIds(ls, ex);
+      (ex.chunkIds || [ex.chunkId]).forEach(function (id) { used.add(id); });
+      const alts = G.passagesNear(ls.chunks || [], ex.markerTime, { exclude: used, type: ex.type, lang: ls.lang, window: 90, range: ex.range }).filter(function (p) { return !p.cta; });
+      if (!alts.length) return toast('Nessun\'altra frase di questa lunghezza nei dintorni: allarga l\'intervallo o scegli dall\'elenco');
+      const k = (S.editor.altIdx[ex.id] || 0) % alts.length;
+      S.editor.altIdx[ex.id] = k + 1;
+      return applyCandidate(ls, ex, alts[k]);
+    }
     const used = new Set(ls.exercises.filter(function (e) { return e !== ex; }).map(function (e) { return e.chunkId; }));
     used.add(ex.chunkId);
     const alts = G.alternatives(ls.chunks || [], ex.markerTime, { exclude: used, type: ex.type, lang: ls.lang, window: 75 });
@@ -734,6 +804,7 @@
     $('#r-target').value = fmtMin(p.target || ls.duration);
     $$('#r-types input').forEach(function (i) { i.checked = !p.types || p.types.indexOf(i.value) !== -1; });
     $('#r-ai').checked = !!S.settings.apiKey && (p.ai !== false);
+    $('#r-words').value = rangeKey(p.range);
     $('#r-focus').value = p.focus || '';
     $('#dlg-regen').showModal();
   });
@@ -744,7 +815,7 @@
     if (!types.length) return toast('Scegli almeno un tipo');
     let target = L.parseTime($('#r-target').value);
     if (isNaN(target) || target <= 0 || target > ls.duration) target = ls.duration;
-    ls.params = Object.assign({}, ls.params, { n: Math.max(1, parseInt($('#r-n').value, 10) || 10), target: target, types: types, ai: $('#r-ai').checked, focus: $('#r-focus').value.trim() });
+    ls.params = Object.assign({}, ls.params, { n: Math.max(1, parseInt($('#r-n').value, 10) || 10), target: target, types: types, range: G.RANGES[$('#r-words').value] || null, ai: $('#r-ai').checked, focus: $('#r-focus').value.trim() });
     $('#dlg-regen').close();
     overlay(true, 'Rigenero la bozza…');
     generate(ls, ls.params.ai).then(function () { overlay(false); renderEditorBody(); toast('Bozza rigenerata'); })

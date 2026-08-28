@@ -397,6 +397,106 @@
     return picks.filter(function (p) { return p.chunk; }).sort(function (a, b) { return a.chunk.start - b.chunk.start; });
   }
 
+  // ---------- 4b. Passaggi di lunghezza scelta (più chunk consecutivi) ----------
+
+  const RANGES = { auto: null, '5-10': [5, 10], '10-15': [10, 15], '15-20': [15, 20], '20-30': [20, 30], '30-40': [30, 40], '40-60': [40, 60] };
+
+  function startsSentence(chunks, i) {
+    const c = chunks[i], prev = chunks[i - 1];
+    if (!prev || prev.silence) return true;
+    if (L.endsWithPunct(prev.text)) return true;
+    const first = c.text.charAt(0);
+    return first !== first.toLowerCase();
+  }
+
+  /**
+   * Tutti i passaggi (sequenze di chunk consecutivi, senza silenzi in mezzo) con un numero di parole nell'intervallo [min,max].
+   * Ogni passaggio: { start, end, text, chunkIds, wordCount, score, startsSentence, endsSentence }.
+   */
+  function passages(chunks, opts) {
+    const o = Object.assign({ min: 5, max: 20, lang: 'it', maxGap: 1.5, exclude: null }, opts || {});
+    const out = [];
+    const mid = (o.min + o.max) / 2;
+    for (let i = 0; i < chunks.length; i++) {
+      const ci = chunks[i];
+      if (ci.silence || (o.exclude && o.exclude.has(ci.id))) continue;
+      let words = 0, sc = 0, ids = [], texts = [], end = ci.end;
+      for (let j = i; j < chunks.length; j++) {
+        const cj = chunks[j];
+        if (cj.silence || (o.exclude && o.exclude.has(cj.id))) break;
+        if (j > i && cj.start - chunks[j - 1].end > o.maxGap) break;
+        words += cj.wordCount; sc += (cj.exScore || 0) * cj.wordCount; ids.push(cj.id); texts.push(cj.text); end = cj.end;
+        if (words > o.max) break;
+        if (words >= o.min) {
+          const endsS = L.endsWithPunct(cj.text);
+          const startsS = startsSentence(chunks, i);
+          let score = (sc / Math.max(1, words)) * (startsS ? 1.3 : 0.8) * (endsS ? 1.3 : 0.7) * (1 - 0.3 * Math.abs(words - mid) / Math.max(1, o.max - o.min));
+          if (ids.length > 1 && !endsS) score *= 0.8;
+          out.push({ start: ci.start, end: end, text: texts.join(' '), chunkIds: ids.slice(), wordCount: words, score: score, startsSentence: startsS, endsSentence: endsS, cta: ids.some(function (id) { return chunks.find(function (c) { return c.id === id; }).cta; }) });
+          if (endsS && words >= mid) break; // fermati alla prima chiusura di frase oltre il centro dell'intervallo
+        }
+      }
+    }
+    out.forEach(function (p) { if (p.cta) p.score *= 0.1; });
+    return out.sort(function (a, b) { return a.start - b.start; });
+  }
+
+  function typeFitRange(type, p, lang) {
+    let f = 1;
+    const toks = L.tokenize(p.text);
+    if (type === 'wrong' && !toks.some(function (t) { return L.swapFor(t.core, lang); })) f *= 0.15;
+    if (type === 'gap' && !toks.some(function (t) { return L.isContent(t.core, lang); })) f *= 0.1;
+    if (type === 'scramble' && p.wordCount > 14) f *= 0.5;
+    return f;
+  }
+
+  /** Selezione di n passaggi nell'intervallo di parole scelto, distribuiti lungo il video. */
+  function selectPassages(chunks, params) {
+    const n = Math.max(1, params.n | 0);
+    const types = (params.types && params.types.length ? params.types : ALL_TYPES);
+    const lang = params.lang || 'it';
+    const D = params.duration || chunks[chunks.length - 1].end;
+    const range = params.range;
+    const cands = passages(chunks, { min: range[0], max: range[1], lang: lang, exclude: params.exclude || null });
+    const usedIds = new Set();
+    const picks = [];
+    const binW = D / n;
+    for (let k = 0; k < n; k++) {
+      const lo = k * binW, hi = (k + 1) * binW;
+      const type = types[k % types.length];
+      let best = null, bestS = -1;
+      for (const p of cands) {
+        const m = (p.start + p.end) / 2;
+        if (m < lo || m >= hi) continue;
+        if (p.chunkIds.some(function (id) { return usedIds.has(id); })) continue;
+        const sc = p.score * typeFitRange(type, p, lang);
+        if (sc > bestS) { bestS = sc; best = p; }
+      }
+      if (best) { best.chunkIds.forEach(function (id) { usedIds.add(id); }); picks.push({ bin: k, passage: best, type: type }); }
+    }
+    return picks.sort(function (a, b) { return a.passage.start - b.passage.start; });
+  }
+
+  /** Passaggi alternativi vicino a un tempo, nell'intervallo scelto (per "altra frase" e per l'helper). */
+  function passagesNear(chunks, time, opts) {
+    const o = Object.assign({ window: 75, exclude: new Set(), type: 'gap', lang: 'it', range: [5, 20] }, opts || {});
+    return passages(chunks, { min: o.range[0], max: o.range[1], lang: o.lang })
+      .filter(function (p) { return !p.chunkIds.some(function (id) { return o.exclude.has(id); }) && Math.abs((p.start + p.end) / 2 - time) <= o.window; })
+      .sort(function (a, b) { return b.score * typeFitRange(o.type, b, o.lang) - a.score * typeFitRange(o.type, a, o.lang); });
+  }
+
+  function makeExerciseFromPassage(p, type, opts) {
+    const lang = opts.lang || 'it';
+    const seed = (opts.seed || 1) * 7919 + p.wordCount;
+    let ex = EX.buildExercise(type, p.text, { lang: lang, seed: seed });
+    if (!ex) {
+      for (const alt of ['gap', 'missing', 'scramble', 'extra', 'wrong']) { if (alt === type) continue; ex = EX.buildExercise(alt, p.text, { lang: lang, seed: seed }); if (ex) break; }
+    }
+    if (!ex) return null;
+    const seg = { start: Math.max(0, p.start - 0.2), end: p.end + 0.35 };
+    return { id: 'e' + p.chunkIds[0] + '-' + Math.floor(Math.random() * 1e6).toString(36), chunkId: p.chunkIds[0], chunkIds: p.chunkIds.slice(), type: ex.type, sentence: p.text, segment: seg, markerTime: seg.end + 0.05, data: ex.data, source: opts.source || 'rules', range: opts.range || null };
+  }
+
   /** Chunk alternativo vicino a un tempo (per "altra frase" nell'editor). */
   function alternatives(chunks, time, opts) {
     const o = Object.assign({ window: 60, exclude: new Set(), type: 'gap', lang: 'it' }, opts || {});
@@ -580,12 +680,19 @@
     const types = params.types && params.types.length ? params.types : ALL_TYPES.slice();
     const target = params.target && params.target > 0 ? Math.min(params.target, duration) : duration;
 
-    const picks = selectChunks(chunks, { n: n, types: types, lang: lang, duration: duration, exclude: params.exclude });
+    const range = params.range && params.range.length === 2 ? params.range : null;
     const exercises = [];
-    picks.forEach(function (p) {
-      const ex = makeExercise(p.chunk, p.type, { lang: lang, seed: params.seed || 1 });
-      if (ex) exercises.push(ex);
-    });
+    if (range) {
+      selectPassages(chunks, { n: n, types: types, lang: lang, duration: duration, range: range, exclude: params.exclude }).forEach(function (p) {
+        const ex = makeExerciseFromPassage(p.passage, p.type, { lang: lang, seed: params.seed || 1, range: range });
+        if (ex) exercises.push(ex);
+      });
+    } else {
+      selectChunks(chunks, { n: n, types: types, lang: lang, duration: duration, exclude: params.exclude }).forEach(function (p) {
+        const ex = makeExercise(p.chunk, p.type, { lang: lang, seed: params.seed || 1 });
+        if (ex) exercises.push(ex);
+      });
+    }
 
     const result = fitCuts(chunks, exercises, { duration: duration, target: target, tolerance: params.tolerance, contextBefore: params.contextBefore, lang: lang });
     return {
@@ -627,7 +734,8 @@
   }
 
   return {
-    TYPE_RANGES: TYPE_RANGES, ALL_TYPES: ALL_TYPES,
+    TYPE_RANGES: TYPE_RANGES, ALL_TYPES: ALL_TYPES, RANGES: RANGES,
+    passages: passages, selectPassages: selectPassages, passagesNear: passagesNear, makeExerciseFromPassage: makeExerciseFromPassage,
     parseTranscript: parseTranscript, buildChunks: buildChunks, wordTimes: wordTimes, annotate: annotate, wordFreq: wordFreq,
     typeFit: typeFit, selectChunks: selectChunks, alternatives: alternatives, nearestChunk: nearestChunk,
     planCuts: planCuts, keepRanges: keepRanges, effectiveDuration: effectiveDuration, inCut: inCut,
