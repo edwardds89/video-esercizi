@@ -1,0 +1,210 @@
+/* exercises.js — costruzione e correzione dei 5 tipi di esercizio (browser + Node) */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./lang.js'));
+  else root.VLEx = factory(root.VLLang);
+})(typeof self !== 'undefined' ? self : this, function (L) {
+  'use strict';
+
+  const LABELS = {
+    gap: 'Completa gli spazi (fill the gaps)',
+    scramble: 'Riordina la frase (scrambled sentence)',
+    missing: 'Trova la parola mancante (find the missing word)',
+    extra: 'Trova la parola in più (find the extra word)',
+    wrong: 'Trova la parola sbagliata (find the wrong word)'
+  };
+
+  const INSTRUCTIONS = {
+    gap: 'Ascolta e scrivi le parole mancanti.',
+    scramble: 'Tocca le parole nell\'ordine giusto per ricostruire la frase che hai sentito.',
+    missing: 'In questa frase manca una parola rispetto a quello che hai sentito: scrivila.',
+    extra: 'In questa frase c\'è una parola in più rispetto a quello che hai sentito: toccala.',
+    wrong: 'In questa frase c\'è una parola diversa da quella che hai sentito: toccala e scrivi quella giusta.'
+  };
+
+  function shuffle(arr, rand) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function sameSeq(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  function matchCase(sample, word) {
+    if (sample && sample[0] === sample[0].toUpperCase() && sample[0] !== sample[0].toLowerCase()) {
+      return word[0].toUpperCase() + word.slice(1);
+    }
+    return word;
+  }
+
+  function findIndex(tokens, word, from) {
+    const n = L.normalize(word);
+    for (let i = from || 0; i < tokens.length; i++) if (tokens[i].norm === n) return i;
+    return -1;
+  }
+
+  /**
+   * Costruisce un esercizio dal testo di una frase.
+   * opts: { lang, seed, choices } — choices permette a un modello AI (o all'insegnante) di imporre le parole scelte.
+   * Ritorna { type, data } oppure null se il tipo non è applicabile alla frase.
+   */
+  function buildExercise(type, sentence, opts) {
+    const o = Object.assign({ lang: 'it', seed: 1, choices: null }, opts || {});
+    const rand = L.rng(o.seed);
+    const tokens = L.tokenize(sentence);
+    const ch = o.choices || {};
+    if (tokens.length < 3) return null;
+
+    if (type === 'gap') {
+      let idx = [];
+      if (ch.gapWords && ch.gapWords.length) {
+        for (const w of ch.gapWords) { const i = findIndex(tokens, w); if (i !== -1 && idx.indexOf(i) === -1) idx.push(i); }
+      }
+      if (!idx.length) {
+        const cands = tokens.map(function (t, i) { return { i: i, t: t }; })
+          .filter(function (x) { return L.isContent(x.t.core, o.lang); });
+        if (!cands.length) return null;
+        const k = Math.min(cands.length, Math.max(1, Math.min(3, 1 + Math.floor(tokens.length / 8))));
+        const scored = cands.map(function (x) { return { i: x.i, s: x.t.core.length + rand() * 3 }; }).sort(function (a, b) { return b.s - a.s; });
+        for (const c of scored) {
+          if (idx.length >= k) break;
+          if (idx.some(function (j) { return Math.abs(j - c.i) <= 1; })) continue;
+          idx.push(c.i);
+        }
+        if (!idx.length) idx.push(scored[0].i);
+      }
+      idx.sort(function (a, b) { return a - b; });
+      const answers = idx.map(function (i) { return tokens[i].core; });
+      return {
+        type: 'gap',
+        data: { tokens: tokens.map(function (t) { return t.raw; }), gapIndices: idx, answers: answers, wordBank: shuffle(answers, rand) }
+      };
+    }
+
+    if (type === 'scramble') {
+      if (tokens.length > 14) return null;
+      const words = tokens.map(function (t, i) {
+        let w = t.core;
+        if (i === 0 && w.length > 1 && w.slice(1) === w.slice(1).toLowerCase()) w = w[0].toLowerCase() + w.slice(1);
+        return w;
+      }).filter(Boolean);
+      if (words.length < 3) return null;
+      let sh = shuffle(words, rand), tries = 0;
+      while (sameSeq(sh, words) && tries++ < 10) sh = shuffle(words, rand);
+      if (sameSeq(sh, words)) sh = words.slice().reverse();
+      return { type: 'scramble', data: { words: words, shuffled: sh } };
+    }
+
+    if (type === 'missing') {
+      let i = -1;
+      if (ch.missingWord) i = findIndex(tokens, ch.missingWord);
+      if (i === -1) {
+        const cands = tokens.map(function (t, j) { return j; }).filter(function (j) {
+          return j > 0 && j < tokens.length - 1 && L.isContent(tokens[j].core, o.lang);
+        });
+        if (!cands.length) return null;
+        i = cands[Math.floor(rand() * cands.length)];
+      }
+      return { type: 'missing', data: { tokens: tokens.map(function (t) { return t.raw; }), missingIndex: i, answer: tokens[i].core } };
+    }
+
+    if (type === 'extra') {
+      const list = L.extraCandidates(o.lang);
+      let word = ch.extraWord ? String(ch.extraWord).trim() : '';
+      let p = -1;
+      if (ch.extraAfter != null) {
+        if (typeof ch.extraAfter === 'number') p = ch.extraAfter + 1;
+        else { const j = findIndex(tokens, ch.extraAfter); if (j !== -1) p = j + 1; }
+      }
+      if (!word || p < 1 || p > tokens.length - 1) {
+        let tries = 0;
+        do {
+          word = list[Math.floor(rand() * list.length)];
+          p = 1 + Math.floor(rand() * (tokens.length - 1));
+          tries++;
+        } while (tries < 30 && (tokens[p - 1].norm === L.normalize(word) || (tokens[p] && tokens[p].norm === L.normalize(word))));
+      }
+      const shown = tokens.map(function (t) { return t.raw; });
+      shown.splice(p, 0, word);
+      return { type: 'extra', data: { shown: shown, extraIndex: p, extraWord: word, original: tokens.map(function (t) { return t.raw; }) } };
+    }
+
+    if (type === 'wrong') {
+      let i = -1, repl = null;
+      if (ch.wrongWord) {
+        i = findIndex(tokens, ch.wrongWord);
+        if (i !== -1) repl = ch.wrongReplacement ? String(ch.wrongReplacement).trim() : L.swapFor(tokens[i].core, o.lang);
+        if (i !== -1 && repl && L.normalize(repl) === tokens[i].norm) repl = null;
+        if (!repl) i = -1;
+      }
+      if (i === -1) {
+        const cands = tokens.map(function (t, j) { return j; }).filter(function (j) { return L.swapFor(tokens[j].core, o.lang); });
+        if (!cands.length) return null;
+        const mid = cands.filter(function (j) { return j > 0 && j < tokens.length - 1; });
+        const pool = mid.length ? mid : cands;
+        i = pool[Math.floor(rand() * pool.length)];
+        repl = L.swapFor(tokens[i].core, o.lang);
+      }
+      const shown = tokens.map(function (t) { return t.raw; });
+      shown[i] = tokens[i].pre + matchCase(tokens[i].core, repl) + tokens[i].post;
+      return { type: 'wrong', data: { shown: shown, wrongIndex: i, wrongWord: repl, answer: tokens[i].core, original: tokens.map(function (t) { return t.raw; }) } };
+    }
+    return null;
+  }
+
+  function eq(a, b, strict) {
+    const opts = { accents: !!strict };
+    return L.normalize(a, opts) === L.normalize(b, opts);
+  }
+
+  /** Corregge una risposta. Ritorna { correct, detail }. */
+  function check(exercise, answer, opts) {
+    const strict = !!(opts && opts.strict);
+    const d = exercise.data;
+    switch (exercise.type) {
+      case 'gap': {
+        const arr = Array.isArray(answer) ? answer : [answer];
+        const per = d.answers.map(function (a, i) { return eq(arr[i] || '', a, strict); });
+        return { correct: per.every(Boolean), detail: per };
+      }
+      case 'scramble': {
+        const arr = Array.isArray(answer) ? answer : String(answer || '').split(/\s+/);
+        const got = arr.map(function (w) { return L.normalize(w, { accents: strict }); });
+        const want = d.words.map(function (w) { return L.normalize(w, { accents: strict }); });
+        return { correct: sameSeq(got, want), detail: got.map(function (w, i) { return w === want[i]; }) };
+      }
+      case 'missing':
+        return { correct: eq(answer || '', d.answer, strict), detail: null };
+      case 'extra':
+        return { correct: Number(answer) === d.extraIndex, detail: null };
+      case 'wrong': {
+        const a = answer || {};
+        const okIdx = Number(a.index) === d.wrongIndex;
+        const okWord = eq(a.correction || '', d.answer, strict);
+        return { correct: okIdx && okWord, detail: { index: okIdx, word: okWord } };
+      }
+    }
+    return { correct: false, detail: null };
+  }
+
+  /** Testo "soluzione" leggibile. */
+  function solution(exercise) {
+    const d = exercise.data;
+    switch (exercise.type) {
+      case 'gap': return d.answers.join(', ');
+      case 'scramble': return d.words.join(' ');
+      case 'missing': return d.answer;
+      case 'extra': return d.extraWord;
+      case 'wrong': return d.wrongWord + ' → ' + d.answer;
+    }
+    return '';
+  }
+
+  return { LABELS: LABELS, INSTRUCTIONS: INSTRUCTIONS, buildExercise: buildExercise, check: check, solution: solution, shuffle: shuffle };
+});

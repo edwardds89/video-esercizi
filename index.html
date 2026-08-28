@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Esercizi</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">▶ Video Esercizi</div>
+  <nav id="nav">
+    <button data-view="home">Le mie lezioni</button>
+    <button data-view="new" class="primary">Nuova lezione</button>
+    <button id="btn-settings">Impostazioni AI</button>
+  </nav>
+</header>
+
+<main>
+  <!-- HOME -->
+  <section id="view-home" class="view">
+    <h1>Le mie lezioni</h1>
+    <div class="card">
+      <div id="lesson-list" class="lesson-list"></div>
+      <div class="row" style="margin-top:12px">
+        <button data-view="new" class="primary">+ Nuova lezione</button>
+        <label for="import-file" class="chip" style="margin:0">Importa JSON…</label>
+        <input id="import-file" type="file" accept="application/json,.json" class="sr">
+        <button id="btn-demo">Crea lezione demo (player finto)</button>
+      </div>
+      <p class="hint">Le lezioni sono salvate in questo browser. Per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
+    </div>
+  </section>
+
+  <!-- NUOVA LEZIONE -->
+  <section id="view-new" class="view">
+    <h1 id="new-title">Nuova lezione</h1>
+    <div class="card">
+      <div class="grid2">
+        <div>
+          <label>Link del video YouTube</label>
+          <input id="f-url" type="url" placeholder="https://www.youtube.com/watch?v=…">
+          <div id="f-video-status" class="hint">Incolla il link: controllo che il video esista e che si possa incorporare.</div>
+          <label>Titolo</label>
+          <input id="f-title" type="text" placeholder="Es. Come funziona Neuralink">
+          <div class="grid2">
+            <div><label>Lingua del video</label>
+              <select id="f-lang"><option value="it">Italiano</option><option value="en">Inglese</option></select></div>
+            <div><label>Livello degli studenti</label>
+              <select id="f-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option></select></div>
+          </div>
+          <div class="grid2">
+            <div><label>Numero di esercizi</label><input id="f-n" type="number" min="1" max="40" value="10"></div>
+            <div><label>Durata finale desiderata (mm:ss)</label><input id="f-target" type="text" placeholder="es. 10:00 — vuoto = nessun taglio">
+              <div id="f-duration-hint" class="hint"></div></div>
+          </div>
+          <label>Tipi di esercizio</label>
+          <div class="chips" id="f-types">
+            <label class="chip"><input type="checkbox" value="gap" checked> Fill the gaps</label>
+            <label class="chip"><input type="checkbox" value="scramble" checked> Scrambled sentence</label>
+            <label class="chip"><input type="checkbox" value="missing" checked> Missing word</label>
+            <label class="chip"><input type="checkbox" value="extra" checked> Extra word</label>
+            <label class="chip"><input type="checkbox" value="wrong" checked> Wrong word</label>
+          </div>
+          <label>Generazione</label>
+          <div class="row">
+            <label class="chip" style="margin:0"><input type="checkbox" id="f-ai"> Usa l'AI (Claude) per scegliere frasi e tagli</label>
+            <span id="f-ai-status" class="hint"></span>
+          </div>
+          <label>Indicazioni per l'AI (facoltative)</label>
+          <input id="f-focus" type="text" placeholder="Es. privilegia il lessico del corpo umano; evita i numeri">
+          <label>Secondi di contesto da tenere prima di ogni frase (solo regole)</label>
+          <input id="f-ctx" type="number" min="0" max="120" value="25" class="short">
+        </div>
+        <div>
+          <div id="f-player" class="player-box"></div>
+          <label>Trascrizione con i tempi</label>
+          <textarea id="f-transcript" style="min-height:260px" placeholder="0:00&#10;ciao a tutti&#10;0:03&#10;oggi parliamo di…"></textarea>
+          <div class="hint">Su YouTube: sotto il video apri la descrizione → <b>Mostra trascrizione</b> → seleziona tutto il testo del pannello → copia → incolla qui. Vanno bene anche file .srt / .vtt.</div>
+          <div id="f-transcript-status" class="hint"></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:16px">
+        <button id="btn-generate" class="primary big">Genera la bozza</button>
+        <button data-view="home">Annulla</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- EDITOR -->
+  <section id="view-editor" class="view">
+    <div class="editor-top">
+      <div class="row" style="margin-bottom:8px">
+        <input id="e-title" type="text" class="grow" style="font-size:18px;font-weight:600">
+        <button id="btn-student" class="primary">▶ Modalità studente</button>
+        <button id="btn-share">Link studente</button>
+        <button id="btn-export">Esporta JSON</button>
+        <button id="btn-regenerate">Rigenera bozza…</button>
+        <button id="btn-delete" class="danger">Elimina</button>
+      </div>
+      <div id="e-player" class="player-box"></div>
+      <div id="e-timeline" class="timeline"></div>
+      <div class="row">
+        <div id="e-stats" class="kv"></div>
+        <label class="chip right" style="margin:0"><input type="checkbox" id="e-skip" checked> Applica i tagli in anteprima</label>
+        <span id="e-saved" class="hint"></span>
+      </div>
+    </div>
+    <div id="e-warnings"></div>
+    <div id="e-ai-notes"></div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Esercizi</h2>
+        <button id="btn-add-ex" class="small right">+ Esercizio al tempo corrente</button></div>
+      <p class="hint">Trascina i numeri sulla linea del tempo per spostare i segnaposto. "Ascolta" riproduce solo la frase. "Altra frase" propone la successiva migliore vicino allo stesso punto.</p>
+      <div id="e-exercises"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Parti tagliate (salti)</h2>
+        <button id="btn-add-cut" class="small right">+ Taglio dal tempo corrente</button></div>
+      <div id="e-cuts"></div>
+    </div>
+    <div class="card">
+      <h2>Opzioni per lo studente</h2>
+      <div class="row">
+        <label class="chip" style="margin:0"><input type="checkbox" id="e-wordbank" checked> Mostra la banca di parole negli spazi</label>
+        <label class="chip" style="margin:0"><input type="checkbox" id="e-strict"> Accenti obbligatori nelle risposte</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- STUDENTE -->
+  <section id="view-student" class="view">
+    <div class="row" style="margin-bottom:8px">
+      <h1 id="s-title" style="margin:0" class="grow"></h1>
+      <button id="btn-back-editor" class="small">← Editor</button>
+    </div>
+    <div class="student-layout">
+      <div>
+        <div id="s-player" class="player-box"></div>
+        <div id="s-timeline" class="timeline"></div>
+        <div id="s-progress" class="progress"></div>
+      </div>
+      <div id="s-panel" class="ex-panel"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg-settings">
+  <h2>Impostazioni AI</h2>
+  <p class="hint">La chiave resta salvata solo in questo browser e viene inviata direttamente ad Anthropic quando generi una bozza. I link per gli studenti non la contengono. Non incollarla mai nel codice del repo.</p>
+  <label>Chiave API Anthropic</label>
+  <input id="set-key" type="password" placeholder="sk-ant-…" autocomplete="off">
+  <label>Modello</label>
+  <select id="set-model">
+    <option value="claude-sonnet-5">claude-sonnet-5 (consigliato, ~2-4 cent a video)</option>
+    <option value="claude-haiku-4-5-20251001">claude-haiku-4-5 (più economico, meno preciso)</option>
+    <option value="claude-opus-5">claude-opus-5 (più costoso)</option>
+  </select>
+  <div id="set-status" class="hint" style="margin-top:8px"></div>
+  <div class="row" style="margin-top:14px">
+    <button id="set-test">Prova la chiave</button>
+    <button id="set-save" class="primary">Salva</button>
+    <button id="set-close">Chiudi</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-share">
+  <h2>Link per gli studenti</h2>
+  <p><b>1. Link con i dati inclusi</b> — funziona subito, da qualsiasi hosting; è lungo ma va bene per WhatsApp / Classroom.</p>
+  <div id="share-hash" class="linkbox"></div>
+  <div class="row" style="margin:6px 0 14px"><button id="share-copy-hash" class="small">Copia</button></div>
+  <p><b>2. File nel repo</b> — salva il JSON in <code>lessons/</code> del repo e usa il link corto:</p>
+  <div id="share-file" class="linkbox"></div>
+  <div class="row" style="margin:6px 0 14px"><button id="share-download" class="small">Scarica il JSON</button><button id="share-copy-file" class="small">Copia il link</button></div>
+  <div class="row"><button id="share-close">Chiudi</button></div>
+</dialog>
+
+<dialog id="dlg-regen">
+  <h2>Rigenera la bozza</h2>
+  <p class="hint">Sostituisce esercizi e tagli attuali con una nuova proposta (la trascrizione resta).</p>
+  <div class="grid2">
+    <div><label>Numero di esercizi</label><input id="r-n" type="number" min="1" max="40" value="10"></div>
+    <div><label>Durata finale (mm:ss)</label><input id="r-target" type="text"></div>
+  </div>
+  <label>Tipi</label>
+  <div class="chips" id="r-types">
+    <label class="chip"><input type="checkbox" value="gap" checked> Fill the gaps</label>
+    <label class="chip"><input type="checkbox" value="scramble" checked> Scrambled</label>
+    <label class="chip"><input type="checkbox" value="missing" checked> Missing word</label>
+    <label class="chip"><input type="checkbox" value="extra" checked> Extra word</label>
+    <label class="chip"><input type="checkbox" value="wrong" checked> Wrong word</label>
+  </div>
+  <div class="row" style="margin-top:8px"><label class="chip" style="margin:0"><input type="checkbox" id="r-ai"> Usa l'AI</label></div>
+  <label>Indicazioni per l'AI</label>
+  <input id="r-focus" type="text">
+  <div class="row" style="margin-top:14px"><button id="r-go" class="primary">Rigenera</button><button id="r-close">Annulla</button></div>
+</dialog>
+
+<div id="overlay"><div><div class="spinner"></div><div id="overlay-text">Generazione in corso…</div></div></div>
+<div id="toast"></div>
+
+<script src="lang.js"></script>
+<script src="exercises.js"></script>
+<script src="generator.js"></script>
+<script src="ai.js"></script>
+<script src="demo-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
