@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Concept "Riascolta": anello di replay (bianco) attorno al play (arancione = colore dei segnaposto) -->
+  <circle cx="32" cy="32" r="30" fill="#1f6feb"/>
+  <path d="M46.5 20.5A19 19 0 1 0 51 32" fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M50.5 12.5v11h-11z" fill="#ffffff"/>
+  <path d="M27 22.5l15 9.5-15 9.5z" fill="#ff8a00"/>
+</svg>
