@@ -7,7 +7,7 @@
 
   const DEFAULT_MODEL = 'claude-sonnet-5';
   const PRICES = { 'claude-sonnet-5': [2, 10], 'claude-haiku-4-5-20251001': [1, 5], 'claude-opus-5': [5, 25] };
-  const TYPE_NAMES = { gap: 'gap', scramble: 'scramble', missing: 'missing', extra: 'extra', wrong: 'wrong' };
+  const TYPE_NAMES = { gap: 'gap', gapbank: 'gapbank', scramble: 'scramble', missing: 'missing', extra: 'extra', wrong: 'wrong' };
 
   function fmtChunks(chunks) {
     return chunks.filter(function (c) { return !c.silence; }).map(function (c) {
@@ -16,24 +16,26 @@
   }
 
   function buildMessages(p) {
-    const n = p.n, types = p.types && p.types.length ? p.types : G.ALL_TYPES;
+    const n = p.n, types = p.types && p.types.length ? p.types : G.DEFAULT_TYPES;
     const system = 'You help a language teacher turn a YouTube video transcript into an interactive listening lesson. ' +
       'You receive the transcript split into chunks (id|start seconds|end seconds|text). Output ONLY a JSON object that follows the schema; no prose, no markdown fences.';
     const lines = [];
     lines.push('TRANSCRIPT LANGUAGE: ' + (p.lang || 'it') + '   STUDENT LEVEL (CEFR): ' + (p.level || 'B1'));
     lines.push('NUMBER OF EXERCISES: ' + n + '   ALLOWED TYPES: ' + types.join(', '));
-    if (p.range && p.range.length === 2) lines.push('SENTENCE LENGTH: between ' + p.range[0] + ' and ' + p.range[1] + ' words for every exercise (a passage may span several consecutive chunks; this overrides the per-type ranges below).');
+    if (p.range === 'smart') lines.push('SENTENCE LENGTH: gap 22-32 words, gapbank 18-30, scramble 7-12, missing/extra/wrong 10-20 (a passage may span several consecutive chunks).');
+    else if (p.range && p.range.length === 2) lines.push('SENTENCE LENGTH: between ' + p.range[0] + ' and ' + p.range[1] + ' words for every exercise (a passage may span several consecutive chunks; this overrides the per-type ranges below).');
     lines.push('VIDEO DURATION: ' + Math.round(p.duration) + 's   TARGET KEPT DURATION: ' + Math.round(p.target) + 's' +
       (p.target < p.duration - 5 ? ' (skip about ' + Math.round(p.duration - p.target) + 's)' : ' (no cuts needed)'));
     if (p.focus) lines.push('TEACHER NOTES / FOCUS: ' + p.focus);
     lines.push('');
     lines.push('TASKS');
     lines.push('1. Choose exactly ' + n + ' sentences for listening exercises, spread across the video (about one per equal time slice). ' +
-      'Prefer complete, self-contained sentences with vocabulary useful for the level. Avoid intros, greetings, sponsor segments, calls to action and the last 30 seconds. ' +
+      'Every sentence must be COMPLETE and self-contained: it starts where a sentence starts (capital letter) and ends with its final punctuation; it may contain two short sentences. Prefer vocabulary useful for the level. Avoid intros, greetings, sponsor segments, calls to action and the last 30 seconds. ' +
       'A sentence must be a CONTIGUOUS part of one chunk, or the end of one chunk plus the start of the next chunk. Give it in "sentence" with exactly the same words in the same order: ' +
       'you may add punctuation and capital letters, but never change, add, remove or reorder words. Reference the chunk id where the sentence starts in "chunk".');
     lines.push('2. Assign each sentence one type, rotating through the allowed types so each is used, with these constraints: ' +
-      'gap = 7-20 words, list 1-3 content words to blank in "gaps" (exact words from the sentence); ' +
+      'gap = 18-40 words (about 25-30 is ideal), list 3-5 content words to blank in "gaps" (exact words from the sentence, not adjacent, not the first word); ' +
+      'gapbank = 12-30 words, same as gap but the student gets a word bank: list 3-4 "gaps" and 2 plausible wrong words from the video in "distractors"; ' +
       'scramble = 5-10 words; ' +
       'missing = 6-14 words, give the word to remove in "missing"; ' +
       'extra = 6-14 words, give a function word to insert and the word it comes after in "extra": {"word","after"}; ' +
@@ -44,7 +46,7 @@
     lines.push('4. Give a short lesson "title" in the transcript language.');
     lines.push('');
     lines.push('OUTPUT SCHEMA (JSON only):');
-    lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"notes":"..."}');
+    lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"notes":"..."}');
     lines.push('Include only the fields relevant to each exercise type.');
     lines.push('');
     lines.push('TRANSCRIPT CHUNKS (id|start|end|text):');
@@ -137,7 +139,8 @@
   /** Applica il piano del modello: costruisce esercizi e tagli validi, completa con le regole dove serve. */
   function applyPlan(plan, ctx) {
     const chunks = ctx.chunks, lang = ctx.lang || 'it', D = ctx.duration, target = ctx.target || D;
-    const n = ctx.n, types = ctx.types && ctx.types.length ? ctx.types : G.ALL_TYPES;
+    const n = ctx.n, types = ctx.types && ctx.types.length ? ctx.types : G.DEFAULT_TYPES;
+    const vocab = G.vocabulary(chunks, lang);
     const byId = {};
     chunks.forEach(function (c, i) { byId[c.id] = c; c._idx = i; });
     const warnings = [];
@@ -161,8 +164,10 @@
         loc = { chunkIds: [c.id], tokens: c.tokens, start: c.start, end: c.end };
         sentenceText = c.text;
       }
+      sentenceText = G.capFirst(sentenceText);
       const choices = {
         gapWords: Array.isArray(pe.gaps) ? pe.gaps : null,
+        distractors: Array.isArray(pe.distractors) ? pe.distractors : null,
         missingWord: pe.missing || null,
         extraWord: pe.extra && pe.extra.word ? pe.extra.word : null,
         extraAfter: pe.extra && pe.extra.after != null ? pe.extra.after : null,
@@ -170,9 +175,9 @@
         wrongReplacement: pe.wrong && pe.wrong.replacement ? pe.wrong.replacement : null
       };
       const seed = 1000 + i;
-      let ex = EX.buildExercise(type, sentenceText, { lang: lang, seed: seed, choices: choices });
+      let ex = EX.buildExercise(type, sentenceText, { lang: lang, seed: seed, choices: choices, vocab: vocab });
       if (!ex) {
-        for (const alt of types) { if (alt === type) continue; ex = EX.buildExercise(alt, sentenceText, { lang: lang, seed: seed }); if (ex) break; }
+        for (const alt of types) { if (alt === type) continue; ex = EX.buildExercise(alt, sentenceText, { lang: lang, seed: seed, vocab: vocab }); if (ex) break; }
         if (ex) warnings.push('Esercizio AI ' + (i + 1) + ': tipo "' + type + '" non applicabile, usato "' + ex.type + '".');
       }
       if (!ex) { warnings.push('Esercizio AI ' + (i + 1) + ': frase troppo corta, saltato.'); return; }
@@ -209,7 +214,7 @@
         if (exercises.length >= n) break;
         const mid = (p.chunk.start + p.chunk.end) / 2;
         if (exercises.some(function (e) { return Math.abs(e.markerTime - mid) < minDist; })) continue;
-        const ex = G.makeExercise(p.chunk, p.type, { lang: lang, seed: 77, source: 'rules' });
+        const ex = G.makeExercise(p.chunk, p.type, { lang: lang, seed: 77, source: 'rules', vocab: vocab });
         if (ex) { exercises.push(ex); used.add(p.chunk.id); }
       }
       warnings.push('Il modello ha proposto meno esercizi del richiesto: completati con le regole.');

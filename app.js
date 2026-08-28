@@ -46,7 +46,7 @@
   const S = {
     lessons: {}, currentId: null, view: 'home', player: null, loop: null, mock: false, speed: 1, standalone: false,
     settings: { apiKey: '', model: AI.DEFAULT_MODEL },
-    editor: { replay: null, altIdx: {} },
+    editor: { replay: null, altIdx: {}, previewId: null, focusKey: null },
     student: null
   };
   function loadState() {
@@ -151,7 +151,8 @@
     container.appendChild(div);
     return loadYT().then(function (YT) {
       return new Promise(function (resolve) {
-        const vars = { rel: 0, playsinline: 1, modestbranding: 1, controls: 1 };
+        // cc_load_policy: 3 (non documentato) = sottotitoli spenti all'avvio; iv_load_policy: 3 = niente annotazioni
+        const vars = { rel: 0, playsinline: 1, modestbranding: 1, controls: 1, cc_load_policy: 3, iv_load_policy: 3 };
         if (/^https?:/.test(location.protocol)) vars.origin = location.origin;
         const p = new YT.Player(div, {
           width: '100%', height: '100%', videoId: videoId, playerVars: vars,
@@ -165,10 +166,18 @@
       });
     });
   }
-  /** Sottotitoli di YouTube spenti: sono esercizi di ascolto (il modulo può ricaricarsi all'avvio, quindi si ripete al PLAYING). */
+  /**
+   * Sottotitoli di YouTube spenti: sono esercizi di ascolto. Si azzera la traccia con setOption (il modo previsto dall'API),
+   * più volte dopo l'avvio perché il modulo sottotitoli viene caricato solo quando il video parte.
+   * (unloadModule non va usato: lascia il pulsante CC in uno stato incoerente e i sottotitoli possono restare visibili.)
+   */
   function hideCaptions(p) {
-    try { p.unloadModule('captions'); } catch (e) { /* ignore */ }
-    try { p.unloadModule('cc'); } catch (e) { /* ignore */ }
+    const off = function () {
+      try { p.setOption('captions', 'track', {}); } catch (e) { /* ignore */ }
+      try { p.setOption('cc', 'track', {}); } catch (e) { /* ignore */ }
+    };
+    off();
+    [300, 1000, 2500, 5000].forEach(function (ms) { setTimeout(off, ms); });
   }
   function ytErrorText(code) {
     if (code === 2) return 'ID del video non valido.';
@@ -191,6 +200,8 @@
   function show(view) {
     S.view = view;
     $$('.view').forEach(function (v) { v.classList.toggle('active', v.id === 'view-' + view); });
+    document.body.className = document.body.className.replace(/\bview-\S+/g, '').trim();
+    document.body.classList.add('view-' + view);
     $$('#nav button[data-view]').forEach(function (b) { b.classList.toggle('primary', b.dataset.view === view && view === 'new'); });
     window.scrollTo(0, 0);
     if (view !== 'editor' && view !== 'student') { stopLoop(); destroyPlayer(); }
@@ -250,7 +261,7 @@
         const ls = JSON.parse(r.result);
         if (!ls || !Array.isArray(ls.exercises)) throw new Error('formato non riconosciuto');
         ls.id = ls.id && !S.lessons[ls.id] ? ls.id : uid();
-        ls.options = ls.options || { wordBank: true, strict: false };
+        ls.options = ls.options || { strict: false, fx: true };
         ls.cuts = ls.cuts || [];
         ls.updatedAt = new Date().toISOString();
         S.lessons[ls.id] = ls; saveLessons(); renderHome(); toast('Lezione importata');
@@ -263,7 +274,7 @@
     if (!window.VL_DEMO) return toast('Dati demo non trovati');
     const parsed = G.parseTranscript(window.VL_DEMO.transcript);
     const ls = newLesson({ title: window.VL_DEMO.title, videoId: 'demo', videoUrl: '', lang: 'it', level: 'B1', lines: parsed.lines, duration: window.VL_DEMO.duration, transcriptRaw: window.VL_DEMO.transcript });
-    ls.params = { n: 8, target: 600, types: G.ALL_TYPES.slice(), contextBefore: 25, ai: false, focus: '' };
+    ls.params = { n: 8, target: 600, types: G.ALL_TYPES.slice(), range: 'smart', contextBefore: 25, ai: false, focus: '' };
     overlay(true, 'Generazione della demo…');
     setTimeout(function () {
       generate(ls, false).then(function () { overlay(false); openEditor(ls.id); });
@@ -272,7 +283,7 @@
 
   function newLesson(base) {
     const ls = Object.assign({ v: 1, id: uid(), title: '', videoId: '', videoUrl: '', lang: 'it', level: 'B1', duration: 0, lines: [], chunks: [], exercises: [], cuts: [],
-      options: { wordBank: true, strict: false }, params: {}, ai: null, warnings: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, base);
+      options: { strict: false, fx: true }, params: {}, ai: null, warnings: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, base);
     S.lessons[ls.id] = ls;
     return ls;
   }
@@ -283,7 +294,7 @@
     const duration = ls.duration;
     if (ls.transcriptRaw) { const rp = G.parseTranscript(ls.transcriptRaw); if (rp.lines.length) ls.lines = rp.lines; }
     const chunks = G.annotate(G.buildChunks(ls.lines, { duration: duration, lang: ls.lang }), { lang: ls.lang, duration: duration });
-    ls.chunks = chunks;
+    ls.chunks = chunks; ls._vocab = null;
     const warnings = [];
     let promise;
     if (useAI && S.settings.apiKey) {
@@ -465,17 +476,24 @@
     const ls = current();
     if (!ls) return renderHome();
     show('editor');
+    closePreview();
     $('#e-title').value = ls.title || '';
-    $('#e-wordbank').checked = ls.options.wordBank !== false;
     $('#e-strict').checked = !!ls.options.strict;
+    $('#e-fx').checked = ls.options.fx !== false;
+    $('#e-lock').checked = !!ls.options.lock;
     createPlayer($('#e-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 5000); } })
       .then(function () { startLoop(); })
       .catch(function (e) { toast('Player non disponibile: ' + e.message, 6000); });
     renderEditorBody();
   }
   $('#e-title').addEventListener('change', function () { const ls = current(); if (ls) { ls.title = $('#e-title').value.trim(); touch(ls); } });
-  $('#e-wordbank').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.wordBank = $('#e-wordbank').checked; touch(ls); } });
+  $('#e-fx').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.fx = $('#e-fx').checked; touch(ls); } });
+  function lessonVocab(ls) {
+    if (!ls._vocab) ls._vocab = G.vocabulary(ls.chunks || [], ls.lang);
+    return ls._vocab;
+  }
   $('#e-strict').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.strict = $('#e-strict').checked; touch(ls); } });
+  $('#e-lock').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.lock = $('#e-lock').checked; touch(ls); } });
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
   $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
@@ -512,15 +530,36 @@
     const t = S.player.time();
     drawCursor($('#e-timeline'), t, ls.duration);
     const rp = S.editor.replay;
-    if (rp) { if (t >= rp.end || S.player.state() === 0) { S.player.pause(); S.editor.replay = null; } return; }
+    if (rp) {
+      // se il seek iniziale non è stato accettato (primo avvio del player YouTube), riprova una volta
+      if (rp.start != null && t < rp.start - 1.5 && Date.now() - rp.at < 4000) { if (!rp.retried) { rp.retried = true; S.player.seek(rp.start); S.player.play(); } return; }
+      if (t >= rp.end || S.player.state() === 0) { S.player.pause(); S.editor.replay = null; }
+      return;
+    }
     if ($('#e-skip').checked && S.player.state() === 1) {
       const c = G.inCut(ls.cuts, t);
-      if (c) S.player.seek(c.end + 0.05);
+      if (c && !ls.exercises.some(function (e) { return e.markerTime >= c.start && e.markerTime <= c.end; })) S.player.seek(c.end + 0.05);
     }
+  }
+  /** Anteprima dell'esercizio nell'area del video, esattamente come la vedrà lo studente. */
+  function openPreview(ls, ex, play) {
+    S.editor.previewId = ex.id;
+    dock('#e-stage', true);
+    if (S.player) { if (play) playSegment(ex.segment); else if (!S.editor.replay) S.player.pause(); }
+    renderExerciseInto($('#e-pop'), ex, {
+      mode: 'preview', lesson: ls, index: ls.exercises.indexOf(ex), total: ls.exercises.length,
+      replay: function (e) { playSegment(e.segment); }, attempts: {},
+      onClose: closePreview
+    });
+  }
+  function closePreview() {
+    S.editor.previewId = null;
+    dock('#e-stage', false);
+    const pop = $('#e-pop'); if (pop) pop.innerHTML = '';
   }
   function playSegment(seg) {
     if (!S.player) return;
-    S.editor.replay = { end: seg.end };
+    S.editor.replay = { start: seg.start, end: seg.end, at: Date.now(), retried: false };
     S.player.seek(seg.start);
     S.player.play();
   }
@@ -528,9 +567,11 @@
   function renderEditorBody() {
     const ls = current(); if (!ls) return;
     renderTimeline($('#e-timeline'), ls, { editable: true, onSeek: function (t) { if (S.player) S.player.seek(t); }, onMarker: function (ex) {
+      openPreview(ls, ex, true);   // anteprima + riproduzione della frase, che si ferma da sola alla fine
       const card = $('#ex-' + ex.id);
       if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(function () { card.classList.remove('flash'); }, 1500); }
     } });
+    if (S.editor.previewId && !ls.exercises.some(function (e) { return e.id === S.editor.previewId; })) closePreview();
     const eff = G.effectiveDuration(ls.cuts, ls.duration);
     $('#e-stats').innerHTML = '';
     $('#e-stats').appendChild(el('span', { html: 'Video: <b>' + fmtMin(ls.duration) + '</b>' }));
@@ -546,6 +587,8 @@
     if (ls.ai && ls.ai.model) {
       an.appendChild(el('div', { class: 'notice info', text: 'Bozza generata con ' + ls.ai.model + (ls.ai.cost != null ? ' · costo stimato ' + (ls.ai.cost * 100).toFixed(1) + ' cent' : '') + (ls.ai.notes ? ' · note del modello: ' + ls.ai.notes : '') }));
     }
+    // anteprima aperta: aggiornala con i dati correnti
+    if (S.editor.previewId) { const pe = ls.exercises.find(function (e) { return e.id === S.editor.previewId; }); if (pe) openPreview(ls, pe, false); }
     // esercizi
     const box = $('#e-exercises'); box.innerHTML = '';
     if (!ls.exercises.length) box.appendChild(el('p', { class: 'muted', text: 'Nessun esercizio. Aggiungine uno dal tempo corrente o rigenera la bozza.' }));
@@ -554,20 +597,38 @@
     const cb = $('#e-cuts'); cb.innerHTML = '';
     if (!ls.cuts.length) cb.appendChild(el('p', { class: 'muted', text: 'Nessun taglio: il video viene mostrato per intero.' }));
     ls.cuts.forEach(function (c, i) { cb.appendChild(renderCutRow(ls, c, i)); });
+    restoreFocus();
   }
 
-  function timeInput(value, onChange) {
-    const inp = el('input', { type: 'text', class: 'short', value: fmt(value) });
+  /** Campo tempo "m:ss.s". Frecce ↑/↓ = ±0,1 s (con Maiusc ±1 s); il fuoco resta sul campo anche dopo il ridisegno. */
+  function timeInput(value, onChange, key) {
+    const inp = el('input', { type: 'text', class: 'short', value: fmt(value), title: 'm:ss.s — frecce ↑↓ = ±0,1 s, con Maiusc ±1 s' });
+    if (key) inp.setAttribute('data-key', key);
     inp.addEventListener('change', function () {
       const t = L.parseTime(inp.value);
       if (isNaN(t)) { inp.value = fmt(value); return toast('Formato tempo: m:ss.s'); }
+      if (key) S.editor.focusKey = key;
       onChange(Math.max(0, t));
+    });
+    inp.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      const base = L.parseTime(inp.value); if (isNaN(base)) return;
+      const step = (e.shiftKey ? 1 : 0.1) * (e.key === 'ArrowUp' ? 1 : -1);
+      if (key) S.editor.focusKey = key;
+      onChange(Math.max(0, Math.round((base + step) * 10) / 10));
     });
     return inp;
   }
+  function restoreFocus() {
+    const k = S.editor.focusKey; if (!k) return;
+    S.editor.focusKey = null;
+    const inp = document.querySelector('[data-key="' + k + '"]');
+    if (inp) { inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { /* ignore */ } }
+  }
 
   function rebuildExercise(ls, ex, type, choices, seed) {
-    const built = EX.buildExercise(type, ex.sentence, { lang: ls.lang, seed: seed || (Date.now() % 100000), choices: choices || null });
+    const built = EX.buildExercise(type, ex.sentence, { lang: ls.lang, seed: seed || (Date.now() % 100000), choices: choices || null, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 });
     if (!built) return false;
     ex.type = built.type; ex.data = built.data;
     return true;
@@ -582,7 +643,7 @@
       touch(ls); renderEditorBody();
     });
     const rangeSel = el('select', { style: 'width:auto', title: 'Lunghezza della frase (parole)' });
-    [['auto', 'lunghezza: auto'], ['5-10', '5-10 parole'], ['10-15', '10-15 parole'], ['15-20', '15-20 parole'], ['20-30', '20-30 parole'], ['30-40', '30-40 parole'], ['40-60', '40-60 parole']].forEach(function (o) {
+    [['smart', 'lunghezza consigliata'], ['auto', 'frase singola'], ['5-10', '5-10 parole'], ['10-15', '10-15 parole'], ['15-20', '15-20 parole'], ['20-30', '20-30 parole'], ['30-40', '30-40 parole'], ['40-60', '40-60 parole']].forEach(function (o) {
       rangeSel.appendChild(el('option', { value: o[0], text: o[1], selected: rangeKey(ex.range) === o[0] ? 'selected' : null }));
     });
     rangeSel.addEventListener('change', function () {
@@ -590,7 +651,7 @@
       // cerca subito la frase migliore di questa lunghezza vicino al punto attuale
       const used = usedChunkIds(ls, ex);
       let best = null;
-      if (ex.range) {
+      if (effRange(ex)) {
         const near = G.passagesNear(ls.chunks || [], ex.markerTime, { exclude: used, type: ex.type, lang: ls.lang, window: 90, range: ex.range }).filter(function (p) { return !p.cta; });
         best = near[0] || null;
         if (!best) { const all = candidatesFor(ls, ex); if (all.length) best = all.reduce(function (a, b) { return Math.abs((b.start + b.end) / 2 - ex.markerTime) < Math.abs((a.start + a.end) / 2 - ex.markerTime) ? b : a; }); }
@@ -603,17 +664,33 @@
     });
     const cands = candidatesFor(ls, ex);
     const helperSel = el('select', { style: 'width:auto;max-width:420px', title: 'Frasi adatte in tutto il video' });
-    helperSel.appendChild(el('option', { value: '', text: (ex.range ? 'Frasi di ' + ex.range[0] + '-' + ex.range[1] + ' parole' : 'Frasi adatte') + ' nel video: ' + cands.length + ' — scegli…' }));
+    const er = effRange(ex);
+    helperSel.appendChild(el('option', { value: '', text: (er ? 'Frasi di ' + er[0] + '-' + er[1] + ' parole' : 'Frasi adatte') + ' nel video: ' + cands.length + ' — scegli…' }));
+    const curNorm = L.normalize(ex.sentence || '');
     cands.forEach(function (p, k) {
-      helperSel.appendChild(el('option', { value: String(k), text: fmtMin(p.start) + ' · ' + p.wordCount + ' parole · ' + (p.text.length > 70 ? p.text.slice(0, 70) + '…' : p.text) }));
+      const isCur = L.normalize(p.text) === curNorm;
+      helperSel.appendChild(el('option', { value: String(k), selected: isCur ? 'selected' : null, text: (isCur ? '✓ (attuale) ' : '') + fmtMin(p.start) + ' · ' + p.wordCount + ' parole · ' + (p.text.length > 70 ? p.text.slice(0, 70) + '…' : p.text) }));
     });
     helperSel.addEventListener('change', function () { const k = parseInt(helperSel.value, 10); if (!isNaN(k) && cands[k]) applyCandidate(ls, ex, cands[k]); });
-    const head = el('div', { class: 'head' },
+    const alignMarker = function () { ex.markerTime = Math.round((ex.segment.end + 0.1) * 10) / 10; };
+    const timesRow = el('div', { class: 'head' },
       el('span', { class: 'num', text: String(i + 1) }),
-      el('span', { class: 'hint', text: 'ferma il video a' }),
-      timeInput(ex.markerTime, function (t) { ex.markerTime = t; sortExercises(ls); touch(ls); renderEditorBody(); }),
+      el('span', { class: 'hint', text: 'frase da' }),
+      timeInput(ex.segment.start, function (t) { ex.segment.start = t; touch(ls); renderEditorBody(); }, ex.id + ':start'),
+      el('span', { class: 'hint', text: 'a' }),
+      timeInput(ex.segment.end, function (t) { const wasAligned = Math.abs(ex.markerTime - ex.segment.end) < 0.6; ex.segment.end = t; if (wasAligned || ex.markerTime < t) alignMarker(); sortExercises(ls); touch(ls); renderEditorBody(); }, ex.id + ':end'),
+      el('button', { class: 'small play', text: '▶', title: 'Ascolta esattamente da inizio a fine: parte da "frase da" e si ferma da solo ad "a"', onclick: function () { playSegment(ex.segment); } }),
+      el('span', { class: 'hint', text: '· il video si ferma a' }),
+      timeInput(ex.markerTime, function (t) { ex.markerTime = t; sortExercises(ls); touch(ls); renderEditorBody(); }, ex.id + ':marker'),
+      el('button', { class: 'small', text: '= fine frase', title: 'Ferma il video subito dopo la fine della frase', onclick: function () { alignMarker(); sortExercises(ls); touch(ls); renderEditorBody(); } }),
+      el('button', { class: 'small', text: 'Inizio = ora', title: 'Usa il tempo corrente del player come inizio della frase', onclick: function () { if (S.player) { ex.segment.start = Math.round(S.player.time() * 10) / 10; touch(ls); renderEditorBody(); } } }),
+      el('button', { class: 'small', text: 'Fine = ora', title: 'Usa il tempo corrente del player come fine della frase', onclick: function () { if (S.player) { ex.segment.end = Math.round(S.player.time() * 10) / 10; alignMarker(); sortExercises(ls); touch(ls); renderEditorBody(); } } })
+    );
+    card.appendChild(timesRow);
+    const head = el('div', { class: 'head', style: 'margin-top:6px' },
       typeSel,
       rangeSel,
+      el('button', { class: 'small', text: '👁 Anteprima', title: 'Mostra l\'esercizio come lo vedrà lo studente e riproduce la frase', onclick: function () { openPreview(ls, ex, true); $('#e-stage').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }),
       el('button', { class: 'small', text: '▶ Ascolta', onclick: function () { playSegment(ex.segment); } }),
       el('button', { class: 'small', text: '↻ Altra frase', onclick: function () { altSentence(ls, ex); } }),
       el('button', { class: 'small', text: '⟳ Rigenera', onclick: function () { rebuildExercise(ls, ex, ex.type); touch(ls); renderEditorBody(); } }),
@@ -631,15 +708,6 @@
     });
     card.appendChild(el('label', { text: 'Frase (quello che lo studente sente)' }));
     card.appendChild(ta);
-    const segRow = el('div', { class: 'row', style: 'margin-top:8px' },
-      el('span', { class: 'hint', text: 'Ascolto da' }),
-      timeInput(ex.segment.start, function (t) { ex.segment.start = t; touch(ls); renderEditorBody(); }),
-      el('span', { class: 'hint', text: 'a' }),
-      timeInput(ex.segment.end, function (t) { ex.segment.end = t; touch(ls); renderEditorBody(); }),
-      el('button', { class: 'small', text: 'Inizio = ora', title: 'Usa il tempo corrente del player', onclick: function () { if (S.player) { ex.segment.start = Math.round(S.player.time() * 10) / 10; touch(ls); renderEditorBody(); } } }),
-      el('button', { class: 'small', text: 'Fine = ora', onclick: function () { if (S.player) { ex.segment.end = Math.round(S.player.time() * 10) / 10; if (ex.markerTime < ex.segment.end) ex.markerTime = ex.segment.end + 0.1; touch(ls); renderEditorBody(); } } })
-    );
-    card.appendChild(segRow);
     card.appendChild(renderTypeEditor(ls, ex));
     card.appendChild(el('div', { class: 'preview', html: '<span class="hint">Lo studente vede: </span>' + previewText(ex) }));
     return card;
@@ -649,7 +717,7 @@
   function previewText(ex) {
     const d = ex.data;
     switch (ex.type) {
-      case 'gap': return d.tokens.map(function (t, i) { return d.gapIndices.indexOf(i) !== -1 ? '<b>______</b>' : escapeHtml(t); }).join(' ');
+      case 'gap': case 'gapbank': return d.tokens.map(function (t, i) { return d.gapIndices.indexOf(i) !== -1 ? '<b>______</b>' : escapeHtml(t); }).join(' ') + (ex.type === 'gapbank' ? ' <span class="hint">[' + (d.wordBank || []).map(escapeHtml).join(' · ') + ']</span>' : '');
       case 'scramble': return d.shuffled.map(function (w) { return '<span class="chip static">' + escapeHtml(w) + '</span>'; }).join(' ');
       case 'missing': return d.tokens.filter(function (t, i) { return i !== d.missingIndex; }).map(escapeHtml).join(' ');
       case 'extra': return d.shown.map(function (t, i) { return i === d.extraIndex ? '<b><u>' + escapeHtml(t) + '</u></b>' : escapeHtml(t); }).join(' ');
@@ -662,8 +730,14 @@
     const d = ex.data;
     const wrap = el('div', { style: 'margin-top:8px' });
     const toks = L.tokenize(ex.sentence);
-    if (ex.type === 'gap') {
-      wrap.appendChild(el('div', { class: 'hint', text: 'Tocca le parole da nascondere:' }));
+    if (ex.type === 'gapbank') {
+      const cb = el('input', { type: 'checkbox' }); cb.checked = !ex.noDistractors;
+      cb.addEventListener('change', function () { ex.noDistractors = !cb.checked; rebuildExercise(ls, ex, 'gapbank', { gapWords: d.answers }); touch(ls); renderEditorBody(); });
+      wrap.appendChild(el('div', { class: 'row' }, el('label', { class: 'chip', style: 'margin:0' }, cb, ' Aggiungi parole sbagliate nella lista (distrattori)'),
+        el('span', { class: 'hint', text: 'Lista che vede lo studente: ' + (d.wordBank || []).join(' · ') })));
+    }
+    if (ex.type === 'gap' || ex.type === 'gapbank') {
+      wrap.appendChild(el('div', { class: 'hint', text: 'Tocca le parole da nascondere (almeno tre):' }));
       const chips = el('div', { class: 'chips' });
       d.tokens.forEach(function (t, i) {
         const c = el('span', { class: 'chip' + (d.gapIndices.indexOf(i) !== -1 ? ' gap' : ''), text: t });
@@ -673,7 +747,7 @@
           else d.gapIndices.push(i);
           d.gapIndices.sort(function (a, b) { return a - b; });
           d.answers = d.gapIndices.map(function (j) { return toks[j] ? toks[j].core : d.tokens[j]; });
-          d.wordBank = EX.shuffle(d.answers, L.rng(Date.now() % 10000));
+          if (ex.type === 'gapbank') d.wordBank = EX.shuffle(d.answers.concat(d.distractors || []), L.rng(Date.now() % 10000));
           touch(ls); renderEditorBody();
         });
         chips.appendChild(c);
@@ -718,9 +792,11 @@
 
   function rangeKey(range) {
     if (!range) return 'auto';
-    for (const k in G.RANGES) { const r = G.RANGES[k]; if (r && r[0] === range[0] && r[1] === range[1]) return k; }
+    if (range === 'smart') return 'smart';
+    for (const k in G.RANGES) { const r = G.RANGES[k]; if (Array.isArray(r) && r[0] === range[0] && r[1] === range[1]) return k; }
     return 'auto';
   }
+  function effRange(ex) { return G.resolveRange(ex.range, ex.type); }
   function usedChunkIds(ls, except) {
     const used = new Set();
     ls.exercises.forEach(function (e) { if (e === except) return; (e.chunkIds || [e.chunkId]).forEach(function (id) { used.add(id); }); });
@@ -729,8 +805,9 @@
   /** Candidati per un esercizio: passaggi nell'intervallo scelto, oppure chunk singoli (auto). Ordinati per tempo. */
   function candidatesFor(ls, ex) {
     const used = usedChunkIds(ls, ex);
-    if (ex.range) {
-      return G.passages(ls.chunks || [], { min: ex.range[0], max: ex.range[1], lang: ls.lang })
+    const r = effRange(ex);
+    if (r) {
+      return G.passages(ls.chunks || [], { min: r[0], max: r[1], lang: ls.lang })
         .filter(function (p) { return !p.cta && (p.startsSentence || p.endsSentence) && !p.chunkIds.some(function (id) { return used.has(id); }); })
         .sort(function (a, b) { return b.score - a.score; }).slice(0, 60)
         .sort(function (a, b) { return a.start - b.start; });
@@ -741,15 +818,16 @@
       .map(function (c) { return { start: c.start, end: c.end, text: c.text, chunkIds: [c.id], wordCount: c.wordCount, chunk: c }; });
   }
   function applyCandidate(ls, ex, p) {
-    const nx = p.chunk ? G.makeExercise(p.chunk, ex.type, { lang: ls.lang, seed: Date.now() % 1000, source: 'rules' })
-      : G.makeExerciseFromPassage(p, ex.type, { lang: ls.lang, seed: Date.now() % 1000, source: 'rules', range: ex.range });
+    const bo = { lang: ls.lang, seed: Date.now() % 1000, source: 'rules', range: ex.range, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 };
+    const nx = p.chunk ? G.makeExercise(p.chunk, ex.type, bo) : G.makeExerciseFromPassage(p, ex.type, bo);
     if (!nx) return toast('Frase non adatta a questo tipo di esercizio');
     ex.chunkId = nx.chunkId; ex.chunkIds = nx.chunkIds || [nx.chunkId]; ex.sentence = nx.sentence; ex.segment = nx.segment; ex.markerTime = nx.markerTime; ex.type = nx.type; ex.data = nx.data; ex.source = 'rules'; ex.note = '';
+    if (!ex.range) delete ex.range;
     sortExercises(ls); touch(ls); renderEditorBody();
     const card = $('#ex-' + ex.id); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   function altSentence(ls, ex) {
-    if (ex.range) {
+    if (effRange(ex)) {
       const used = usedChunkIds(ls, ex);
       (ex.chunkIds || [ex.chunkId]).forEach(function (id) { used.add(id); });
       const alts = G.passagesNear(ls.chunks || [], ex.markerTime, { exclude: used, type: ex.type, lang: ls.lang, window: 90, range: ex.range }).filter(function (p) { return !p.cta; });
@@ -849,36 +927,76 @@
     if (!ls) return renderHome();
     document.body.classList.toggle('standalone', !!S.standalone);
     S.currentId = ls.id;
-    S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {} };
+    // lock: con la barra bloccata non si va oltre un esercizio da fare; di default la barra è libera (chi guida il video decide)
+    S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {}, lock: !!(ls.options && ls.options.lock) };
     show('student');
     $('#s-title').textContent = ls.title || '';
     $('#btn-edit').style.display = (!S.standalone && S.lessons[ls.id]) ? '' : 'none';
-    renderTimeline($('#s-timeline'), ls, { done: S.student.done });
+    $('#s-lock').checked = S.student.lock;
+    $('#s-lock-label').style.display = S.standalone ? 'none' : '';
+    renderStudentTimeline();
     renderProgress();
     createPlayer($('#s-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
       .then(function () { startLoop(); renderStart(); })
       .catch(function (e) { $('#s-panel').innerHTML = ''; $('#s-panel').appendChild(el('div', { class: 'notice bad', text: e.message })); });
   }
   $('#btn-edit').addEventListener('click', function () { if (S.player) S.player.pause(); openEditor(S.currentId); });
+  $('#s-lock').addEventListener('change', function () { if (S.student) S.student.lock = $('#s-lock').checked; });
+  $('#btn-fullscreen').addEventListener('click', function () {
+    const w = $('#s-wrap');
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    if (w.requestFullscreen) w.requestFullscreen().catch(function () { toast('Schermo intero non disponibile in questo browser'); });
+    else if (w.webkitRequestFullscreen) w.webkitRequestFullscreen();
+    else toast('Schermo intero non disponibile in questo browser');
+  });
+  document.addEventListener('fullscreenchange', function () { $('#btn-fullscreen').textContent = document.fullscreenElement ? '✕ Esci da schermo intero' : '⛶ Schermo intero'; });
+
+  /** Linea del tempo dello studente: clic sulla barra = vai lì; clic su un numero = ascolta la frase e apri quell'esercizio. */
+  function renderStudentTimeline() {
+    const st = S.student; if (!st) return;
+    renderTimeline($('#s-timeline'), st.lesson, {
+      done: st.done, activeId: st.activeId,
+      onSeek: function (t) { if (S.player) S.player.seek(t); },
+      onMarker: function (ex) { goToExercise(ex); }
+    });
+  }
+  /** Porta il video all'inizio della frase dell'esercizio e lo fa ripartire: al segnaposto si ferma e l'esercizio compare (anche se era già fatto). */
+  function goToExercise(ex) {
+    const st = S.student; if (!st || !S.player) return;
+    if (st.lock && !st.done.has(ex.id) && st.lesson.exercises.some(function (e) { return !st.done.has(e.id) && e.markerTime < ex.markerTime; })) {
+      return toast('Barra bloccata: prima vanno fatti gli esercizi precedenti (togli il blocco per saltare)');
+    }
+    st.done.delete(ex.id);
+    st.blocked = false; st.activeId = null; st.replay = null; st.started = true;
+    $('#s-panel').innerHTML = '';
+    dock('#s-stage', false);
+    renderStudentTimeline(); renderProgress();
+    st.lastT = null;
+    S.player.seek(Math.max(0, Math.min(ex.segment.start - 0.3, ex.markerTime - 0.5)));
+    S.player.play();
+  }
 
   function renderProgress() {
     const st = S.student; const box = $('#s-progress'); box.innerHTML = '';
     st.lesson.exercises.forEach(function (ex, i) {
       const r = st.results[ex.id];
-      box.appendChild(el('div', { class: 'dot' + (r ? (r.correct ? ' ok' : ' bad') : '') + (st.activeId === ex.id ? ' cur' : ''), text: String(i + 1), title: EX.LABELS[ex.type] }));
+      box.appendChild(el('div', { class: 'dot' + (r ? (r.correct ? ' ok' : ' bad') : '') + (st.activeId === ex.id ? ' cur' : ''), text: String(i + 1), title: EX.LABELS[ex.type] + ' · clicca per andarci', onclick: function () { goToExercise(ex); } }));
     });
   }
+  function dock(stageSel, on) { const st = $(stageSel); if (st) st.classList.toggle('docked', !!on); }
   function renderStart() {
     const st = S.student; const p = $('#s-panel'); p.innerHTML = '';
     const ls = st.lesson;
+    dock('#s-stage', true);
     p.appendChild(el('h2', { text: ls.exercises.length + ' esercizi · ' + fmtMin(G.effectiveDuration(ls.cuts, ls.duration)) + ' di video' }));
-    p.appendChild(el('p', { class: 'muted', text: 'Il video si ferma da solo a ogni esercizio. Puoi riascoltare la frase quante volte vuoi.' }));
+    p.appendChild(el('p', { class: 'muted', text: 'Il video si ferma da solo a ogni esercizio: l\'esercizio compare qui, il video resta nell\'angolo e puoi riascoltare la frase quante volte vuoi. Cliccando un numero sulla linea del tempo vai subito a quell\'esercizio.' }));
     p.appendChild(el('button', { class: 'primary big', text: '▶ Inizia', onclick: function () {
       st.started = true;
       const c = G.inCut(ls.cuts, 0);
       if (c) S.player.seek(c.end + 0.05);
       S.player.play();
-      p.innerHTML = ''; p.appendChild(el('p', { class: 'muted', text: 'Guarda e ascolta… il video si fermerà al primo esercizio.' }));
+      p.innerHTML = '';
+      dock('#s-stage', false);
     } }));
   }
   function studentTick() {
@@ -888,24 +1006,45 @@
     const t = S.player.time();
     drawCursor($('#s-timeline'), t, ls.duration);
     if (st.replay) {
-      if (t >= st.replay.end || S.player.state() === 0) { S.player.pause(); st.replay = null; }
+      const rp = st.replay;
+      if (rp.start != null && t < rp.start - 1.5 && Date.now() - rp.at < 4000) { if (!rp.retried) { rp.retried = true; S.player.seek(rp.start); S.player.play(); } return; }
+      if (t >= rp.end || S.player.state() === 0) { S.player.pause(); st.replay = null; }
       return;
     }
-    if (st.blocked) return;
-    if (!st.started) return;
-    const next = ls.exercises.find(function (e) { return !st.done.has(e.id) && t >= e.markerTime - 0.1; });
+    if (st.blocked) { st.lastT = null; return; }
+    if (!st.started) { st.lastT = null; return; }
+    // Un esercizio scatta solo se il suo segnaposto viene attraversato guardando (tra il tick precedente e questo),
+    // non se lo si supera trascinando la barra: il tempo del video deve essere avanzato quanto il tempo reale.
+    const now = Date.now();
+    const prev = st.lastT, prevAt = st.lastAt;
+    st.lastT = t; st.lastAt = now;
+    const elapsed = prevAt ? (now - prevAt) / 1000 * (S.player.kind === 'mock' ? (S.speed || 1) : 1) : 0;
+    const natural = prev != null && t >= prev && t - prev <= elapsed + 1.5;
+    const next = natural ? ls.exercises.find(function (e) { return !st.done.has(e.id) && t >= e.markerTime - 0.1 && prev < e.markerTime - 0.1; }) : null;
+    if (!next && st.lock && S.player.state() === 1) {
+      // barra bloccata: se si è andati oltre un esercizio ancora da fare, si torna all'inizio della sua frase
+      const passed = ls.exercises.find(function (e) { return !st.done.has(e.id) && t > e.markerTime + 1.5; });
+      if (passed) { S.player.seek(Math.max(0, Math.min(passed.segment.start - 0.3, passed.markerTime - 0.5))); st.lastT = null; return; }
+    }
     if (next) {
-      if (t > next.markerTime + 1.5) { S.player.seek(Math.max(0, next.segment.start - 0.3)); return; }
       S.player.pause();
       st.blocked = true; st.activeId = next.id;
-      renderTimeline($('#s-timeline'), ls, { done: st.done, activeId: next.id });
+      renderStudentTimeline();
       renderProgress();
-      renderExercise(next);
+      dock('#s-stage', true);
+      renderExerciseInto($('#s-panel'), next, {
+        mode: 'student', lesson: ls, index: ls.exercises.indexOf(next), total: ls.exercises.length,
+        replay: replaySegment, attempts: st.attempts,
+        onDone: function (correct) { finishExercise(next, correct); },
+        onContinue: continueVideo,
+        onSkip: function () { finishExercise(next, false); continueVideo(); }
+      });
       return;
     }
     if (S.player.state() === 1) {
       const c = G.inCut(ls.cuts, t);
-      if (c) S.player.seek(c.end + 0.05);
+      // un taglio che contiene un esercizio ancora da fare non si salta: il video arriva fino al segnaposto
+      if (c && !ls.exercises.some(function (e) { return !st.done.has(e.id) && e.markerTime >= c.start && e.markerTime <= c.end; })) S.player.seek(c.end + 0.05);
     }
     if (S.player.kind === 'mock' && S.player.state() === 0 && !st.ended) onEnded();
   }
@@ -916,7 +1055,7 @@
   }
   function replaySegment(ex) {
     const st = S.student;
-    st.replay = { end: ex.segment.end };
+    st.replay = { start: ex.segment.start, end: ex.segment.end, at: Date.now(), retried: false };
     S.player.seek(ex.segment.start);
     S.player.play();
   }
@@ -931,35 +1070,56 @@
     renderTimeline($('#s-timeline'), st.lesson, { done: st.done });
     renderProgress();
     const p = $('#s-panel'); p.innerHTML = '';
+    dock('#s-stage', false);
     const remaining = st.lesson.exercises.filter(function (e) { return !st.done.has(e.id); }).length;
-    p.appendChild(el('p', { class: 'muted', text: remaining ? 'Continua a guardare… prossimo esercizio in arrivo.' : 'Ultimo esercizio fatto: guarda la fine del video.' }));
-    if (!remaining) p.appendChild(el('button', { class: 'small', text: 'Vai al riepilogo', onclick: function () { S.player.pause(); st.ended = true; renderSummary(); } }));
+    if (!remaining) {
+      // ultimo esercizio fatto: il riepilogo compare alla fine del video (o subito, se lo studente vuole)
+      const bar = $('#s-progress');
+      const btn = el('button', { class: 'small', text: 'Vai al riepilogo', style: 'margin-left:8px', onclick: function () { S.player.pause(); st.ended = true; renderSummary(); } });
+      bar.appendChild(btn);
+    }
     S.player.play();
   }
 
-  function renderExercise(ex) {
-    const st = S.student; const ls = st.lesson;
-    const p = $('#s-panel'); p.innerHTML = '';
-    const idx = ls.exercises.indexOf(ex);
-    p.appendChild(el('div', { class: 'row' }, el('h3', { text: 'Esercizio ' + (idx + 1) + ' di ' + ls.exercises.length }), el('span', { class: 'badge right', text: EX.LABELS[ex.type] })));
+  /**
+   * Disegna un esercizio dentro un contenitore. opts: { mode: 'student'|'preview', lesson, index, total, replay(ex), attempts,
+   * onDone(correct), onContinue(), onSkip(), onClose() }
+   */
+  function renderExerciseInto(p, ex, opts) {
+    const ls = opts.lesson;
+    const preview = opts.mode === 'preview';
+    p.innerHTML = '';
+    // titolo = tipo di esercizio ("Trova la parola mancante"), traduzione in piccolo; "N di M" piccolo a destra
+    const label = EX.LABELS[ex.type] || ex.type;
+    const paren = label.indexOf(' (');
+    const h = el('h3', { class: 'ex-title' }, [
+      preview ? el('span', { class: 'muted', text: 'Anteprima · ' }) : null,
+      document.createTextNode(paren === -1 ? label : label.slice(0, paren)),
+      paren === -1 ? null : el('span', { class: 'sub', text: ' ' + label.slice(paren + 1) })
+    ]);
+    p.appendChild(el('div', { class: 'row ex-head' },
+      h,
+      el('span', { class: 'badge right', text: (opts.index + 1) + ' di ' + opts.total }),
+      preview ? el('button', { class: 'small', text: '✕ Chiudi anteprima', onclick: function () { if (opts.onClose) opts.onClose(); } }) : null));
     p.appendChild(el('div', { class: 'instr', text: EX.INSTRUCTIONS[ex.type] }));
     const body = el('div');
     p.appendChild(body);
     const fb = el('div', { class: 'feedback' });
     const actions = el('div', { class: 'actions' });
-    const replayBtn = el('button', { text: '🔁 Riascolta', onclick: function () { replaySegment(ex); } });
+    const replayBtn = el('button', { text: '🔁 Riascolta', onclick: function () { if (opts.replay) opts.replay(ex); } });
     const checkBtn = el('button', { class: 'primary', text: 'Controlla' });
     const solBtn = el('button', { class: 'link', text: 'Mostra soluzione', style: 'display:none' });
-    const skipBtn = el('button', { class: 'link', text: 'Salta' });
+    const skipBtn = el('button', { class: 'link', text: 'Salta', style: preview ? 'display:none' : '' });
     actions.appendChild(replayBtn); actions.appendChild(checkBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
     p.appendChild(actions); p.appendChild(fb);
+    const attempts = opts.attempts || {};
 
-    const strict = !!ls.options.strict;
+    const strict = !!(ls.options && ls.options.strict);
     let getAnswer = function () { return null; };
     let markResult = function () { };
     const d = ex.data;
 
-    if (ex.type === 'gap') {
+    if (ex.type === 'gap' || ex.type === 'gapbank') {
       const sent = el('div', { class: 'sentence' });
       const inputs = [];
       d.tokens.forEach(function (t, i) {
@@ -967,18 +1127,19 @@
         if (k === -1) { sent.appendChild(document.createTextNode(t + ' ')); return; }
         const tok = L.tokenize(t)[0] || { pre: '', post: '' };
         if (tok.pre) sent.appendChild(document.createTextNode(tok.pre));
-        const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', style: 'width:' + Math.max(5, d.answers[k].length + 2) + 'ch' });
+        // larghezza uguale per tutti gli spazi: la lunghezza della parola non si deve indovinare
+        const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', style: 'width:11ch' });
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
         inputs.push(inp); sent.appendChild(inp);
         sent.appendChild(document.createTextNode((tok.post || '') + ' '));
       });
       body.appendChild(sent);
-      if (ls.options.wordBank !== false && d.wordBank && d.wordBank.length) {
+      if (ex.type === 'gapbank' && d.wordBank && d.wordBank.length) {
         body.appendChild(el('div', { class: 'chips' }, d.wordBank.map(function (w) { return el('span', { class: 'chip', text: w, onclick: function () { const empty = inputs.find(function (i) { return !i.value; }); if (empty) { empty.value = w; empty.focus(); } } }); })));
       }
       getAnswer = function () { return inputs.map(function (i) { return i.value; }); };
-      markResult = function (res) { inputs.forEach(function (inp, k) { inp.classList.toggle('ok', !!res.detail[k]); inp.classList.toggle('bad', !res.detail[k]); }); };
-      setTimeout(function () { if (inputs[0]) inputs[0].focus(); }, 50);
+      markResult = function (res) { inputs.forEach(function (inp, k) { inp.classList.toggle('ok', !!res.detail[k]); inp.classList.toggle('bad', !res.detail[k]); }); if (res.correct) sent.style.color = 'var(--ok)'; };
+      if (!preview) setTimeout(function () { if (inputs[0]) inputs[0].focus(); }, 50);   // in anteprima il fuoco resta all'editor
     } else if (ex.type === 'scramble') {
       const pool = el('div', { class: 'chips' });
       const ans = el('div', { class: 'answer-row chips' });
@@ -997,15 +1158,15 @@
       render();
       body.appendChild(ans); body.appendChild(pool);
       getAnswer = function () { return chosen.map(function (i) { return d.shuffled[i]; }); };
-      markResult = function (res) { $$('.chip', ans).forEach(function (c, k) { c.style.borderColor = res.detail[k] ? 'var(--ok)' : 'var(--bad)'; }); };
+      markResult = function (res) { $$('.chip', ans).forEach(function (c, k) { c.classList.toggle('good', !!res.detail[k]); c.classList.toggle('wrongpick', !res.detail[k]); }); };
     } else if (ex.type === 'missing') {
       body.appendChild(el('div', { class: 'sentence', text: d.tokens.filter(function (t, i) { return i !== d.missingIndex; }).join(' ') }));
       const inp = el('input', { type: 'text', placeholder: 'Parola mancante', autocomplete: 'off', autocapitalize: 'off', style: 'margin-top:10px;max-width:16em' });
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
       body.appendChild(inp);
       getAnswer = function () { return inp.value; };
-      markResult = function (res) { inp.classList.toggle('ok', res.correct); inp.classList.toggle('bad', !res.correct); };
-      setTimeout(function () { inp.focus(); }, 50);
+      markResult = function (res) { inp.classList.toggle('ok', res.correct); inp.classList.toggle('bad', !res.correct); if (res.correct) { const sdiv = body.querySelector('.sentence'); if (sdiv) sdiv.style.color = 'var(--ok)'; } };
+      if (!preview) setTimeout(function () { inp.focus(); }, 50);
     } else if (ex.type === 'extra' || ex.type === 'wrong') {
       let selected = -1;
       const chips = el('div', { class: 'chips' });
@@ -1022,44 +1183,69 @@
       if (ex.type === 'wrong') body.appendChild(corr);
       getAnswer = function () { return ex.type === 'extra' ? selected : { index: selected, correction: corr.value }; };
       markResult = function (res) {
-        const c = $$('.chip', chips)[selected];
-        if (c) c.style.borderColor = res.correct ? 'var(--ok)' : 'var(--bad)';
+        const all = $$('.chip', chips);
+        const c = all[selected];
+        if (res.correct) all.forEach(function (x) { x.classList.add('good'); x.classList.remove('sel'); });
+        else if (c) { c.classList.add('wrongpick'); setTimeout(function () { c.classList.remove('wrongpick'); }, 900); }
         if (ex.type === 'wrong') { corr.classList.toggle('ok', !!(res.detail && res.detail.word)); corr.classList.toggle('bad', !(res.detail && res.detail.word)); }
       };
     }
 
     let solved = false;
+    const continueLabel = preview ? 'Chiudi anteprima' : 'Continua ▶';
+    const onContinue = function () { if (preview) { if (opts.onClose) opts.onClose(); } else if (opts.onContinue) opts.onContinue(); };
     checkBtn.addEventListener('click', function () {
       if (solved) return;
       const a = getAnswer();
       if (a == null || a === '' || a === -1 || (Array.isArray(a) && !a.length) || (typeof a === 'object' && !Array.isArray(a) && a.index === -1)) { fb.textContent = 'Prima rispondi.'; fb.style.color = 'var(--muted)'; return; }
-      st.attempts[ex.id] = (st.attempts[ex.id] || 0) + 1;
+      attempts[ex.id] = (attempts[ex.id] || 0) + 1;
       const res = EX.check(ex, a, { strict: strict });
       markResult(res);
       if (res.correct) {
         solved = true;
         fb.textContent = '✓ Giusto!'; fb.style.color = 'var(--ok)';
-        finishExercise(ex, true);
+        if (!ls.options || ls.options.fx !== false) celebrate(p, fb);
+        if (opts.onDone) opts.onDone(true);
         checkBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';
-        actions.appendChild(el('button', { class: 'primary', text: 'Continua ▶', onclick: continueVideo }));
+        actions.appendChild(el('button', { class: 'primary', text: continueLabel, onclick: onContinue }));
       } else {
         fb.textContent = '✗ Non ancora. Riascolta e riprova.'; fb.style.color = 'var(--bad)';
-        if (st.attempts[ex.id] >= 2) solBtn.style.display = '';
+        if (attempts[ex.id] >= 2 || preview) solBtn.style.display = '';
       }
     });
     solBtn.addEventListener('click', function () {
       solved = true;
       fb.textContent = 'Soluzione: ' + EX.solution(ex); fb.style.color = 'var(--muted)';
-      finishExercise(ex, false);
+      if (opts.onDone) opts.onDone(false);
       checkBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';
-      actions.appendChild(el('button', { class: 'primary', text: 'Continua ▶', onclick: continueVideo }));
+      actions.appendChild(el('button', { class: 'primary', text: continueLabel, onclick: onContinue }));
     });
-    skipBtn.addEventListener('click', function () { finishExercise(ex, false); continueVideo(); });
+    skipBtn.addEventListener('click', function () { if (opts.onSkip) opts.onSkip(); });
+  }
+
+  /** Piccola festa: coriandoli nel pannello, "Giusto!" che salta, pallino verde che pulsa. */
+  function celebrate(panel, fb) {
+    fb.classList.add('win');
+    panel.classList.remove('win-flash'); void panel.offsetWidth; panel.classList.add('win-flash');
+    const burst = el('div', { class: 'fx-burst' });
+    const colors = ['#ff8a00', '#1f6feb', '#1a7f37', '#e5484d', '#f5c400', '#8e7cf3'];
+    const rect = panel.getBoundingClientRect();
+    const ox = Math.min(rect.width * 0.5, 320), oy = Math.min(rect.height * 0.55, 240);
+    for (let i = 0; i < 28; i++) {
+      const a = Math.random() * Math.PI * 2, dist = 90 + Math.random() * 170;
+      const piece = el('div', { class: 'fx-piece', style: 'left:' + ox + 'px;top:' + oy + 'px;background:' + colors[i % colors.length] +
+        ';--dx:' + Math.round(Math.cos(a) * dist) + 'px;--dy:' + Math.round(Math.sin(a) * dist + 60) + 'px;--rot:' + Math.round(Math.random() * 720 - 360) + 'deg;animation-delay:' + Math.round(Math.random() * 120) + 'ms' + (i % 3 === 0 ? ';border-radius:50%' : '') });
+      burst.appendChild(piece);
+    }
+    panel.appendChild(burst);
+    setTimeout(function () { burst.remove(); }, 1400);
+    const dot = $('#s-progress .dot.cur'); if (dot) { dot.classList.add('ok', 'just'); }
   }
 
   function renderSummary() {
     const st = S.student; const ls = st.lesson;
     const p = $('#s-panel'); p.innerHTML = '';
+    dock('#s-stage', true);
     const tot = ls.exercises.length;
     const ok = ls.exercises.filter(function (e) { return st.results[e.id] && st.results[e.id].correct; }).length;
     p.appendChild(el('h2', { text: 'Fine! ' + ok + ' su ' + tot + ' esercizi corretti' }));

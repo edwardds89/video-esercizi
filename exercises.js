@@ -7,6 +7,7 @@
 
   const LABELS = {
     gap: 'Completa gli spazi (fill the gaps)',
+    gapbank: 'Completa gli spazi — semplificato, con le parole (fill the gaps)',
     scramble: 'Riordina la frase (scrambled sentence)',
     missing: 'Trova la parola mancante (find the missing word)',
     extra: 'Trova la parola in più (find the extra word)',
@@ -15,6 +16,7 @@
 
   const INSTRUCTIONS = {
     gap: 'Ascolta e scrivi le parole mancanti.',
+    gapbank: 'Ascolta e metti negli spazi le parole giuste: nella lista ce ne sono anche di sbagliate.',
     scramble: 'Tocca le parole nell\'ordine giusto per ricostruire la frase che hai sentito.',
     missing: 'In questa frase manca una parola rispetto a quello che hai sentito: scrivila.',
     extra: 'In questa frase c\'è una parola in più rispetto a quello che hai sentito: toccala.',
@@ -61,30 +63,46 @@
     const ch = o.choices || {};
     if (tokens.length < 3) return null;
 
-    if (type === 'gap') {
+    if (type === 'gap' || type === 'gapbank') {
+      // Almeno 3 spazi (se la frase lo permette), circa uno ogni 7 parole; parole piene, mai adiacenti, mai la prima
       let idx = [];
       if (ch.gapWords && ch.gapWords.length) {
         for (const w of ch.gapWords) { const i = findIndex(tokens, w); if (i !== -1 && idx.indexOf(i) === -1) idx.push(i); }
       }
       if (!idx.length) {
-        const cands = tokens.map(function (t, i) { return { i: i, t: t }; })
-          .filter(function (x) { return L.isContent(x.t.core, o.lang); });
-        if (!cands.length) return null;
-        const k = Math.min(cands.length, Math.max(1, Math.min(3, 1 + Math.floor(tokens.length / 8))));
-        const scored = cands.map(function (x) { return { i: x.i, s: x.t.core.length + rand() * 3 }; }).sort(function (a, b) { return b.s - a.s; });
-        for (const c of scored) {
-          if (idx.length >= k) break;
-          if (idx.some(function (j) { return Math.abs(j - c.i) <= 1; })) continue;
-          idx.push(c.i);
-        }
-        if (!idx.length) idx.push(scored[0].i);
+        const content = tokens.map(function (t, i) { return { i: i, t: t }; }).filter(function (x) { return x.i > 0 && L.isContent(x.t.core, o.lang); });
+        const others = tokens.map(function (t, i) { return { i: i, t: t }; }).filter(function (x) { return x.i > 0 && !L.isContent(x.t.core, o.lang) && x.t.core.length >= 3; });
+        const want = Math.max(3, Math.min(6, Math.round(tokens.length / 7)));
+        const pick = function (cands, limit) {
+          const scored = cands.map(function (x) { return { i: x.i, s: x.t.core.length + rand() * 3 }; }).sort(function (a, b) { return b.s - a.s; });
+          for (const c of scored) {
+            if (idx.length >= limit) break;
+            if (idx.some(function (j) { return Math.abs(j - c.i) <= 1; })) continue;
+            idx.push(c.i);
+          }
+        };
+        pick(content, want);
+        if (idx.length < 3) pick(others, 3);
+        if (idx.length < Math.min(3, Math.floor((tokens.length - 1) / 2))) return null;
+        if (!idx.length) return null;
       }
       idx.sort(function (a, b) { return a - b; });
       const answers = idx.map(function (i) { return tokens[i].core; });
-      return {
-        type: 'gap',
-        data: { tokens: tokens.map(function (t) { return t.raw; }), gapIndices: idx, answers: answers, wordBank: shuffle(answers, rand) }
-      };
+      const data = { tokens: tokens.map(function (t) { return t.raw; }), gapIndices: idx, answers: answers };
+      if (type === 'gapbank') {
+        // banca di parole: le risposte più, se richiesto, parole sbagliate prese dal lessico del video
+        let distractors = Array.isArray(ch.distractors) ? ch.distractors.slice() : [];
+        const nd = o.distractors == null ? 2 : o.distractors;
+        if (!distractors.length && nd > 0 && Array.isArray(o.vocab)) {
+          const used = new Set(tokens.map(function (t) { return t.norm; }));
+          const pool = o.vocab.filter(function (w) { return !used.has(L.normalize(w)); });
+          const sh = shuffle(pool, rand);
+          distractors = sh.slice(0, nd);
+        }
+        data.distractors = distractors;
+        data.wordBank = shuffle(answers.concat(distractors), rand);
+      }
+      return { type: type, data: data };
     }
 
     if (type === 'scramble') {
@@ -168,7 +186,8 @@
     const strict = !!(opts && opts.strict);
     const d = exercise.data;
     switch (exercise.type) {
-      case 'gap': {
+      case 'gap':
+      case 'gapbank': {
         const arr = Array.isArray(answer) ? answer : [answer];
         const per = d.answers.map(function (a, i) { return eq(arr[i] || '', a, strict); });
         return { correct: per.every(Boolean), detail: per };
@@ -197,7 +216,7 @@
   function solution(exercise) {
     const d = exercise.data;
     switch (exercise.type) {
-      case 'gap': return d.answers.join(', ');
+      case 'gap': case 'gapbank': return d.answers.join(', ');
       case 'scramble': return d.words.join(' ');
       case 'missing': return d.answer;
       case 'extra': return d.extraWord;

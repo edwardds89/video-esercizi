@@ -154,8 +154,11 @@
 
   function parseTime(str) {
     if (typeof str === 'number') return str;
-    const s = String(str || '').trim().replace(',', '.');
+    let s = String(str || '').trim().replace(',', '.');
     if (!s) return NaN;
+    // "1.19.8" (punti al posto dei due punti) → "1:19.8"
+    const dots = s.split('.');
+    if (dots.length === 3 && s.indexOf(':') === -1) s = dots[0] + ':' + dots[1] + '.' + dots[2];
     const parts = s.split(':').map(Number);
     if (parts.some(isNaN)) return NaN;
     if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
