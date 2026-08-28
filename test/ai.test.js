@@ -3,6 +3,7 @@
 const assert = require('assert');
 const L = require('../lang.js');
 const G = require('../generator.js');
+const EX = require('../exercises.js');
 const AI = require('../ai.js');
 const F = require('./fixture.js');
 
@@ -68,9 +69,9 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
       { from: cSin.id, to: cSin.id, reason: 'errore: taglio su un esercizio' }
     ],
     vocab: [
-      { word: 'sinapsi', translation: 'synapse', emoji: '', inExercise: true },
+      { word: 'sinapsi', translation: 'synapse', inExercise: true },
       { word: 'Sinapsi', translation: 'dup' },
-      { word: 'ippocampo', translation: 'hippocampus', emoji: '🧠', inExercise: false },
+      { word: 'ippocampo', translation: 'hippocampus', emoji: '🧠', inExercise: false }, // campo estraneo: deve essere ignorato
       { word: '', translation: 'x' }, 'stringa', { word: 'caffeina', translation: 'caffeine' }
     ],
     notes: 'ok'
@@ -119,9 +120,10 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.strictEqual(applied.title, 'Il cervello e la memoria');
   });
 
-  await test('parole utili del piano: pulite, senza doppioni, con emoji e traduzione', function () {
+  await test('parole utili del piano: pulite, senza doppioni, senza campi estranei (niente emoji)', function () {
     assert.deepStrictEqual(applied.vocab.map(function (v) { return v.word; }), ['sinapsi', 'ippocampo', 'caffeina']);
-    assert.strictEqual(applied.vocab[1].emoji, '🧠');
+    assert.strictEqual(applied.vocab[1].emoji, undefined);
+    assert.strictEqual(applied.vocab[1].translation, 'hippocampus');
     assert.strictEqual(applied.vocab[0].inExercise, true);
   });
   await test('prompt: parole utili e modalità automatica', function () {
@@ -138,15 +140,30 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     const fakeFetch = async function (url, opts) {
       const body = JSON.parse(opts.body);
       const isTr = body.messages[0].content.indexOf('WORDS:') !== -1;
-      const text = isTr ? '{"vocab":[{"word":"corteccia","translation":"cortex","emoji":""},{"word":"cellule","translation":"cells","emoji":"🧫"}]}'
-        : '{"vocab":[{"word":"neurone","translation":"neuron","emoji":"","inExercise":true},{"word":"memoria","translation":"memory","emoji":"🧠"}]}';
+      const text = isTr ? '{"vocab":[{"word":"corteccia","translation":"cortex"},{"word":"cellule","translation":"cells","emoji":"🧫"}]}'
+        : '{"vocab":[{"word":"neurone","translation":"neuron","inExercise":true},{"word":"memoria","translation":"memory"}]}';
       return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 500, output_tokens: 100 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
     };
     const sv = await AI.suggestVocab({ chunks: chunks, exercises: applied.exercises, lang: 'it', support: 'en', apiKey: 'k', fetchImpl: fakeFetch });
     assert.deepStrictEqual(sv.vocab.map(function (v) { return v.word; }), ['neurone', 'memoria']);
     const tr = await AI.translateWords({ words: ['corteccia', 'cellule', 'ignota'], lang: 'it', support: 'en', apiKey: 'k', fetchImpl: fakeFetch });
     assert.deepStrictEqual(tr.translations, { corteccia: 'cortex', cellule: 'cells' });
-    assert.strictEqual(tr.emojis.cellule, '🧫');
+    assert.strictEqual(tr.emojis, undefined);
+  });
+
+  await test('scelta multipla: generateMC e makeTricky con fetch finta', async function () {
+    const fakeFetch = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      const isTricky = body.messages[0].content.indexOf('Replace ONE of the wrong options') !== -1;
+      const text = isTricky ? '{"index":2,"option":"Le sinapsi rallentano la memoria"}' : '{"question":"Cosa sono le sinapsi?","options":["Punti di contatto tra neuroni","Cellule del sangue","Ormoni","Ossa del cranio"],"correct":0,"tricky":null}';
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 300, output_tokens: 60 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
+    };
+    const mc = await AI.generateMC({ sentence: cSin.text, context: '', lang: 'it', apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(mc.options.length, 4); assert.strictEqual(mc.correct, 0); assert.strictEqual(mc.tricky, null);
+    const tr = await AI.makeTricky({ question: mc.question, options: mc.options, correct: 0, sentence: cSin.text, lang: 'it', apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(tr.index, 2); assert.ok(/rallentano/.test(tr.option));
+    const built = EX.buildExercise('mc', cSin.text, { choices: { question: mc.question, options: mc.options, correct: 0, tricky: 2 } });
+    assert.ok(built && built.data.tricky === 2 && EX.check(built, 0).correct && !EX.check(built, 2).correct);
   });
 
   console.log('Chiamata (fetch finta)');

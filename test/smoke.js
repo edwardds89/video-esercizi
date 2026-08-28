@@ -132,6 +132,33 @@ async function startVideo(page) {
   await page.waitForTimeout(150);
   assert.ok(/4 pronte/.test(await page.$eval('#e-vocab .hint.ready', function (h) { return h.textContent; })), 'quattro parole pronte');
   await page.check('#v-write');
+  // ricerca foto (Wikipedia + Commons simulati): usa la parola scritta ORA, "↻ Altra" scorre i candidati
+  await page.route('**/*.wikipedia.org/w/api.php*', function (route) {
+    const q = decodeURIComponent((route.request().url().match(/gsrsearch=([^&]*)/) || [])[1] || '');
+    const pages = q.indexOf('mare') !== -1 ? { 1: { pageid: 1, index: 1, title: 'Mare', thumbnail: { source: 'https://upload.example/mare-1.jpg' } }, 2: { pageid: 2, index: 2, title: 'Mare Nostrum', thumbnail: { source: 'https://upload.example/mare-2.jpg' } }, 3: { pageid: 3, index: 3, title: 'Mare (disambigua)', pageprops: { disambiguation: '' }, thumbnail: { source: 'https://upload.example/no.jpg' } } } : {};
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: { pages: pages } }) });
+  });
+  await page.route('**/commons.wikimedia.org/w/api.php*', function (route) {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: { pages: { 9: { pageid: 9, index: 1, title: 'File:Onde.jpg', imageinfo: [{ thumburl: 'https://upload.example/onde.jpg', mime: 'image/jpeg' }] } } } }) });
+  });
+  const wordInp = (await page.$$('#e-vocab .vocab-row .v-word'))[0];
+  await wordInp.fill('mare');   // parola modificata e NON ancora confermata: la ricerca deve usarla lo stesso
+  await page.click('#e-vocab .vocab-row:first-child button:has-text("Foto")');
+  await page.waitForFunction(function () { return !!Object.values(window.VLApp.S.lessons)[0].vocab.words[0].image; }, null, { timeout: 5000 });
+  const img1 = await page.evaluate(function () { const w = Object.values(window.VLApp.S.lessons)[0].vocab.words[0]; return { word: w.word, image: w.image }; });
+  assert.strictEqual(img1.word, 'mare', 'parola aggiornata prima della ricerca');
+  assert.strictEqual(img1.image, 'https://upload.example/mare-1.jpg', 'prima foto (la disambigua è saltata)');
+  await page.click('#e-vocab .vocab-row:first-child button:has-text("Altra")');
+  await page.waitForTimeout(200);
+  const img2 = await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].vocab.words[0].image; });
+  assert.strictEqual(img2, 'https://upload.example/mare-2.jpg', 'altra foto');
+  await page.click('#e-vocab .vocab-row:first-child button:has-text("Altra")');
+  await page.waitForTimeout(200);
+  assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].vocab.words[0].image; }), 'https://upload.example/onde.jpg', 'poi Commons');
+  await page.click('#e-vocab .vocab-row:first-child button:has-text("✕")');
+  await page.waitForTimeout(150);
+  assert.ok(!(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].vocab.words[0].image; })), 'foto tolta');
+  await page.unroute('**/*.wikipedia.org/w/api.php*'); await page.unroute('**/commons.wikimedia.org/w/api.php*');
   // "+" sulla linea del tempo: clic nel punto più lontano dai segnaposto → popover → Aggiungi
   const gapT = await page.evaluate(function () {
     const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; const ms = ls.exercises.map(function (e) { return e.markerTime; }).sort(function (a, b) { return a - b; });
@@ -187,7 +214,7 @@ async function startVideo(page) {
   await page.click('#btn-start');
   await page.waitForSelector('#s-panel .match', { timeout: 5000 });
   assert.ok(await page.$('#s-stage.docked'), 'scheda nell\'area del video');
-  const vwords = await page.evaluate(function () { const v = window.VLApp.S.student.lesson.vocab; return v.words.filter(function (w) { return w.selected && (w.translation || w.image || w.emoji); }).map(function (w) { return { id: w.id, word: w.word, tr: w.translation }; }); });
+  const vwords = await page.evaluate(function () { const v = window.VLApp.S.student.lesson.vocab; return v.words.filter(function (w) { return w.selected && (w.translation || w.image); }).map(function (w) { return { id: w.id, word: w.word, tr: w.translation }; }); });
   assert.strictEqual(vwords.length, 4, 'quattro parole nelle schede');
   // sbaglio apposta una volta, poi abbino tutte
   const firstLeft = await page.$('#s-panel .match .col:first-child .mchip');
@@ -249,10 +276,13 @@ async function startVideo(page) {
     assert.ok(shownTitle.indexOf(ex.type === 'gap' ? 'Completa' : '') === 0 && shownTitle.length > 5, 'titolo = tipo: ' + shownTitle);
     const t = await page.evaluate(function () { return window.VLApp.S.player.time(); });
     assert.ok(Math.abs(t - ex.markerTime) < 2.5, 'fermato vicino al marker: ' + t.toFixed(1) + ' vs ' + ex.markerTime.toFixed(1));
-    // riascolta una volta: durante il riascolto la frase sparisce (video grande), poi torna
+    // riascolta una volta: durante il riascolto la frase sparisce (video grande), poi torna; con "con la frase" resta tutto com'è
+    if (k === 1) await page.check('#s-panel .withtext input');
+    if (k === 2) await page.uncheck('#s-panel .withtext input');
     await page.click('#s-panel button:has-text("Riascolta")');
     await page.waitForTimeout(300);
-    if (k === 0) assert.ok(!(await page.$('#s-stage.docked')), 'durante il riascolto il video è grande');
+    if (k === 0 || k === 2) assert.ok(!(await page.$('#s-stage.docked')), 'durante il riascolto il video è grande');
+    if (k === 1) assert.ok(await page.$('#s-stage.docked'), '"con la frase": lo schermo resta com\'è durante il riascolto');
     await page.waitForFunction(function () { return !window.VLApp.S.student.replay; }, null, { timeout: 20000 });
     await page.waitForTimeout(150);
     assert.ok(await page.$('#s-stage.docked'), 'dopo il riascolto torna l\'esercizio');
