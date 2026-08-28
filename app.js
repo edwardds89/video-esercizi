@@ -807,6 +807,8 @@
   let previewBox = null;
   function showImgPreview(anchor, src, caption) {
     if (!previewBox) { previewBox = el('div', { class: 'img-preview' }); document.body.appendChild(previewBox); }
+    const host = document.fullscreenElement || document.body;   // a tutto schermo si vede solo ciò che sta dentro l'elemento a tutto schermo
+    if (previewBox.parentElement !== host) host.appendChild(previewBox);
     const cur = previewBox.querySelector('img');
     if (!cur || cur.getAttribute('src') !== src) {
       previewBox.innerHTML = '';
@@ -1464,7 +1466,7 @@
     document.body.classList.toggle('standalone', !!S.standalone);
     S.currentId = ls.id;
     // lock: con la barra bloccata non si va oltre un esercizio da fare; di default la barra è libera (chi guida il video decide)
-    S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {}, hints: {}, lock: !!(ls.options && ls.options.lock), phase: 'start', stars: loadStars(ls) };
+    S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {}, hints: {}, lock: !!(ls.options && ls.options.lock), phase: 'start', stars: {} };   // stelle: da zero a ogni apertura
     show('student');
     $('#s-stage').classList.remove('cards');
     $('#s-title').textContent = ls.title || '';
@@ -1499,7 +1501,12 @@
     else if (w.webkitRequestFullscreen) w.webkitRequestFullscreen();
     else toast('Schermo intero non disponibile in questo browser');
   });
-  document.addEventListener('fullscreenchange', function () { $('#btn-fullscreen').textContent = document.fullscreenElement ? '✕ Esci da schermo intero' : '⛶ Schermo intero'; });
+  document.addEventListener('fullscreenchange', function () {
+    $('#btn-fullscreen').textContent = document.fullscreenElement ? '✕ Esci da schermo intero' : '⛶ Schermo intero';
+    // avvisi (toast) e zoom foto devono stare dentro l'elemento a tutto schermo, altrimenti non si vedono
+    const host = document.fullscreenElement || document.body;
+    ['#toast', '.img-preview'].forEach(function (sel) { const n = document.querySelector(sel); if (n && n.parentElement !== host) host.appendChild(n); });
+  });
 
   /** Linea del tempo dello studente: clic sulla barra = vai lì; clic su un numero = ascolta la frase e apri quell'esercizio. */
   function renderStudentTimeline() {
@@ -2120,16 +2127,9 @@
 
   // ---------- stelle (parole preferite) ----------
   function cleanWord(w) { return String(w || '').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').toLowerCase(); }
-  function loadStars(ls) {
-    const m = {};
-    ((ls.vocab && ls.vocab.starred) || []).forEach(function (x) { if (x && x.word) m[L.normalize(x.word)] = { word: x.word, translation: x.translation || '' }; });
-    return m;
-  }
-  function saveStars(ls, stars) {
-    vocabState(ls).starred = Object.keys(stars).map(function (k) { return stars[k]; });
-    if (S.lessons[ls.id]) touch(ls);
-  }
-  function starStore(ls) { return (S.student && S.student.lesson === ls) ? S.student.stars : (S.editorStars = S.editorStars || loadStars(ls)); }
+  // Le stelle valgono per la sessione del video: si riparte da zero a ogni apertura, non si salvano nella lezione
+  function saveStars() { /* solo in memoria (S.student.stars / S.editorStars) */ }
+  function starStore(ls) { return (S.student && S.student.lesson === ls) ? S.student.stars : (S.editorStars = S.editorStars || {}); }
   function isStarred(ls, word) { return !!starStore(ls)[L.normalize(cleanWord(word))]; }
   function translationFor(ls, word) {
     const k = L.normalize(cleanWord(word));
