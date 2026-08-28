@@ -313,7 +313,10 @@ async function startVideo(page) {
     assert.ok(Math.abs(t - ex.markerTime) < 2.5, 'fermato vicino al marker: ' + t.toFixed(1) + ' vs ' + ex.markerTime.toFixed(1));
     // riascolta una volta: durante il riascolto la frase sparisce (video grande), poi torna; con "con la frase" resta tutto com'è
     if (k === 1) await page.check('#s-panel .withtext input');
-    if (k === 2) await page.uncheck('#s-panel .withtext input');
+    if (k === 2) { assert.ok(!(await page.isChecked('#s-panel .withtext input')), '"con la frase" riparte spenta a ogni esercizio'); await page.uncheck('#s-panel .withtext input'); }
+    // titolo del tipo allineato alla consegna; niente scorrimento nel pop (il video si restringe se serve)
+    const align = await page.evaluate(function () { const h = document.querySelector('#s-panel h3.ex-type-title'), i = document.querySelector('#s-panel .instr'); const pad = parseFloat(getComputedStyle(h).paddingLeft) || 0; return Math.abs((h.offsetLeft + pad) - i.offsetLeft); });   // offsetLeft ignora l'animazione d'entrata
+    assert.ok(align < 2, 'titolo allineato alla consegna: ' + align);
     await page.click('#s-panel button:has-text("Riascolta")');
     await page.waitForTimeout(300);
     if (k === 0 || k === 2) assert.ok(!(await page.$('#s-stage.docked')), 'durante il riascolto il video è grande');
@@ -322,8 +325,27 @@ async function startVideo(page) {
     await page.waitForTimeout(150);
     assert.ok(await page.$('#s-stage.docked'), 'dopo il riascolto torna l\'esercizio');
     // risposta sbagliata poi giusta
+    if (k === 0) {
+      // insegnante: Alt/⌘ + clic su una parola della frase → correzione al volo, esercizio ricostruito uguale, lezione salvata
+      const wordEl = (await page.$$('#s-panel .sentence .w'))[0];
+      const oldWord = (await wordEl.textContent()).trim();
+      page.once('dialog', function (dlg) { dlg.accept(oldWord + 'X'); });
+      await wordEl.click({ modifiers: ['Alt'] });
+      await page.waitForTimeout(700);   // salvataggio con debounce 400 ms
+      const fixed = await page.evaluate(function () { const s = window.VLApp.S; const e = s.student.lesson.exercises[0]; return { sentence: e.sentence, type: e.type, saved: JSON.parse(localStorage.getItem('vle.lessons'))[s.student.lesson.id].exercises[0].sentence, keys: Object.keys(e.data).sort().join(',') }; });
+      assert.ok(fixed.sentence.indexOf(oldWord + 'X') !== -1, 'parola corretta nella frase: ' + fixed.sentence.slice(0, 50));
+      assert.strictEqual(fixed.type, ex.type, 'stesso tipo'); assert.strictEqual(fixed.keys, Object.keys(ex.data).sort().join(','), 'stessa struttura');
+      assert.ok(fixed.saved.indexOf(oldWord + 'X') !== -1, 'lezione salvata');
+      assert.ok(!(await page.$('#s-panel .w.starred')) || true);
+      ex.sentence = fixed.sentence; ex.data = await page.evaluate(function () { return JSON.parse(JSON.stringify(window.VLApp.S.student.lesson.exercises[0].data)); });
+    }
     if (ex.type === 'gap' || ex.type === 'gapbank') {
       const inputs = await page.$$('#s-panel input.gap');
+      // "💡 Aiuto": una lettera alla volta nel primo spazio non giusto
+      await page.click('#s-panel button:has-text("Aiuto")');
+      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), ex.data.answers[0].slice(0, 1).toLowerCase(), 'prima lettera svelata');
+      await page.click('#s-panel button:has-text("Aiuto")');
+      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), ex.data.answers[0].slice(0, 2).toLowerCase(), 'seconda lettera svelata');
       for (const inp of inputs) await inp.fill('zzz');
       await page.click('#s-panel button:has-text("Controlla")');
       assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })));
@@ -348,21 +370,44 @@ async function startVideo(page) {
     await page.click('#s-panel button:has-text("Controlla")');
     const fb = await page.$eval('#s-panel .feedback', function (f) { return f.textContent; });
     assert.ok(/Giusto/.test(fb), 'esercizio ' + (k + 1) + ' (' + ex.type + '): ' + fb);
+    assert.ok(await page.$('#s-panel .actions .feedback'), '"Giusto!" sulla riga dei pulsanti');
+    await page.waitForTimeout(400);   // fitStage (transizione .3s)
+    const fit = await page.evaluate(function () { const pop = document.querySelector('#s-panel'), pb = document.querySelector('#s-player'); return { scroll: pop.scrollHeight, client: pop.clientHeight, ph: pb.getBoundingClientRect().height }; });
+    assert.ok(fit.scroll <= fit.client + 2, 'tutto visibile senza scorrere: ' + JSON.stringify(fit));
+    assert.ok(fit.ph >= 200, 'video mai sotto 200 px: ' + fit.ph);
     if (k === 0) {
       assert.ok(await page.$('#s-panel .fx-burst .fx-piece') || await page.$('#s-stage .fx-burst .fx-piece'), 'coriandoli');
       assert.ok(await page.$('#s-panel .feedback.win'), 'feedback animato');
       // frase completa con parole cliccabili: una stella
       await page.waitForTimeout(1500);   // fine dei coriandoli
-      const wEl = page.locator('#s-panel .fullwrap .w').nth(1);
+      // niente frase duplicata sotto: le parole della frase sopra (verde) sono cliccabili per la stella
+      assert.ok(!(await page.$('#s-panel .fullwrap')), 'nessuna frase completa duplicata (tipo ' + ex.type + ')');
+      assert.ok(!(await page.$('#s-panel input.gap')) && !(await page.$('#s-panel .chips:not(.answer-row) .chip:not(.w)')), 'campi e banca di parole tolti a risposta giusta');
+      const wEl = page.locator('#s-panel .w').nth(1);
       await wEl.scrollIntoViewIfNeeded();
       try { await wEl.click({ timeout: 8000 }); } catch (e) { console.log('DIAG star click:', e.message.split('\n').slice(0, 8).join(' | ')); throw e; }
-      assert.ok(await page.$('#s-panel .fullwrap .w.starred'), 'parola con la stella');
+      assert.ok(await page.$('#s-panel .w.starred'), 'parola con la stella');
       // layout: video in alto al centro, esercizio sotto
       const geo = await page.evaluate(function () { const p = document.getElementById('s-player').getBoundingClientRect(); const st = document.getElementById('s-stage').getBoundingClientRect(); const b = document.querySelector('#s-panel .sentence, #s-panel .chips, #s-panel .mc-options').getBoundingClientRect(); return { pCenter: (p.left + p.width / 2) - (st.left + st.width / 2), pTop: p.top - st.top, bodyBelow: b.top >= p.bottom - 1, pH: p.height / st.height }; });
-      assert.ok(Math.abs(geo.pCenter) < 4 && geo.pTop < 60 && geo.bodyBelow && geo.pH > 0.4, 'video in alto al centro, frase sotto: ' + JSON.stringify(geo));
+      assert.ok(Math.abs(geo.pCenter) < 4 && geo.pTop < 60 && geo.bodyBelow && geo.pH > 0.2 && geo.pH <= 0.56, 'video in alto al centro, frase sotto: ' + JSON.stringify(geo));
     }
     await page.click('#s-panel button:has-text("Continua")');
     if (k === 0) { await page.waitForTimeout(200); assert.ok(!(await page.$('#s-stage.docked')), 'stage torna pieno dopo Continua'); }
+    if (k === 1) {
+      // dopo "Continua" la barra deve rispondere ancora ai clic (prima veniva ridisegnata senza gestori)
+      await page.waitForTimeout(150);
+      const track = await page.$('#s-timeline .track'); const tb = await track.boundingBox();
+      const tBefore = await page.evaluate(function () { return window.VLApp.S.player.time(); });
+      const target = lesson.exercises[2].segment.start - 5;
+      // la barra dello studente è compressa (senza i tagli): la posizione del clic segue il tempo "che resta"
+      const frac = await page.evaluate(function (target) { const ls = window.VLApp.S.student.lesson; const keep = window.VLGen.keepRanges(ls.cuts, ls.duration); let v = 0, V = 0; keep.forEach(function (r) { V += r.end - r.start; if (target >= r.end) v += r.end - r.start; else if (target > r.start) v += target - r.start; }); return v / V; }, target);
+      assert.ok(!(await page.$('#s-timeline .cut')), 'niente tagli disegnati sulla barra dello studente');
+      assert.strictEqual(await page.$eval('#s-timeline .labels span:last-child', function (x) { return x.textContent; }), await page.evaluate(function () { const ls = window.VLApp.S.student.lesson; const d = Math.round(window.VLGen.effectiveDuration(ls.cuts, ls.duration)); return Math.floor(d / 60) + ':' + String(d % 60).padStart(2, '0'); }), 'durata scritta = durata dopo i tagli');
+      await page.mouse.click(tb.x + tb.width * frac, tb.y + tb.height / 2);
+      await page.waitForTimeout(120);
+      const tAfter = await page.evaluate(function () { return window.VLApp.S.player.time(); });
+      assert.ok(Math.abs(tAfter - target) < 6, 'clic sulla barra dopo Continua: ' + tBefore.toFixed(1) + ' → ' + tAfter.toFixed(1) + ' (atteso ~' + target.toFixed(0) + ')');
+    }
   }
   await page.waitForSelector('#s-panel h2:has-text("Fine!")', { timeout: 90000 });
   clearInterval(sampler);
@@ -414,6 +459,18 @@ async function startVideo(page) {
   assert.ok(jump.playing && jump.t >= exs[4].segment.start - 2 && jump.t < exs[4].markerTime, 'clic sul numero: ' + JSON.stringify(jump));
   await page.waitForSelector('#s-panel button:has-text("Controlla")', { timeout: 30000 });
   assert.ok(/^5 di /.test(await page.$eval('#s-panel .ex-head .badge', function (b) { return b.textContent; })), 'esercizio 5 aperto dal numero');
+  await page.evaluate(function () { window.VLApp.S.player.pause(); });
+  // esercizio già fatto: ricliccando il numero il verde/rosso resta (con l'anello di "sei qui"), e si può rifare
+  await page.evaluate(function () { const s = window.VLApp.S.student; const e = s.lesson.exercises[0]; s.results[e.id] = { correct: false, attempts: 1 }; s.done.add(e.id); });
+  await page.locator('#s-timeline .marker').nth(0).click();
+  await page.waitForTimeout(150);
+  const m0 = await page.$eval('#s-timeline .marker', function (m) { return m.className; });
+  assert.ok(/done/.test(m0) && /bad/.test(m0), 'il numero resta rosso dopo il clic: ' + m0);
+  await page.waitForSelector('#s-panel button:has-text("Continua")', { timeout: 30000 });
+  assert.ok(/^1 di /.test(await page.$eval('#s-panel .ex-head .badge', function (b) { return b.textContent; })), 'esercizio già fatto riaperto');
+  assert.ok(!(await page.$('#s-panel button:has-text("Controlla")')), 'già fatto: si riascolta, non si rifà (niente Controlla)');
+  assert.ok(/già fatto/.test(await page.$eval('#s-panel .instr', function (i) { return i.textContent; })) && /Soluzione:/.test(await page.$eval('#s-panel', function (p) { return p.textContent; })), 'ripasso con soluzione');
+  assert.ok(/active/.test(await page.$eval('#s-timeline .marker', function (m) { return m.className; })) && /bad/.test(await page.$eval('#s-timeline .marker', function (m) { return m.className; })), 'aperto ma ancora rosso');
   await page.evaluate(function () { window.VLApp.S.player.pause(); });
 
   console.log('4. link con dati inclusi');

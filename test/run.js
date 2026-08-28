@@ -329,6 +329,12 @@ test('tagli: l\'introduzione del tema e la conclusione restano, i saluti inizial
   d2.cuts.forEach(function (c) { d2.chunks.forEach(function (ch) { if (ch.silence) return; assert.ok(!(ch.start < c.start && ch.end > c.start + 0.6) && !(ch.start < c.end - 0.6 && ch.end > c.end), 'taglio a metà frase ' + Math.round(c.start) + '-' + Math.round(c.end)); }); });
 });
 
+test('soluzione del fill the gaps: uno spazio unito = una voce, senza virgole tra le sue parole', function () {
+  const ex = EX.buildExercise('gap', 'Le boe misurano la temperatura dell\'acqua e trasmettono i dati via satellite ogni giorno.', { lang: 'it', choices: { gapWords: ['la', 'temperatura', 'via', 'satellite'] } });
+  assert.ok(ex && EX.gapRuns(ex.data).length === 2, 'due spazi uniti: ' + JSON.stringify(ex && ex.data.gapIndices));
+  assert.strictEqual(EX.solution(ex), 'la temperatura, via satellite');
+});
+
 test('scelta multipla: cambiando frase resta "mc" (domanda vuota da compilare), mai un fill the gaps al suo posto', function () {
   const near = G.passagesNear(realChunks, 300, { range: 'smart', lang: 'it', type: 'mc', exclude: new Set() });
   assert.ok(near.length >= 1);
