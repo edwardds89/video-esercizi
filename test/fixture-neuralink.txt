@@ -1,0 +1,103 @@
+# Chapter 1: Il chip Neuralink: cos'è, a cosa serve e come funzionano le BCI
+0:00 Ma voi vi fareste impiantare un chip nel cervello?
+0:07 Vediamolo. Oggi parliamo della tecnologia dietro Neuralink, una delle aziende fondate da Elon Musk, ma più in
+0:13 generale dai sistemi che permettono al nostro cervello di dialogare direttamente con un computer. Tutti ne parlano come del chip nel cervello che
+0:23 legge i pensieri, ma non legge proprio i pensieri, però riescono a capire cosa sta succedendo nella nostra testa mentre
+0:31 stiamo immaginando di voler compiere delle azioni.
+0:35 Queste tecnologie si chiamano BCI [musica] Brain Computer Interface o in italiano le interfaccevello computer e
+0:43 sono degli impianti [musica] per ridare a persone paralizzate il controllo di un computer tramite il quale muovere gli arti, comunicare,
+0:52 giocare usando direttamente l'attività nel loro cervello. In questo video vi raccontiamo che cosa sono, come
+0:59 funzionano, come vengono usate e quali sono le sfide e [musica] soprattutto dove ci stanno portando.
+1:08 [musica]
+1:09 Comunque se vi piacciono questi video e vorreste che andassimo nelle scuole, potete abbonarvi a Geopop. Se raggiungiamo i 20.000 meccenati, faremo
+1:17 un tour per le scuole di tutte [musica] le regioni d'Italia. Basta andare sul sito jopap.it e cliccare su abbonamento.
+1:24 Grazie mille e torniamo al video. Ma facciamo un passo indietro e chiediamoci come fa un computer a capire cosa stiamo
+1:32 pensando o meglio cosa vorremmo fare e poi farlo fare al posto nostro.
+1:39 Partiamo dal cervello. 86 miliardi di cellule nervose, i neuroni, che possiamo vedere come un fittimo circuito
+1:47 elettrico. Dietro ogni nostro movimento, pensiero, sensazione che proviamo, [musica] c'è una proprietà fondamentale di queste cellule che è l'eccitabilità,
+1:56 cioè il fatto che se i neuroni vengono stimolati questi comunicano tra di loro generando dei segnali elettrici. Ma un
+2:04 singolo segnale ha un'intensità piccola [musica] piccola. Quando un'area del nostro cervello però viene stimolata, i neuroni che si attivano sono milioni ed
+2:13 insieme creano un campo elettrico che può essere misurato a distanza. Ed eccoci qui che ci stiamo avvicinando al principio, alla base delle tecnologie
+2:22 BCI, cioè di interfaccia cervello computer. E allora perché per misurare questa attività elettrica vengono posizionati degli elettrodi metallici?
+# Chapter 2: Gli elettrodi delle Brain-Computer Interface invasive
+2:31 [musica]
+2:33 Nel caso di Neuralink, ma non è la sola, un elettrodo grande, più o meno come una moneta, viene inserito chirurgicamente
+2:40 sotto lo scalpo a filo con il cranio. Da questo dischetto partono dei fili sottilissimi, immaginate più fini di un
+2:47 capello. E su questi fili ci sono in totale più di 1000 microelettrodi che si appoggiano direttamente sul cervello,
+2:54 proprio nella zona che normalmente manda i comandi ai muscoli di braccia e mani e che si chiama proprio corteccia motoria.
+3:01 Ovviamente questo elettrodo e questi fili non li piazza un chirurgo a mano, ma li inserisce un robot chirurgico che li infila nel punto giusto, evitando i
+3:10 vasi sanguigni con una precisione addirittura al micrometro. Ma questa è un'altra storia. Comunque dovete sapere che quando una persona rimane
+3:18 paralizzata a causa di un'adesione al midollo spinale, di un ictus o di altri incidenti, può accadere che il cervello
+3:25 comunque continui a funzionare e a generare i segnali necessari al movimento, ma che questi segnali non riescono più a raggiungere i muscoli.
+3:33 [musica]
+# Chapter 3: Come funzionano le interfacce cervello-computer
+3:34 Le BCI sfruttano proprio questo, cioè intercettano l'attività cerebrale attraverso gli elettrodi e la inviano al
+3:41 computer. I segnali raccolti vengono prima amplificati e poi passano attraverso una catena di algoritmi che li analizza e li interpreta. A quel
+3:50 punto il computer può tradurre l'intenzione della persona in azione, [musica] cioè può muovere un cursore, controllare una protesi, può addirittura
+3:59 selezionare delle lettere per generare delle parole e molto altro. L'aspetto rivoluzionario di questa tecnologia è
+4:06 [musica] che permette di ristabilire una forma di comunicazione dove il collegamento naturale era stato interrotto. In pratica crea un ponte
+4:15 artificiale che bypassa il tratto danneggiato e permette al cervello di trasformare i segnali, i movimenti o
+4:23 comandi esterni. [musica] In pratica, che cos'è che stiamo dicendo? Andiamo alla lavagna che così lo vediamo. Eh, allora, immaginiamo che
+4:31 questo è il nostro cervello. Qui c'è l'aria motoria, ok? Qui che succede? Che qui ci sono dei dei tratti, si chiamano corticospinali, cioè partono dalla
+4:39 corteccia, [musica] passano per il midollo spinale e scendono fino, ad esempio, alle nostre mani o alle nostre braccia. Quindi se
+4:47 questa connessione qui, immaginate qui, arriva qui alla nostra mano, ok? Se questa connessione qui si è interrotta perché magari c'è stato un incidente che
+4:56 ha interrotto, questi tratti non funzionano più. Perché questa BCI è così incredibile? Perché immaginate che la
+5:04 BCI ha attaccata una protesi alla nostra mano. Allora, immaginate che quindi questa è la protesi. La protesi è
+5:12 attaccata, qui c'è il macchinario, c'è la BCI, quello che stiamo dicendo, la brain computer interface, ok? Ci sono gli
+5:21 algoritmi [musica] che fanno muovere la protesi, ma da dove? vanno direttamente a leggere il segnale qui tramite
+5:29 l'elettrodo, quindi fanno da ponte, cioè dove questa interruzione c'è stata,
+5:36 questo sistema ristabilisce una connessione, prende proprio i messaggi, i segnali dal cervello, legge i segnali,
+5:45 li trasforma in azioni e quindi la protesi si muoverà al posto della mano.
+5:51 Quindi abbiamo ristabilito un ponte dove questa connessione non c'era più.
+5:57 La ricerca nel campo di queste tecnologie sta facendo passi da gigante e ci sono degli studi che si stanno concentrando sul testarla proprio come
+6:06 tecnica di riabilitazione con l'idea di aiutare il cervello a fargli ritrovare dei nuovi percorsi lì dove sono stati
+6:13 danneggiati, così addirittura da non avere più necessità della BCI. Ma adesso la domanda fondamentale è come si
+6:20 riconosce qual è l'azione che vuole compiere una persona? Cioè come fa la BCI a sapere che voglio muovere il dito della mano destra?
+6:31 La prima cosa da fare è addestrare gli algoritmi che dovranno capire quale attività elettrica del cervello è
+6:39 associata a quale volontà. Durante la fase di addestramento, il sistema mostra al partecipante ai vari compiti, tipo
+6:46 immagina di aprire la mano destra oppure "immagina di muovere la mano sinistra".
+6:52 Adesso rilassati. Quando al paziente viene chiesto immagina di muovere la mano destra, quello che succede nel cervello è che si attiveranno le
+7:01 specifiche aree motorie che è associato a quel movimento. Questo si rifletterà nell'attività elettrica che viene
+7:08 registrata dagli elettrodi. Allora, per ogni richiesta, muovi la mano destra o muovi la mano sinistra, l'attività elettrica registrata sarà diversa. In
+7:17 questo modo il sistema si allena e quando il paziente effettivamente poi vorrà muovere la mano destra invece della mano sinistra, il sistema lo
+7:25 riconosce subito e farà muovere il rubot per lui. È un po' come insegnare al sistema a riconoscere le impronte
+7:33 digitali, ma invece delle dita si usano delle impronte cerebrali. Quindi non è che il sistema legge il pensiero voglio
+7:41 muovere la mano per prendere la bottiglia, ma riconosce la firma elettrica del movimento immaginato.
+7:48 Magia.
+# Chapter 4: Oltre Neuralink di Musk: gli altri tipi di interfacce cervello-computer
+7:51 Ora vi faccio una specifica. Neuralink non è la sola e soprattutto non è stata la prima. Ci sono moltissimi gruppi di
+7:58 ricerca in tutto il mondo e tantissime aziende che sono partite molto prima di Neuralink e che occupano una posizione
+8:05 cruciale negli ambiti clinici. Vi faccio menzione dei lavori straordinari dell'Università di San Francisco in California e di Stanford che hanno messo
+8:15 su un sistema per ridare voce a una paziente che non poteva più muovere i muscoli del volto, né pronunciare una parola da quando aveva 18 anni. Allora
+8:24 cosa hanno fatto? Le hanno installato 200 elettrodi sulla corteccia [musica] cerebrale, le hanno ridato una voce
+8:30 digitale e hanno addirittura creato un avatar in 3D che muove il viso proprio come lei.
+8:40 Sia studio sia un Euralink hanno un approccio piuttosto invasivo perché l'elettrodo viene proprio impiantato chirurgicamente. Quando però questa
+8:48 tecnologia è partita [musica] circa una ventina di anni fa e che adesso ancora tanti centri portano avanti, gli elettrodi erano tanti e venivano
+8:56 posizionati sulla superficie esterna della testa. Quindi, invece di leggere l'attività elettrica di singoli neuroni, quello che facevano è misurare
+9:05 l'attività di grandi gruppi di neuroni dall'esterno. Ovviamente ci sono vantaggi e svantaggi in entrambi gli approcci perché se gli elettrodi non
+9:13 entrano nel cervello ma rimangono fuori dalla testa, il segnale è molto più debole. pieno di rumore perché ci sono altri muscoli che si muovono, ci sono
+9:21 gli occhi che sbattono, ma comunque la tecnologia sta migliorando tantissimo.
+9:25 [musica]
+9:26 Bene, abbiamo parlato dell'ambito clinico, certo, ma tutto questo arriverà mai nelle nostre case o meglio nelle
+# Chapter 5: Quando si diffonderanno i chip nel cervello
+9:34 nostre teste? E quando? [musica] Per ora la risposta è non subito, almeno non così com'è, perché gli impianti più
+9:43 usati sono invasivi, [musica] quindi richiedono una chirurgia. ci sono dei controlli etici molto stringenti anche di durabilità degli impianti e che
+9:51 tra l'altro costano tantissimo. Hanno senso dove il beneficio è davvero enorme, quindi persone con paralisi gravi, [musica] disturbi del movimento,
+9:59 perdita completa del linguaggio. Il pezzo davvero consumer, quello che potremmo vedere prima di tutti nelle nostre vite di tutti i giorni,
+10:07 probabilmente arriverà da un'altra direzione, cioè le BCI non invasive, quindi caschetti con elettrodintegrati,
+10:14 fasce, occhiali o visori di realtà virtuale. Già oggi esistono caschetti e cuffie che stimano l'attenzione,
+10:22 [musica]
+10:22 la fatica, lo stress e trasformano questi parametri in difficoltà nei videogiochi, se sei concentrato,
+10:30 [musica] oppure piattaforme di realtà aumentata che modificano lo scenario o addirittura la musica in base a quanto sei dentro l'esperienza o addirittura
+10:39 sistemi che adattano le notifiche e le pause in base al carico mentale.
+10:45 Ma quanto tutto ciò ci sembra davvero lontano dalla nostra quotidianità?
+10:49 Facciamo una piccola riflessione. Se ci pensate 20 anni fa anche soltanto l'idea di un orologio che ti dicesse come
+10:56 dormi, quanto dormi, quanto ti muovi, come ti batte il cuore e quanto bere sembrava esagerata. Beh, con Neuralink e
+11:03 con tutte le altre tecnologie di BCI siamo un passo prima. ancora in grande parte sono in ospedale nei centri di ricerca, ma già sono in grado di
+11:12 cambiare radicalmente la vita di alcune persone. Di certo non ci danno la telepatia, non leggeranno i nostri pensieri nascosti, però potrebbero
+11:21 diventare pezzo dopo [musica] pezzo un nuovo modo per collegare il cervello al mondo digitale e speriamo in un modo in
+11:28 più per istituire un'autonomia a chi l'ha persa. [musica] Io ringrazio voi per avermi seguita e
+11:36 ringrazio anche Michele Bevilacqua,
+11:38 [musica]
+11:39 un ricercatore dell'Harvard Medical School di Boston, per il supporto tecnico. Io vi do sempre appuntamento qui [musica] su Jopop, le scienze e la vita di tutti i giorni. Ciao. Ciao.
+11:54 [musica]

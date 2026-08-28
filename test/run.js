@@ -47,6 +47,14 @@ test('WebVTT', function () {
   assert.strictEqual(p.lines[0].text, 'Hello there');
   assert.strictEqual(p.lines[1].start, 4.5);
 });
+test('trascrizione duplicata (letta due volte) → una copia sola; righe identiche → una', function () {
+  const one = '0:00 Tutti ci laviamo i denti\n0:02 col dentifricio, ma in quanti\n0:04 sappiamo davvero a cosa serve\n0:06 il fluoro forma uno scudo\n0:08 protettivo sullo smalto dei denti.';
+  const twice = G.parseTranscript(one + '\n' + one);
+  assert.strictEqual(twice.lines.length, 5, 'copia doppia in coda');
+  const rows = one.split('\n');
+  const inter = G.parseTranscript(rows.map(function (r) { return r + '\n' + r; }).join('\n'));
+  assert.strictEqual(inter.lines.length, 5, 'righe identiche adiacenti');
+});
 test('testo senza timestamp → formato sconosciuto', function () {
   const p = G.parseTranscript('solo testo senza tempi\naltra riga');
   assert.strictEqual(p.format, 'unknown');
@@ -136,6 +144,30 @@ test('frasi alternative vicine a un tempo', function () {
   const alts = G.alternatives(chunks, e.markerTime, { exclude: new Set([e.chunkId]), type: e.type, lang: 'it' });
   assert.ok(alts.length >= 2);
   alts.forEach(function (c) { assert.notStrictEqual(c.id, e.chunkId); });
+});
+
+console.log('Trascrizione reale (Geopop, con punteggiatura)');
+const real = G.parseTranscript(require('fs').readFileSync(__dirname + '/fixture-neuralink.txt', 'utf8'));
+test('parser: righe "0:07 testo", capitoli e [musica] in mezzo alla riga gestiti', function () {
+  assert.ok(real.lines.length >= 90, 'righe ' + real.lines.length);
+  assert.ok(!real.lines.some(function (l) { return /\[musica\]|Chapter/i.test(l.text); }));
+  assert.ok(real.lines.filter(function (l) { return l.noise; }).length >= 5, 'righe di sola musica → rumore');
+});
+const realChunks = G.annotate(G.buildChunks(real.lines, { duration: 719, lang: 'it' }), { lang: 'it', duration: 719 });
+test('modalità frasi: chunk allineati alla punteggiatura, mai troppo lunghi', function () {
+  const sp = realChunks.filter(function (c) { return !c.silence; });
+  assert.strictEqual(sp[0].mode, 'sentences');
+  const punct = sp.filter(function (c) { return /[.!?…,;:]["'»)]*$/.test(c.text); }).length;
+  assert.ok(punct / sp.length >= 0.7, 'chiusi da punteggiatura: ' + punct + '/' + sp.length);
+  sp.forEach(function (c) { assert.ok(c.wordCount <= 26, 'chunk lungo: ' + c.wordCount); assert.ok(c.words && c.words.length === c.text.split(/\s+/).length, 'tempi per parola'); });
+  assert.ok(sp.some(function (c) { return c.text === 'Ma voi vi fareste impiantare un chip nel cervello?'; }), 'prima frase intera');
+});
+test('bozza sulla trascrizione reale: niente CTA/sponsor tra gli esercizi, durata rispettata', function () {
+  const d = G.generateDraft({ chunks: realChunks, lines: real.lines, duration: 719, n: 10, target: 540, lang: 'it', seed: 3 });
+  assert.strictEqual(d.exercises.length, 10);
+  d.exercises.forEach(function (e) { assert.ok(!/abbonarvi|abbonamento|meccenati|jopap|ringrazio|appuntamento/i.test(e.sentence), 'CTA: ' + e.sentence); });
+  assert.ok(Math.abs(d.stats.effective - 540) <= 12, 'effettiva ' + d.stats.effective.toFixed(0));
+  assert.ok(!d.cuts.some(function (c) { return c.end - c.start < 3; }), 'tagli ridicoli');
 });
 
 console.log('Esercizi');

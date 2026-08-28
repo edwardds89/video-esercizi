@@ -59,9 +59,9 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   // persistenza
   await page.reload();
   await page.waitForSelector('#view-home.active');
-  const items = await page.$$eval('#lesson-list .item', function (els) { return els.length; });
+  const items = await page.$$eval('#lesson-list .lesson-card', function (els) { return els.length; });
   assert.strictEqual(items, 1, 'lezione salvata');
-  await page.click('#lesson-list .item button:has-text("Editor")');
+  await page.click('#lesson-list .lesson-card button:has-text("Modifica")');
   await page.waitForSelector('#view-editor.active');
   assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (els) { return els.length; }), 8);
 
@@ -140,7 +140,7 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   await page2.goto(link);
   await page2.waitForSelector('#view-student.active');
   await page2.waitForSelector('#s-panel button:has-text("Inizia")');
-  assert.strictEqual(await page2.$eval('#btn-back-editor', function (b) { return b.style.display; }), 'none', 'niente editor nel link studente');
+  assert.strictEqual(await page2.$eval('#btn-edit', function (b) { return b.style.display; }), 'none', 'niente editor nel link studente');
   console.log('   link studente ok, lunghezza', link.length);
 
   console.log('5. nuova lezione: parser e validazioni');
@@ -152,6 +152,43 @@ const BASE = process.env.BASE || 'http://localhost:8123/';
   await page.fill('#f-transcript', '0:00\nciao a tutti\n0:03\noggi parliamo di neuroni e sinapsi\n0:08\nogni neurone comunica con gli altri');
   await page.waitForTimeout(100);
   assert.ok(/3 righe/.test(await page.$eval('#f-transcript-status', function (e) { return e.textContent; })));
+
+  console.log('6. pulsante per Chrome (pagina YouTube finta) → import → bozza');
+  await page.goto(BASE + 'test/fake/youtube.com/watch.html?v=BsXw2C5XORk');
+  await page.addScriptTag({ path: 'bookmarklet.js' });
+  await Promise.all([
+    page.waitForURL(function (u) { return u.href.indexOf('#import=') !== -1 || u.href.indexOf(BASE) === 0 && u.href.indexOf('watch.html') === -1; }, { timeout: 20000 }),
+    page.evaluate(function (base) { window.VL_BOOKMARKLET(base); }, BASE)
+  ]);
+  await page.waitForSelector('#view-new.active', { timeout: 15000 });
+  assert.ok(/importata/.test(await page.$eval('#new-title', function (h) { return h.textContent; })));
+  assert.ok(/BsXw2C5XORk/.test(await page.$eval('#f-url', function (i) { return i.value; })), 'link compilato');
+  assert.ok(/Neuralink/.test(await page.$eval('#f-title', function (i) { return i.value; })), 'titolo compilato');
+  assert.ok(/9\d righe/.test(await page.$eval('#f-transcript-status', function (e) { return e.textContent; })), 'trascrizione importata');
+  assert.strictEqual(await page.$eval('#f-range', function (s) { return s.value; }), '600', 'circa 10 minuti proposto per un video di 12');
+  await page.click('#btn-generate');
+  await page.waitForSelector('#view-editor.active', { timeout: 20000 });
+  await page.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  const realStats = await page.$eval('#e-stats', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+  console.log('   ', realStats);
+  assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (els) { return els.length; }), 10);
+  assert.ok(/Durata per lo studente: (9:[3-5]\d|10:[0-5]\d|11:0\d)/.test(realStats), 'durata circa 10 minuti');
+
+  console.log('7. video senza trascrizione → avviso chiaro; generazione senza trascrizione → errore');
+  let dialogMsg = '';
+  page.once('dialog', function (d) { dialogMsg = d.message(); d.dismiss(); });
+  await page.goto(BASE + 'test/fake/youtube.com/watch-notranscript.html?v=abcdefghijk');
+  await page.addScriptTag({ path: 'bookmarklet.js' });
+  await page.evaluate(function (base) { window.VL_BOOKMARKLET(base); }, BASE);
+  await page.waitForFunction(function () { return true; });
+  await page.waitForTimeout(9000);
+  assert.ok(/non è utilizzabile/i.test(dialogMsg), 'avviso: ' + dialogMsg);
+  await page.goto(BASE + '?mock=1');
+  await page.click('#nav button[data-view=new]');
+  await page.fill('#f-url', 'https://www.youtube.com/watch?v=abcdefghijk');
+  await page.click('#btn-generate');
+  const err = await page.$eval('#f-error', function (e) { return e.textContent; });
+  assert.ok(/non è utilizzabile/i.test(err), 'errore in pagina: ' + err);
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
