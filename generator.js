@@ -188,7 +188,9 @@
   function chunkFromWords(ws) {
     const text = ws.map(function (x) { return x.w; }).join(' ').trim();
     const tokens = L.tokenize(text);
-    return { start: ws[0].start, end: ws[ws.length - 1].end, text: text, lines: [], words: ws.map(function (x) { return { start: x.start, end: x.end }; }), tokens: tokens, wordCount: tokens.length };
+    const words = ws.map(function (x) { const w = { start: x.start, end: x.end }; if (x.f) w.f = true; if (x.l) w.l = true; return w; });
+    // startExact/endExact: il confine coincide con l'inizio/fine di una riga dei sottotitoli (tempo vero, non interpolato)
+    return { start: ws[0].start, end: ws[ws.length - 1].end, text: text, lines: [], words: words, tokens: tokens, wordCount: tokens.length, startExact: !!ws[0].f, endExact: !!ws[ws.length - 1].l };
   }
   /** Parole con tempi stimati (distribuite uniformemente dentro la riga), più marcatori di silenzio. */
   function wordStream(lines) {
@@ -197,7 +199,7 @@
       if (l.noise) { out.push({ silence: true, start: l.start, end: l.end }); return; }
       const ws = String(l.text).split(/\s+/).filter(Boolean);
       const d = (l.end - l.start) / Math.max(1, ws.length);
-      ws.forEach(function (w, k) { out.push({ w: w, start: l.start + k * d, end: l.start + (k + 1) * d, line: i }); });
+      ws.forEach(function (w, k) { out.push({ w: w, start: l.start + k * d, end: l.start + (k + 1) * d, line: i, f: k === 0, l: k === ws.length - 1 }); });
     });
     return out;
   }
@@ -221,7 +223,9 @@
       if (it.silence) { flush(); if (it.end - it.start >= 0.3) chunks.push(silenceChunk(it.start, it.end)); continue; }
       if (prev && !prev.silence && it.start - prev.end >= o.silenceMin) { flush(); chunks.push(silenceChunk(prev.end, it.start)); }
       cur.push(it);
-      if (SENT_END.test(it.w) && !/^\d+[.,]$/.test(it.w)) flush();
+      // fine frase: punto/?/! finale, non il punto di "2." e, se la parola dopo comincia minuscola, non è una fine frase ("2,5. del terreno")
+      const nx = stream[i + 1];
+      if (SENT_END.test(it.w) && !/^\d+[.,]$/.test(it.w) && !(nx && !nx.silence && /^[a-zà-ÿ]/.test(nx.w))) flush();
     }
     flush();
     // Frasi troppo lunghe: dividi alla virgola/punto e virgola più vicina al centro, altrimenti a metà
@@ -232,7 +236,7 @@
     function splitLong(c) {
       if (c.wordCount <= o.maxWords) return [c];
       const raw = c.text.split(/\s+/);
-      const ws = c.words.map(function (t, k) { return { w: raw[k], start: t.start, end: t.end }; });
+      const ws = c.words.map(function (t, k) { return { w: raw[k], start: t.start, end: t.end, f: !!t.f, l: !!t.l }; });
       const mid = ws.length / 2;
       let best = -1, bestCost = Infinity;
       for (let k = o.minWords - 1; k < ws.length - o.minWords; k++) {
@@ -305,7 +309,7 @@
       for (const part of split(sg.lines)) {
         const text = part.map(function (l) { return l.text; }).join(' ').trim();
         const tokens = L.tokenize(text);
-        chunks.push({ start: part[0].start, end: part[part.length - 1].end, text: text, lines: part, tokens: tokens, wordCount: tokens.length });
+        chunks.push({ start: part[0].start, end: part[part.length - 1].end, text: text, lines: part, tokens: tokens, wordCount: tokens.length, startExact: true, endExact: true });
       }
     }
     return chunks;
@@ -320,9 +324,10 @@
     const merged = [];
     for (const c of chunks) {
       const prev = merged[merged.length - 1];
-      if (!c.silence && c.wordCount <= 2 && prev && !prev.silence && c.start - prev.end < 0.8 && prev.wordCount < o.maxWords + 4) {
+      // (mai se il pezzetto inizia una frase nuova: "…fino alla fine." + "Io" → "Io" resta con la SUA frase)
+      if (!c.silence && c.wordCount <= 2 && prev && !prev.silence && c.start - prev.end < 0.8 && prev.wordCount < o.maxWords + 4 && !(mode === 'sentences' && endsSentence(prev, c))) {
         prev.text = (prev.text + ' ' + c.text).trim();
-        prev.end = c.end;
+        prev.end = c.end; prev.endExact = !!c.endExact;
         if (prev.words && c.words) prev.words = prev.words.concat(c.words); else { prev.lines = (prev.lines || []).concat(c.lines || []); prev.words = null; }
         prev.tokens = L.tokenize(prev.text);
         prev.wordCount = prev.tokens.length;
@@ -624,6 +629,78 @@
 
   function overlaps(a, b) { return a.start < b.end && b.start < a.end; }
 
+  /** L'ultimo token del chunk chiude una frase (punto, ?, !, …; "2,5." dei numeri non conta). */
+  function endsSentence(chunk, next) {
+    if (!chunk || chunk.silence || !chunk.text) return false;
+    const ws = String(chunk.text).trim().split(/\s+/);
+    const last = ws[ws.length - 1];
+    if (!SENT_END.test(last) || /^\d+[.,]$/.test(last)) return false;
+    if (next && !next.silence && next.text && /^[a-zà-ÿ]/.test(String(next.text).trim())) return false;   // "2,5. del terreno": la frase continua
+    return true;
+  }
+
+  /**
+   * Unità di taglio = FRASI INTERE. In modalità "sentences" i chunk possono essere pezzi di frase (le frasi lunghe vengono
+   * divise alla virgola per gli esercizi): tagliare a confine di chunk significava tagliare a metà frase. Qui i chunk si
+   * riuniscono fino al punto; i silenzi restano unità a sé. Ogni unità ricorda se i suoi confini sono tempi veri (inizio/fine
+   * di una riga dei sottotitoli) o interpolati.
+   */
+  function cutUnits(chunks) {
+    const units = [];
+    let cur = null;
+    const close = function () { if (cur) { cur.value = cur.tot ? cur.wv / cur.tot : 0; delete cur.wv; delete cur.tot; delete cur.ctaDur; units.push(cur); cur = null; } };
+    for (let i = 0; i < chunks.length; i++) {
+      const c = chunks[i];
+      if (c.silence) {
+        // pausa DENTRO una frase (il testo prima non la chiude e quello dopo continua minuscolo): resta nella frase,
+        // altrimenti il taglio comincerebbe a metà frase ("…significa 0,41° [pausa] in 10 anni…")
+        const prevSpoken = i > 0 && !chunks[i - 1].silence ? chunks[i - 1] : null;
+        const nextSpoken = chunks[i + 1] && !chunks[i + 1].silence ? chunks[i + 1] : null;
+        if (cur && prevSpoken && nextSpoken && prevSpoken.mode === 'sentences' && !endsSentence(prevSpoken, nextSpoken)) { cur.end = c.end; cur.endExact = true; cur.ids.push(c.id); continue; }
+        close(); units.push({ start: c.start, end: c.end, value: 0, silence: true, ids: [c.id], startExact: true, endExact: true }); continue;
+      }
+      if (!cur) cur = { start: c.start, end: c.end, wv: 0, tot: 0, ctaDur: 0, cta: false, ids: [], startExact: !!c.startExact, endExact: false, silence: false };
+      const d = Math.max(0.1, c.end - c.start);
+      cur.tot += d; cur.wv += d * (c.value || 0); if (c.cta) cur.ctaDur += d; cur.end = c.end; cur.endExact = !!c.endExact; cur.ids.push(c.id);
+      cur.cta = cur.ctaDur >= cur.tot / 2;   // frase "promozionale" se lo è per più di metà della sua durata
+      if (c.mode !== 'sentences' || endsSentence(c, chunks[i + 1])) close();
+    }
+    close();
+    return units;
+  }
+
+  /** Margini ai confini: dove il tempo è interpolato si tiene un po' di più della frase che resta (meglio un attacco della frase tolta che una parola mozzata). */
+  function refineCutBounds(cut, D) {
+    const start = cut.start + (cut.startExact ? 0 : 0.25);
+    const end = Math.max(start, cut.end - (cut.endExact ? 0 : 0.25));
+    const out = Object.assign({}, cut, { start: Math.max(0, start), end: D ? Math.min(D, end) : end });
+    if (cut.start <= 0.05) out.start = 0;
+    if (D && cut.end >= D - 0.05) out.end = D;
+    delete out.startExact; delete out.endExact;
+    return out;
+  }
+
+  /**
+   * Riporta un taglio qualsiasi (del modello, o fatto a mano) a confini di frase, restringendolo: inizio = inizio della prima
+   * frase che comincia dentro il taglio (tolleranza `tol` s prima), fine = fine dell'ultima frase che finisce dentro.
+   * Restituisce null se non resta almeno `min` secondi.
+   */
+  function snapCutToSentences(cut, chunks, opts) {
+    const o = Object.assign({ tol: 0.4, min: 3, duration: null, margins: true }, opts || {});
+    const D = o.duration || (chunks.length ? chunks[chunks.length - 1].end : cut.end);
+    const units = cutUnits(chunks);
+    let first = null, last = null;
+    for (const u of units) {
+      if (!first && u.start >= cut.start - o.tol && u.start < cut.end) first = u;
+      if (u.end <= cut.end + o.tol && u.end > cut.start) last = u;
+    }
+    if (cut.start <= 0.05 && units.length) first = units[0];
+    if (D && cut.end >= D - 0.05 && units.length) last = units[units.length - 1];
+    if (!first || !last || last.end - first.start < o.min) return null;
+    const snapped = Object.assign({}, cut, { start: first.start, end: last.end, startExact: first.startExact, endExact: last.endExact });
+    return o.margins ? refineCutBounds(snapped, D) : snapped;
+  }
+
   function planCuts(chunks, params) {
     const D = params.duration || chunks[chunks.length - 1].end;
     const T = params.target;
@@ -634,11 +711,11 @@
     let need = D - T - existing.reduce(function (s, c) { return s + (c.end - c.start); }, 0);
     if (!(need > tol)) return { cuts: [], removed: 0, shortfall: 0 };
 
-    // Unità sulla linea del tempo con copertura completa 0..D
+    // Unità sulla linea del tempo con copertura completa 0..D: frasi intere (mai pezzi di frase), silenzi
     const units = [];
-    if (chunks.length && chunks[0].start > 0.5) units.push({ start: 0, end: chunks[0].start, value: 0, silence: true });
-    for (const c of chunks) units.push({ start: c.start, end: c.end, value: c.value || 0, silence: !!c.silence, cta: !!c.cta, id: c.id });
-    if (chunks.length && D - chunks[chunks.length - 1].end > 0.5) units.push({ start: chunks[chunks.length - 1].end, end: D, value: 0, silence: true });
+    if (chunks.length && chunks[0].start > 0.5) units.push({ start: 0, end: chunks[0].start, value: 0, silence: true, startExact: true, endExact: true });
+    cutUnits(chunks).forEach(function (u) { units.push(u); });
+    if (chunks.length && D - chunks[chunks.length - 1].end > 0.5) units.push({ start: chunks[chunks.length - 1].end, end: D, value: 0, silence: true, startExact: true, endExact: true });
     // L'introduzione del tema (le prime frasi non promozionali, ~40 s) e la conclusione (gli ultimi ~25 s di contenuto prima dei saluti)
     // non si tagliano: senza, il video accorciato perde il senso. Saluti/sponsor all'inizio e alla fine restano tagliabili.
     const introKeep = params.keepIntro === false ? 0 : (params.introSeconds || 40);
@@ -687,7 +764,7 @@
       if (r.length < minForRun) continue;
       const reason = r.silence ? 'silenzio' : r.ctaShare > 0.5 ? 'sponsor / appello al pubblico' : (r.intro && r.length < 60) ? 'introduzione' : (r.outro && r.length < 90) ? 'chiusura' : r.mean < 0.35 ? 'bassa densità' : 'parte secondaria';
       if (r.length <= remaining + minCut / 2) {
-        cuts.push({ start: r.start, end: r.end, reason: reason });
+        cuts.push({ start: r.start, end: r.end, reason: reason, startExact: r.units[0].startExact, endExact: r.units[r.units.length - 1].endExact });
         removed += r.length;
         continue;
       }
@@ -703,7 +780,7 @@
           if (len >= remaining) {
             if (len <= remaining + 15) {
               const mean = wv / tot;
-              if (!best || mean < best.mean) best = { start: r.units[i].start, end: u.end, mean: mean, len: len };
+              if (!best || mean < best.mean) best = { start: r.units[i].start, end: u.end, mean: mean, len: len, startExact: r.units[i].startExact, endExact: u.endExact };
             }
             break;
           }
@@ -713,10 +790,10 @@
         // nessuna finestra ammissibile: prendi dall'inizio della sequenza una lunghezza ~remaining
         let j = 0;
         while (j < r.units.length - 1 && r.units[j].end - r.start < remaining) j++;
-        best = { start: r.start, end: r.units[j].end, len: r.units[j].end - r.start };
+        best = { start: r.start, end: r.units[j].end, len: r.units[j].end - r.start, startExact: r.units[0].startExact, endExact: r.units[j].endExact };
       }
       if (best.len >= minCut) {
-        cuts.push({ start: best.start, end: best.end, reason: reason });
+        cuts.push({ start: best.start, end: best.end, reason: reason, startExact: best.startExact, endExact: best.endExact });
         removed += best.len;
       }
     }
@@ -725,11 +802,12 @@
     const mergedCuts = [];
     for (const c of cuts) {
       const p = mergedCuts[mergedCuts.length - 1];
-      if (p && c.start - p.end < 1.5) { p.end = Math.max(p.end, c.end); }
-      else mergedCuts.push({ start: c.start, end: c.end, reason: c.reason });
+      if (p && c.start - p.end < 1.5) { if (c.end > p.end) { p.end = c.end; p.endExact = c.endExact; } }
+      else mergedCuts.push({ start: c.start, end: c.end, reason: c.reason, startExact: c.startExact, endExact: c.endExact });
     }
-    removed = mergedCuts.reduce(function (s, c) { return s + (c.end - c.start); }, 0);
-    return { cuts: mergedCuts, removed: removed, shortfall: Math.max(0, need - tol - removed) };
+    const finalCuts = mergedCuts.map(function (c) { return refineCutBounds(c, D); });
+    removed = finalCuts.reduce(function (s, c) { return s + (c.end - c.start); }, 0);
+    return { cuts: finalCuts, removed: removed, shortfall: Math.max(0, need - tol - removed) };
   }
 
   function keepRanges(cuts, duration) {
@@ -859,7 +937,7 @@
     passages: passages, selectPassages: selectPassages, passagesNear: passagesNear, makeExerciseFromPassage: makeExerciseFromPassage,
     parseTranscript: parseTranscript, buildChunks: buildChunks, wordTimes: wordTimes, annotate: annotate, wordFreq: wordFreq,
     typeFit: typeFit, selectChunks: selectChunks, alternatives: alternatives, nearestChunk: nearestChunk,
-    planCuts: planCuts, keepRanges: keepRanges, effectiveDuration: effectiveDuration, inCut: inCut,
+    planCuts: planCuts, cutUnits: cutUnits, endsSentence: endsSentence, snapCutToSentences: snapCutToSentences, refineCutBounds: refineCutBounds, keepRanges: keepRanges, effectiveDuration: effectiveDuration, inCut: inCut,
     makeExercise: makeExercise, generateDraft: generateDraft, fitCuts: fitCuts, validateLesson: validateLesson, autoCount: autoCount
   };
 });

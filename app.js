@@ -794,9 +794,13 @@
   });
   $('#btn-add-cut').addEventListener('click', function () {
     const ls = current(); const t = S.player ? S.player.time() : 0;
-    ls.cuts.push({ start: Math.round(t * 10) / 10, end: Math.min(ls.duration, Math.round(t * 10) / 10 + 10), reason: 'manuale' });
+    const raw = { start: Math.round(t * 10) / 10, end: Math.min(ls.duration, Math.round(t * 10) / 10 + 10), reason: 'manuale' };
+    // a frasi intere: inizia con la frase che comincia qui (o subito dopo) e finisce a fine frase
+    const snapped = ls.chunks && ls.chunks.length ? G.snapCutToSentences({ start: raw.start, end: raw.end + 4 }, ls.chunks, { tol: 1.5, min: 3, duration: ls.duration }) : null;
+    ls.cuts.push(snapped ? { start: snapped.start, end: snapped.end, reason: 'manuale' } : raw);
     ls.cuts.sort(function (a, b) { return a.start - b.start; });
     touch(ls); renderEditorBody();
+    if (snapped) toast('Taglio allineato alle frasi: da ' + fmt(snapped.start) + ' a ' + fmt(snapped.end));
   });
 
   /** Se il player conosce la durata vera e la lezione ne aveva una stimata più corta, allinea (e allunga i tagli finali). */
@@ -819,13 +823,40 @@
     if (rp) {
       // se il seek iniziale non è stato accettato (primo avvio del player YouTube), riprova una volta
       if (rp.start != null && t < rp.start - 1.5 && Date.now() - rp.at < 4000) { if (!rp.retried) { rp.retried = true; S.player.seek(rp.start); S.player.play(); } return; }
-      if (t >= rp.end || S.player.state() === 0) { S.player.pause(); S.editor.replay = null; if (rp.redock && S.editor.previewId) dock('#e-stage', true); }
+      if (t >= rp.end || S.player.state() === 0) { S.player.pause(); S.editor.replay = null; if (rp.redock && S.editor.previewId) dock('#e-stage', true); return; }
+      if (rp.cut && S.player.state() === 1) {
+        // giunzione: dentro il taglio si salta subito alla fine; poco prima si programma il salto al millisecondo
+        if (t >= rp.cut.start - 0.05 && t < rp.cut.end) S.player.seek(rp.cut.end + 0.05);
+        else scheduleJump(S.editor, rp.cut, t, function () { return rp.cut.end + 0.05; });
+      }
       return;
     }
     if ($('#e-skip').checked && S.player.state() === 1) {
       const c = G.inCut(ls.cuts, t);
-      if (c && !ls.exercises.some(function (e) { return e.markerTime >= c.start && e.markerTime <= c.end; })) S.player.seek(c.end + 0.05);
+      const skippable = function (cut) { return !ls.exercises.some(function (e) { return e.markerTime >= cut.start && e.markerTime <= cut.end; }); };
+      if (c && skippable(c)) S.player.seek(c.end + 0.05);
+      else if (!c) {
+        const next = (ls.cuts || []).filter(function (x) { return x.start > t && x.start - t <= 0.5 && skippable(x); }).sort(function (a, b) { return a.start - b.start; })[0];
+        if (next) scheduleJump(S.editor, next, t, function () { return next.end + 0.05; });
+      }
     }
+  }
+  /**
+   * Salto anticipato (editor e studente): il tick gira ogni 200 ms, quindi entrando in un taglio si sentiva l'attacco della
+   * frase tolta. Se il taglio comincia entro mezzo secondo, il salto viene programmato al millisecondo giusto, una volta sola.
+   */
+  function scheduleJump(holder, cut, t, targetFn) {
+    if (holder.cutJump && holder.cutJump.cut === cut) return;
+    if (holder.cutJump) clearTimeout(holder.cutJump.timer);
+    const wait = Math.max(0, (cut.start - t) * 1000 - 40);
+    holder.cutJump = { cut: cut, timer: setTimeout(function () {
+      holder.cutJump = null;
+      if (!S.player || S.player.state() !== 1) return;
+      const now = S.player.time();
+      if (now < cut.start - 0.6 || now >= cut.end) return;   // nel frattempo la barra è stata spostata
+      const target = targetFn(Math.max(now, cut.start));
+      if (target > now) { S.player.seek(target); holder.lastT = null; }
+    }, wait) };
   }
   /** Anteprima dell'esercizio nell'area del video, esattamente come la vedrà lo studente. */
   function openPreview(ls, ex, play) {
@@ -842,6 +873,15 @@
     S.editor.previewId = null;
     dock('#e-stage', false);
     const pop = $('#e-pop'); if (pop) pop.innerHTML = '';
+  }
+  /** Ascolta la giunzione di un taglio: 3 s prima, salto esatto all'inizio del taglio, 3 s dopo la fine. */
+  function previewCut(ls, c) {
+    if (!S.player) return;
+    const redock = !!S.editor.previewId && !S.withText && $('#e-stage').classList.contains('docked');
+    S.editor.replay = { start: Math.max(0, c.start - 3), end: Math.min(ls.duration || c.end + 3, c.end + 3), at: Date.now(), retried: false, redock: redock, cut: c };
+    if (redock) dock('#e-stage', false);
+    S.player.seek(S.editor.replay.start);
+    S.player.play();
   }
   function playSegment(seg) {
     if (!S.player) return;
@@ -1577,7 +1617,13 @@
       timeInput(c.start, function (t) { c.start = t; touch(ls); renderEditorBody(); }),
       timeInput(c.end, function (t) { c.end = t; touch(ls); renderEditorBody(); }),
       el('span', { class: 'hint', text: fmtMin(c.end - c.start) + ' · ' + (c.reason || '') + (c.source === 'ai' ? ' (AI)' : '') }),
-      el('button', { class: 'small', text: '▶ Anteprima', title: 'Riproduce da 3 secondi prima del taglio', onclick: function () { if (S.player) { S.editor.replay = null; S.player.seek(Math.max(0, c.start - 3)); S.player.play(); } } }),
+      el('button', { class: 'small', text: '▶ Giunzione', title: 'Ascolta il punto di giunzione: 3 secondi prima del taglio, salto, 3 secondi dopo', onclick: function () { previewCut(ls, c); } }),
+      el('button', { class: 'small', text: '⇤⇥ Frasi intere', title: 'Allinea inizio e fine del taglio ai confini delle frasi della trascrizione', onclick: function () {
+        const sn = ls.chunks && ls.chunks.length ? G.snapCutToSentences(c, ls.chunks, { tol: 1.5, min: 2, duration: ls.duration }) : null;
+        if (!sn) return toast('Nessuna frase intera dentro questo taglio');
+        if (Math.abs(sn.start - c.start) < 0.05 && Math.abs(sn.end - c.end) < 0.05) return toast('Già allineato alle frasi');
+        c.start = sn.start; c.end = sn.end; touch(ls); renderEditorBody(); toast('Taglio allineato: da ' + fmt(c.start) + ' a ' + fmt(c.end));
+      } }),
       el('button', { class: 'small danger', text: 'Rimuovi', onclick: function () { ls.cuts.splice(i, 1); touch(ls); renderEditorBody(); } })
     );
   }
@@ -1799,6 +1845,17 @@
     $('#s-stage').classList.add('cards');
     renderVocabCard();
   }
+  /** Dove riprendere quando si entra nel taglio c al tempo t (fino alla frase di un esercizio da fare, se cade nel taglio). */
+  function cutTarget(ls, st, c, t) {
+    const inside = ls.exercises.filter(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && e.markerTime > t && e.markerTime <= c.end + 0.5; })
+      .sort(function (a, b) { return a.markerTime - b.markerTime; })[0];
+    return inside ? Math.max(t, Math.min(c.end, inside.segment.start - 0.3)) : c.end + 0.05;
+  }
+  /** Studente: se un taglio comincia entro mezzo secondo, programma il salto esatto (vedi scheduleJump). */
+  function armCutJump(ls, st, t) {
+    const next = (ls.cuts || []).filter(function (c) { return c.start > t && c.start - t <= 0.5; }).sort(function (a, b) { return a.start - b.start; })[0];
+    if (next) scheduleJump(st, next, t, function (from) { return S.student === st ? cutTarget(ls, st, next, from) : from; });
+  }
   function studentTick() {
     const st = S.student; if (!st || !S.player) return;
     const ls = st.lesson;
@@ -1851,11 +1908,9 @@
       if (c) {
         // dentro un taglio: si salta alla fine; se nel taglio cade un esercizio ancora da fare (tagli e frasi si sovrappongono
         // per una modifica a mano) si salta solo fino all'inizio della sua frase, così la frase si sente e il resto no
-        const inside = ls.exercises.filter(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && e.markerTime > t && e.markerTime <= c.end + 0.5; })
-          .sort(function (a, b) { return a.markerTime - b.markerTime; })[0];
-        const target = inside ? Math.max(t, Math.min(c.end, inside.segment.start - 0.3)) : c.end + 0.05;
+        const target = cutTarget(ls, st, c, t);
         if (target > t + 0.25) { S.player.seek(target); st.lastT = null; }
-      }
+      } else armCutJump(ls, st, t);
     }
     if (S.player.kind === 'mock' && S.player.state() === 0 && !st.ended) onEnded();
   }

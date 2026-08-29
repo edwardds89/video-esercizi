@@ -10,8 +10,13 @@
   const TYPE_NAMES = { gap: 'gap', gapbank: 'gapbank', scramble: 'scramble', missing: 'missing', extra: 'extra', wrong: 'wrong', mc: 'mc' };
 
   function fmtChunks(chunks) {
-    return chunks.filter(function (c) { return !c.silence; }).map(function (c) {
-      return c.id + '|' + c.start.toFixed(1) + '|' + c.end.toFixed(1) + '|' + c.text;
+    // "…" davanti = il chunk continua la frase del chunk precedente (le frasi lunghe sono divise alla virgola):
+    // un taglio non può iniziare lì, e non può finire su un chunk seguito da "…"
+    const spoken = chunks.filter(function (c) { return !c.silence; });
+    return spoken.map(function (c, i) {
+      const prev = spoken[i - 1];
+      const cont = c.mode === 'sentences' && prev && !G.endsSentence(prev, c) && c.start - prev.end < 1.5;
+      return c.id + '|' + c.start.toFixed(1) + '|' + c.end.toFixed(1) + '|' + (cont ? '…' : '') + c.text;
     }).join('\n');
   }
 
@@ -45,7 +50,7 @@
     lines.push('3. Propose cuts (parts of the video to skip) as inclusive ranges of chunk ids "from"/"to", so that the kept duration is close to the target. ' +
       'Work from the TEXT: the shortened video must still make sense on its own, like a good abridgement. ALWAYS KEEP the opening that introduces the topic (what the video is about), the main line of explanation, and the conclusion. ' +
       'CUT, in this order: greetings/sponsor/calls to action, digressions and asides, repeated examples, overly detailed or technical passages (numbers, lists, minor specifics), long silences. ' +
-      'Every cut must start at the beginning of a sentence and end at the end of a sentence (chunk boundaries), never mid-sentence. Never cut a chunk that contains an exercise sentence, nor the 20 seconds before it. ' +
+      'Every cut must start at the beginning of a sentence and end at the end of a sentence, never mid-sentence: a chunk whose text starts with "…" continues the previous chunk\'s sentence, so a cut can neither start at it nor end right before it. Never cut a chunk that contains an exercise sentence, nor the 20 seconds before it. ' +
       'Prefer few long cuts (at least 8 seconds each) over many short ones; give a short "reason" for each. If the target is not reachable without harming coherence, do your best and say so in "notes".');
     lines.push('4. Give a short lesson "title" in the transcript language.');
     const sup = p.support || (p.lang === 'en' ? 'it' : 'en');
@@ -58,7 +63,7 @@
     lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"vocab":[{"word":"smalto","translation":"enamel","inExercise":true}],"notes":"..."}');
     lines.push('Include only the fields relevant to each exercise type.');
     lines.push('');
-    lines.push('TRANSCRIPT CHUNKS (id|start|end|text):');
+    lines.push('TRANSCRIPT CHUNKS (id|start|end|text; a leading "…" means the chunk continues the previous sentence):');
     lines.push(fmtChunks(p.chunks));
     return { system: system, user: lines.join('\n') };
   }
@@ -252,7 +257,9 @@
         pieces = out;
       });
       pieces.forEach(function (pc2) {
-        if (pc2.end - pc2.start >= 5) cuts.push({ start: pc2.start, end: pc2.end, reason: pc.reason, source: 'ai' });
+        // a frasi intere: il modello (o il ritaglio attorno agli esercizi) può lasciare confini a metà frase
+        const snapped = G.snapCutToSentences(pc2, chunks, { min: 5, duration: D });
+        if (snapped) cuts.push({ start: snapped.start, end: snapped.end, reason: pc.reason, source: 'ai' });
       });
     });
     cuts.sort(function (a, b) { return a.start - b.start; });
