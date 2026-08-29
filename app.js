@@ -323,7 +323,7 @@
     const list = $('#lesson-list');
     list.innerHTML = '';
     const items = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
-    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con "Nuova lezione" (o con il pulsante per Chrome) oppure prova la demo.' })); return; }
+    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con "Nuova lezione" (o con il pulsante per il browser) oppure prova la demo.' })); return; }
     items.forEach(function (ls) {
       const eff = G.effectiveDuration(ls.cuts || [], ls.duration);
       const thumbStyle = ls.videoId && ls.videoId !== 'demo' ? 'background-image:url(https://i.ytimg.com/vi/' + ls.videoId + '/mqdefault.jpg)' : '';
@@ -502,12 +502,15 @@
     if (v === 'custom') { const t = L.parseTime($('#f-target').value.trim()); return isNaN(t) || t <= 0 ? NaN : Math.min(t, duration); }
     return Math.min(parseInt(v, 10), duration);
   }
+  $('#btn-yt-go').addEventListener('click', function () { const id = extractVideoId($('#f-url').value); if (!id) return toast('Prima incolla il link del video'); window.open('https://www.youtube.com/watch?v=' + id, '_blank'); toast('Sul video premi il preferito ▶ Video Esercizi: la lezione arriva qui da sola', 5000); });
   $('#f-url').addEventListener('change', checkVideo);
   $('#f-url').addEventListener('paste', function () { setTimeout(checkVideo, 50); });
   function checkVideo() {
     const id = extractVideoId($('#f-url').value);
     const st = $('#f-video-status');
-    if (!id) { st.textContent = 'Link non riconosciuto.'; N.videoId = null; return; }
+    if (!id) { st.textContent = 'Link non riconosciuto.'; N.videoId = null; $('#f-yt-go').style.display = 'none'; return; }
+    // senza trascrizione, la via più corta è: apri il video su YouTube e premi lì il preferito
+    $('#f-yt-go').style.display = G.parseTranscript($('#f-transcript').value).lines.length ? 'none' : '';
     if (id === N.videoId) return;
     N.videoId = id; N.ok = false; N.duration = 0;
     st.textContent = 'Carico il player…';
@@ -528,11 +531,12 @@
   }
   function updateTranscriptStatus() {
     const p = G.parseTranscript($('#f-transcript').value);
+    const go = $('#f-yt-go'); if (go) go.style.display = (p.lines.length || !extractVideoId($('#f-url').value)) ? 'none' : '';
     const st = $('#f-transcript-status');
     if (!p.lines.length) {
       const raw = $('#f-transcript').value.trim();
       // testo con tempi ma senza righe valide = quasi sempre l'elenco dei capitoli, non la trascrizione
-      st.textContent = !raw ? '' : (/\d{1,2}:\d{2}/.test(raw) ? '⚠ Questo sembra l\'elenco dei CAPITOLI, non la trascrizione: su YouTube apri la descrizione → "Mostra trascrizione" e riprova (pulsante per Chrome o copia-incolla).' : '⚠ Non trovo i tempi (0:00, 0:03…): copia il testo dal pannello "Mostra trascrizione".');
+      st.textContent = !raw ? '' : (/\d{1,2}:\d{2}/.test(raw) ? '⚠ Questo sembra l\'elenco dei CAPITOLI, non la trascrizione: su YouTube apri la descrizione → "Mostra trascrizione" e riprova (pulsante per il browser o copia-incolla).' : '⚠ Non trovo i tempi (0:00, 0:03…): copia il testo dal pannello "Mostra trascrizione".');
       return;
     }
     const last = p.lines[p.lines.length - 1];
@@ -549,8 +553,8 @@
     if (!parsed.lines.length) {
       const raw = $('#f-transcript').value.trim();
       return showFormError(raw
-        ? (/\d{1,2}:\d{2}/.test(raw) ? 'Il testo ricevuto sembra l\'elenco dei capitoli, non la trascrizione (i capitoli hanno tempi e titoli, ma non le frasi). Su YouTube apri la descrizione → "Mostra trascrizione", poi clicca di nuovo il pulsante per Chrome o copia il pannello a mano.' : 'La trascrizione incollata non ha i tempi (0:00, 0:07…): senza tempi il video non è utilizzabile. Copia il testo dal pannello "Mostra trascrizione" di YouTube.')
-        : 'Manca la trascrizione: questo video non è utilizzabile finché non la incolli a mano (YouTube → Mostra trascrizione) o non usi il pulsante per Chrome. Se YouTube non la offre, scegli un altro video.');
+        ? (/\d{1,2}:\d{2}/.test(raw) ? 'Il testo ricevuto sembra l\'elenco dei capitoli, non la trascrizione (i capitoli hanno tempi e titoli, ma non le frasi). Su YouTube apri la descrizione → "Mostra trascrizione", poi clicca di nuovo il pulsante per il browser o copia il pannello a mano.' : 'La trascrizione incollata non ha i tempi (0:00, 0:07…): senza tempi il video non è utilizzabile. Copia il testo dal pannello "Mostra trascrizione" di YouTube.')
+        : 'Manca la trascrizione: questo video non è utilizzabile finché non la incolli a mano (YouTube → Mostra trascrizione) o non usi il pulsante per il browser. Se YouTube non la offre, scegli un altro video.');
     }
     const types = $$('#f-types input[value]:checked').map(function (i) { return i.value; });
     if (!types.length) return showFormError('Scegli almeno un tipo di esercizio.');
