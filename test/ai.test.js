@@ -177,6 +177,19 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(built && built.data.tricky === 2 && EX.check(built, 0).correct && !EX.check(built, 2).correct);
   });
 
+  await test('Parliamone: suggestDiscussion con fetch finta (domande aperte + espressioni)', async function () {
+    const fakeFetch = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      assert.ok(body.messages[0].content.indexOf('SPEAKING practice') !== -1);
+      const text = '{"questions":[{"text":"Secondo te, perché dormiamo?","help":"Secondo me… · Penso che… · Non sono sicuro, ma…"},{"text":"","help":"x"},{"text":"Ti è mai capitato di dimenticare qualcosa di importante? Racconta.","help":"Una volta… · Mi è capitato di…"}]}';
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 400, output_tokens: 120 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 5, apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(r.questions.length, 2, 'la domanda vuota viene scartata');
+    assert.ok(/perché dormiamo/.test(r.questions[0].text) && r.questions[0].help.split('·').length === 3);
+    assert.ok(r.ai.cost > 0);
+  });
+
   console.log('Chiamata (fetch finta)');
   await test('generateWithAI con fetch simulata', async function () {
     const calls = [];

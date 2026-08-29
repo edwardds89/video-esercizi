@@ -228,6 +228,13 @@ async function startVideo(page) {
   await page.waitForSelector('#view-editor.active');
   assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (els) { return els.length; }), 8);
 
+  // "Parliamone": due domande scritte a mano nell'editor; lo studente le vede dopo l'ultimo esercizio, prima del riepilogo
+  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(1) input:nth-of-type(1)', 'Secondo te, perché dormiamo?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) input:nth-of-type(1)', 'change');
+  await page.fill('#e-talk .talk-row:nth-child(1) input:nth-of-type(2)', 'Secondo me… · Penso che…'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) input:nth-of-type(2)', 'change');
+  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(2) input:nth-of-type(1)', 'Ti è mai capitato di dimenticare qualcosa di importante?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(2) input:nth-of-type(1)', 'change');
+  await page.waitForTimeout(600);
+  assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].talk.questions.length; }), 2, 'due domande salvate');
+
   console.log('3. modalità studente: percorso completo');
   await page.click('#btn-student');
   await page.waitForSelector('#view-student.active');
@@ -419,6 +426,15 @@ async function startVideo(page) {
       assert.ok(Math.abs(tAfter - target) < 6, 'clic sulla barra dopo Continua: ' + tBefore.toFixed(1) + ' → ' + tAfter.toFixed(1) + ' (atteso ~' + target.toFixed(0) + ')');
     }
   }
+  // dopo l'ultimo esercizio: le domande per parlare, una alla volta, poi il riepilogo
+  await page.waitForSelector('#s-panel .talk-q', { timeout: 90000 });
+  assert.ok(/perché dormiamo/.test(await page.$eval('#s-panel .talk-q', function (q) { return q.textContent; })), 'prima domanda');
+  assert.strictEqual(await page.$$eval('#s-panel .talk-help .chip', function (c) { return c.length; }), 2, 'espressioni utili');
+  assert.ok(!(await page.$('#s-panel button:has-text("Controlla")')), 'niente correzione');
+  await page.click('#s-panel button:has-text("Prossima")');
+  await page.waitForTimeout(150);
+  assert.ok(/dimenticare/.test(await page.$eval('#s-panel .talk-q', function (q) { return q.textContent; })), 'seconda domanda');
+  await page.click('#s-panel button:has-text("Vai al riepilogo")');
   await page.waitForSelector('#s-panel h2:has-text("Fine!")', { timeout: 90000 });
   clearInterval(sampler);
   const summary = await page.$eval('#s-panel h2', function (h) { return h.textContent; });
