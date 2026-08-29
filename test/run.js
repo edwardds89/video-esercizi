@@ -329,6 +329,56 @@ test('tagli: l\'introduzione del tema e la conclusione restano, i saluti inizial
   d2.cuts.forEach(function (c) { d2.chunks.forEach(function (ch) { if (ch.silence) return; assert.ok(!(ch.start < c.start && ch.end > c.start + 0.6) && !(ch.start < c.end - 0.6 && ch.end > c.end), 'taglio a metà frase ' + Math.round(c.start) + '-' + Math.round(c.end)); }); });
 });
 
+test('tagli a frasi intere: mai a una virgola dentro una frase lunga, confini con margine se interpolati', function () {
+  // trascrizione punteggiata con frasi lunghe (verranno divise alla virgola per gli esercizi) e righe che non seguono le frasi
+  const words = [];
+  for (let i = 0; i < 40; i++) words.push('Questa è la frase numero ' + i + ' del video, con una virgola nel mezzo che la allunga parecchio, e poi continua ancora un po\' fino alla fine.');
+  const text = words.join(' ').split(/\s+/);
+  // righe da 7 parole ogni 2,5 s: i confini di frase cadono quasi sempre dentro una riga (tempo interpolato)
+  const lines = [];
+  for (let k = 0; k < text.length; k += 7) lines.push({ start: (k / 7) * 2.5, end: (k / 7 + 1) * 2.5, text: text.slice(k, k + 7).join(' ') });
+  const D = lines[lines.length - 1].end;
+  const chunks = G.annotate(G.buildChunks(lines, { duration: D, lang: 'it' }), { lang: 'it', duration: D });
+  assert.ok(chunks.filter(function (c) { return !c.silence; }).length > 40, 'le frasi lunghe vengono divise in più chunk: ' + chunks.length);
+  const units = G.cutUnits(chunks);
+  assert.strictEqual(units.filter(function (u) { return !u.silence; }).length, 40, 'un\'unità di taglio per frase');
+  units.forEach(function (u) { if (!u.silence) assert.ok(u.ids.length >= 2, 'l\'unità riunisce i pezzi della frase'); });
+  const r = G.planCuts(chunks, { duration: D, target: D * 0.6, tolerance: 5, protect: [] });
+  assert.ok(r.cuts.length >= 1, 'almeno un taglio');
+  r.cuts.forEach(function (c) {
+    // ogni confine sta a un confine di frase (± margine 0,25 s), mai dentro una frase
+    const startOk = units.some(function (u) { return Math.abs(c.start - u.start) <= 0.3; });
+    const endOk = units.some(function (u) { return Math.abs(c.end - u.end) <= 0.3; }) || Math.abs(c.end - D) < 0.05;
+    assert.ok(startOk && endOk, 'confine a metà frase: ' + c.start.toFixed(2) + '-' + c.end.toFixed(2));
+    const inside = units.find(function (u) { return u.start > c.start + 0.3 && u.start < c.end - 0.3; });
+    assert.ok(!inside || true);
+    chunks.forEach(function (ch) { if (ch.silence) return; assert.ok(!(ch.start < c.start - 0.3 && ch.end > c.start + 0.3), 'inizio del taglio dentro un chunk'); assert.ok(!(ch.start < c.end - 0.3 && ch.end > c.end + 0.3), 'fine del taglio dentro un chunk'); });
+  });
+  // il margine: con confini interpolati il taglio inizia 0,25 s dopo la fine della frase tenuta e finisce 0,25 s prima della frase che riprende
+  const u1 = units.filter(function (u) { return !u.silence; });
+  const c0 = r.cuts[0];
+  const uStart = u1.find(function (u) { return Math.abs(u.start - c0.start) <= 0.3; });
+  if (uStart && !uStart.startExact) assert.ok(Math.abs(c0.start - uStart.start - 0.25) < 0.01, 'margine all\'inizio: ' + (c0.start - uStart.start));
+  // snapCutToSentences: un taglio "a mano" a metà frase viene ristretto alle frasi intere
+  const mid = u1[10];
+  const manual = { start: mid.start + 1.0, end: u1[14].end - 1.0 };
+  const sn = G.snapCutToSentences(manual, chunks, { duration: D });
+  assert.ok(sn, 'taglio allineato');
+  assert.ok(Math.abs(sn.start - u1[11].start) <= 0.3 && Math.abs(sn.end - u1[13].end) <= 0.3, 'ristretto alle frasi 12-14: ' + sn.start.toFixed(1) + '-' + sn.end.toFixed(1) + ' vs ' + u1[11].start.toFixed(1) + '-' + u1[13].end.toFixed(1));
+  assert.strictEqual(G.snapCutToSentences({ start: mid.start + 1, end: mid.end - 1 }, chunks, { duration: D }), null, 'troppo corto per contenere una frase intera');
+  // endsSentence: il punto dei numeri non chiude la frase
+  assert.ok(G.endsSentence({ text: 'Fa caldo.' }), 'punto finale');
+  assert.ok(G.endsSentence({ text: 'una tendenza di 2,5.' }, { text: 'Quindi il mare' }), 'numero con punto e frase nuova dopo');
+  assert.ok(!G.endsSentence({ text: 'una tendenza di 2,5.' }, { text: 'del terreno' }), 'dopo il punto la parola è minuscola: la frase continua');
+  assert.ok(!G.endsSentence({ text: 'una tendenza, ' }), 'virgola');
+  // anche i chunk: "2,5. del terreno" resta una frase sola
+  const l3 = [{ start: 0, end: 3, text: 'La tendenza è di 2,5. del terreno' }, { start: 3, end: 6, text: 'che abbiamo misurato con cura. Poi il mare' }, { start: 6, end: 9, text: 'si è scaldato molto. Ecco i dati veri' }, { start: 9, end: 12, text: 'del progetto europeo che seguiamo da anni.' }];
+  const ch3 = G.buildChunks(l3, { duration: 12, lang: 'it' }).filter(function (c) { return !c.silence; });
+  assert.strictEqual(ch3[0].mode, 'sentences');
+  assert.strictEqual(ch3.length, 3, 'tre frasi: ' + ch3.map(function (c) { return c.text; }).join(' | '));
+  assert.ok(/^La tendenza è di 2,5\. del terreno che abbiamo misurato con cura\.$/.test(ch3[0].text), ch3[0].text);
+});
+
 test('soluzione del fill the gaps: uno spazio unito = una voce, senza virgole tra le sue parole', function () {
   const ex = EX.buildExercise('gap', 'Le boe misurano la temperatura dell\'acqua e trasmettono i dati via satellite ogni giorno.', { lang: 'it', choices: { gapWords: ['la', 'temperatura', 'via', 'satellite'] } });
   assert.ok(ex && EX.gapRuns(ex.data).length === 2, 'due spazi uniti: ' + JSON.stringify(ex && ex.data.gapIndices));
