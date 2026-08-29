@@ -1864,14 +1864,18 @@
       const pool = el('div', { class: 'chips' });
       const ans = el('div', { class: 'answer-row chips' });
       const chosen = [];
+      // ordine delle parole nuovo a ogni apertura (non quello salvato), mai uguale alla frase giusta
+      let shown = EX.shuffle(d.words.slice(), Math.random);
+      for (let t = 0; t < 10 && shown.every(function (w, i) { return sameWord(w, d.words[i]); }); t++) shown = EX.shuffle(d.words.slice(), Math.random);
+      if (shown.every(function (w, i) { return sameWord(w, d.words[i]); })) shown = d.words.slice().reverse();
       const render = function () {
         pool.innerHTML = ''; ans.innerHTML = '';
-        d.shuffled.forEach(function (w, i) {
+        shown.forEach(function (w, i) {
           if (chosen.indexOf(i) !== -1) return;
           pool.appendChild(el('span', { class: 'chip', text: w, onclick: function () { chosen.push(i); render(); } }));
         });
         chosen.forEach(function (i, k) {
-          const c = el('span', { class: 'chip sel', text: d.shuffled[i], 'data-i': String(i), title: 'Trascina per spostare, tocca per togliere' });
+          const c = el('span', { class: 'chip sel', text: shown[i], 'data-i': String(i), title: 'Trascina per spostare, tocca per togliere' });
           // trascinamento per riordinare (mouse e touch); un tocco senza spostamento toglie la parola
           // NB: il chip trascinato non si sposta nel DOM (spostarlo farebbe perdere la cattura del puntatore): segue il dito
           // con position:fixed, mentre un segnaposto (ph) mostra dove finirà
@@ -1912,14 +1916,14 @@
       };
       render();
       body.appendChild(ans); body.appendChild(pool);
-      getAnswer = function () { return chosen.map(function (i) { return d.shuffled[i]; }); };
+      getAnswer = function () { return chosen.map(function (i) { return shown[i]; }); };
       giveHint = function () {
         // si tiene l'inizio giusto e si mette al suo posto la parola successiva
         let ok = 0;
-        while (ok < chosen.length && ok < d.words.length && sameWord(d.shuffled[chosen[ok]], d.words[ok])) ok++;
+        while (ok < chosen.length && ok < d.words.length && sameWord(shown[chosen[ok]], d.words[ok])) ok++;
         if (ok >= d.words.length) return false;
         chosen.length = ok;
-        const idx = d.shuffled.findIndex(function (w, i) { return chosen.indexOf(i) === -1 && sameWord(w, d.words[ok]); });
+        const idx = shown.findIndex(function (w, i) { return chosen.indexOf(i) === -1 && sameWord(w, d.words[ok]); });
         if (idx === -1) return false;
         chosen.push(idx); render();
         const last = ans.lastElementChild; if (last) last.classList.add('hinted');
@@ -1958,32 +1962,33 @@
       };
       if (!preview) setTimeout(function () { inp.focus(); }, 50);
     } else if (ex.type === 'mc') {
-      let selected = -1;
+      let selected = -1;   // indice ORIGINALE (quello salvato), non la posizione mostrata
       body.appendChild(el('div', { class: 'sentence question', text: d.question || '' }));
       const list = el('div', { class: 'mc-options' });
+      const eliminated = new Set();
+      // ordine delle risposte nuovo a ogni apertura: le lettere A-D seguono l'ordine mostrato, la correzione usa l'indice originale
+      const order = EX.shuffle((d.options || []).map(function (o, k) { return k; }).filter(function (k) { return d.options[k]; }), Math.random);
       const render = function () {
         list.innerHTML = '';
-        (d.options || []).forEach(function (o, k) {
-          if (!o) return;
-          list.appendChild(el('button', { class: 'mc-opt' + (k === selected ? ' sel' : ''), text: String.fromCharCode(65 + k) + '. ' + o, onclick: function () { selected = k; render(); } }));
+        order.forEach(function (k, pos) {
+          const b = el('button', { class: 'mc-opt' + (k === selected ? ' sel' : ''), 'data-k': String(k), text: String.fromCharCode(65 + pos) + '. ' + d.options[k], onclick: function () { selected = k; render(); } });
+          if (eliminated.has(k)) { b.classList.add('elim'); b.disabled = true; }
+          list.appendChild(b);
         });
       };
       render();
       body.appendChild(list);
       getAnswer = function () { return selected; };
-      const eliminated = new Set();
       giveHint = function () {
-        const cands = (d.options || []).map(function (o, k) { return k; }).filter(function (k) { return d.options[k] && k !== d.correct && !eliminated.has(k); });
+        const cands = order.filter(function (k) { return k !== d.correct && !eliminated.has(k); });
         if (cands.length <= 1) return false;   // resta sempre almeno una sbagliata
-        const pick = cands.filter(function (k) { return k !== d.tricky; })[0] != null ? cands.filter(function (k) { return k !== d.tricky; })[0] : cands[0];
+        const notTricky = cands.filter(function (k) { return k !== d.tricky; });
+        const pick = notTricky.length ? notTricky[0] : cands[0];
         eliminated.add(pick); if (selected === pick) selected = -1; render();
         return true;
       };
-      const renderBase = render;
-      const renderElim = function () { renderBase(); $$('.mc-opt', list).forEach(function (b, k) { if (eliminated.has(k)) { b.classList.add('elim'); b.disabled = true; } }); };
-      list.innerHTML = ''; renderElim();
       markResult = function (res) {
-        $$('.mc-opt', list).forEach(function (b, k) { if (res.correct && k === d.correct) b.classList.add('good'); else if (k === selected && !res.correct) { b.classList.add('wrongpick'); setTimeout(function () { b.classList.remove('wrongpick'); }, 900); } });
+        $$('.mc-opt', list).forEach(function (b) { const k = parseInt(b.getAttribute('data-k'), 10); if (res.correct && k === d.correct) b.classList.add('good'); else if (k === selected && !res.correct) { b.classList.add('wrongpick'); setTimeout(function () { b.classList.remove('wrongpick'); }, 900); } });
       };
     } else if (ex.type === 'extra' || ex.type === 'wrong') {
       let selected = -1;
