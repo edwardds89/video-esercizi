@@ -69,6 +69,7 @@
   function saveLessons() {
     // i campi che iniziano con "_" sono cache di sessione (candidati foto, lessico): non si salvano
     try { localStorage.setItem('vle.lessons', JSON.stringify(S.lessons, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })); } catch (e) { toast('Impossibile salvare nel browser: ' + e.message); }
+    if (CLOUD.sync) CLOUD.sync.noteLocalChange();   // il cloud capisce da solo cosa è cambiato (confronto per impronta)
   }
   function saveSettings() { try { localStorage.setItem('vle.settings', JSON.stringify(S.settings)); } catch (e) { /* ignore */ } }
   const saveDebounced = (function () { let t; return function () { clearTimeout(t); t = setTimeout(function () { saveLessons(); const s = $('#e-saved'); if (s) { s.textContent = 'Salvato'; setTimeout(function () { s.textContent = ''; }, 1500); } }, 400); }; })();
@@ -76,6 +77,136 @@
   function touch(lesson) { lesson.updatedAt = new Date().toISOString(); saveDebounced(); }
   // chiusura/ricarica della pagina: salva subito quello che il debounce non ha ancora scritto
   window.addEventListener('pagehide', function () { try { saveLessons(); } catch (e) { /* ignore */ } });
+
+  // ---------- cloud (Supabase, opzionale) ----------
+  // Le lezioni restano in localStorage (cache); con l'accesso vengono anche caricate nel cloud e unite tra i computer (vince l'ultima modifica).
+  const CLOUD = { client: null, sync: null, user: null, ready: null, announce: false, lastRun: 0 };
+  function cloudConfigured() { return !!(window.VLSync && (window.VLSync.CONFIG.url || (S.mock && window.__vlCloud))); }
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      const sc = document.createElement('script'); sc.src = src; sc.async = true;
+      sc.onload = function () { resolve(); }; sc.onerror = function () { reject(new Error('Impossibile caricare la libreria del cloud (sei offline?)')); };
+      document.head.appendChild(sc);
+    });
+  }
+  function loadSyncState() { try { return JSON.parse(localStorage.getItem('vle.sync') || 'null'); } catch (e) { return null; } }
+  function saveSyncState(st) { try { localStorage.setItem('vle.sync', JSON.stringify(st)); } catch (e) { /* ignore */ } }
+  /** Applica in locale ciò che arriva dal cloud (lezioni nuove o aggiornate, eliminazioni fatte altrove). */
+  function applyCloud(ch) {
+    const skipped = [], replaced = [], removed = [];
+    (ch.remove || []).forEach(function (id) {
+      if (!S.lessons[id]) return;
+      if (S.view === 'student' && S.currentId === id) { skipped.push(id); return; }   // lezione in corso: si toglie alla prossima apertura
+      delete S.lessons[id]; removed.push(id);
+    });
+    (ch.replace || []).forEach(function (ls) {
+      if (S.view === 'student' && S.currentId === ls.id) { skipped.push(ls.id); return; }
+      migrateLesson(ls); S.lessons[ls.id] = ls; replaced.push(ls.id);
+    });
+    if (replaced.length || removed.length) {
+      saveLessons();
+      if (S.view === 'home') renderHome();
+      else if (S.view === 'editor' && replaced.indexOf(S.currentId) >= 0) { openEditor(S.currentId); toast('Lezione aggiornata dal cloud (modificata su un altro computer)'); }
+      else if (S.view === 'editor' && removed.indexOf(S.currentId) >= 0) { renderHome(); toast('Questa lezione è stata eliminata da un altro computer'); }
+      if (S.view === 'home' && !CLOUD.announce) { const n = replaced.length + removed.length; toast(n === 1 ? '1 lezione aggiornata dal cloud' : n + ' lezioni aggiornate dal cloud'); }
+    }
+    return { skipped: skipped };
+  }
+  function initCloud() {
+    if (CLOUD.ready) return CLOUD.ready;
+    if (S.standalone || !cloudConfigured()) return Promise.resolve(null);
+    CLOUD.ready = (async function () {
+      let adapter;
+      if (S.mock && window.__vlCloud) adapter = window.__vlCloud;   // test: cloud finto in memoria
+      else {
+        if (!window.supabase) await loadScript(window.VLSync.CONFIG.lib);
+        CLOUD.client = window.supabase.createClient(window.VLSync.CONFIG.url, window.VLSync.CONFIG.anonKey);
+        adapter = window.VLSync.supabaseAdapter(CLOUD.client);
+        CLOUD.client.auth.onAuthStateChange(function (ev, session) {
+          const before = CLOUD.user && CLOUD.user.id;
+          CLOUD.user = session ? session.user : null;
+          renderAccount();
+          if (ev === 'SIGNED_IN' && CLOUD.user && CLOUD.user.id !== before) { CLOUD.announce = true; runSync(); }
+        });
+      }
+      CLOUD.sync = window.VLSync.createSync({ adapter: adapter, getLocal: function () { return S.lessons; }, apply: applyCloud, save: saveLessons, loadState: loadSyncState, saveState: saveSyncState, onStatus: function () { renderAccount(); } });
+      CLOUD.user = await adapter.user();
+      renderAccount();
+      if (CLOUD.user) { CLOUD.announce = !CLOUD.sync.state.lastSync; runSync(); }
+      return CLOUD.sync;
+    })().catch(function (e) { toast(e.message); CLOUD.ready = null; return null; });
+    return CLOUD.ready;
+  }
+  function runSync() {
+    if (!CLOUD.sync) return Promise.resolve(null);
+    CLOUD.lastRun = Date.now();
+    return CLOUD.sync.sync().then(function (r) {
+      if (CLOUD.announce) {
+        CLOUD.announce = false;
+        const parts = [];
+        if (r.pushed) parts.push(r.pushed + (r.pushed === 1 ? ' lezione caricata' : ' lezioni caricate'));
+        if (r.pulled) parts.push(r.pulled + (r.pulled === 1 ? ' lezione scaricata' : ' lezioni scaricate'));
+        if (r.dropped) parts.push(r.dropped + (r.dropped === 1 ? ' eliminata' : ' eliminate'));
+        toast(parts.length ? 'Cloud: ' + parts.join(', ') : 'Cloud: tutto sincronizzato', 3500);
+      }
+      return r;
+    }).catch(function () { CLOUD.announce = false; return null; });   // l'errore è già nel pulsante dell'account
+  }
+  function relTime(iso) {
+    const d = (Date.now() - Date.parse(iso)) / 1000;
+    if (d < 60) return 'adesso'; if (d < 3600) return Math.round(d / 60) + ' min fa'; if (d < 86400) return Math.round(d / 3600) + ' h fa';
+    return 'il ' + new Date(iso).toLocaleDateString('it-IT');
+  }
+  function cloudStatusText() {
+    const st = CLOUD.sync && CLOUD.sync.status; if (!st) return '';
+    if (st.state === 'syncing') return 'Sincronizzazione in corso…';
+    if (st.state === 'error') return 'Errore di sincronizzazione: ' + st.message + (st.pending ? ' (' + st.pending + ' da caricare, riprovo da solo)' : '');
+    if (st.pending) return st.pending + (st.pending === 1 ? ' modifica da caricare' : ' modifiche da caricare');
+    return st.lastSync ? 'Sincronizzato ' + relTime(st.lastSync) + '.' : 'Non ancora sincronizzato.';
+  }
+  function renderAccount() {
+    const b = $('#btn-account'); if (!b) return;
+    const on = cloudConfigured() && !S.standalone;
+    b.style.display = on ? '' : 'none';
+    if (!on) return;
+    const st = CLOUD.sync ? CLOUD.sync.status : null, u = CLOUD.user;
+    const dot = !u ? 'off' : st && st.state === 'error' ? 'bad' : st && (st.state === 'syncing' || st.pending) ? 'busy' : 'ok';
+    b.innerHTML = '';
+    b.appendChild(el('span', { class: 'dot ' + dot }));
+    b.appendChild(document.createTextNode(' ' + (u ? (u.email || 'account') : 'Accedi')));
+    b.title = u ? cloudStatusText() : 'Salva le lezioni nel cloud per ritrovarle su ogni computer';
+    const hint = $('#home-storage-hint');
+    if (hint) hint.textContent = u ? 'Le lezioni sono salvate nel cloud (' + (u.email || 'account') + ') e in questo browser: le ritrovi su ogni computer dove entri con la stessa email. ' + cloudStatusText() : 'Le lezioni sono salvate solo in questo browser. Con "Accedi" (in alto) le salvi anche nel cloud e le ritrovi su ogni computer.';
+    if ($('#dlg-account').open) fillAccountDialog();
+  }
+  function fillAccountDialog() {
+    const u = CLOUD.user;
+    $('#acc-out').style.display = u ? 'none' : '';
+    $('#acc-in').style.display = u ? '' : 'none';
+    if (u) { $('#acc-who').textContent = u.email || ''; $('#acc-state').textContent = cloudStatusText(); }
+  }
+  $('#btn-account').addEventListener('click', function () {
+    initCloud().then(function () { fillAccountDialog(); $('#acc-msg').textContent = ''; $('#dlg-account').showModal(); if (!CLOUD.user) $('#acc-email').focus(); });
+  });
+  $$('#acc-close, #acc-close2').forEach(function (b) { b.addEventListener('click', function () { $('#dlg-account').close(); }); });
+  $('#acc-email').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#acc-send').click(); } });
+  $('#acc-send').addEventListener('click', function () {
+    const email = $('#acc-email').value.trim(), msg = $('#acc-msg');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Scrivi un indirizzo email valido.'; return; }
+    if (!CLOUD.client) { msg.textContent = 'Cloud non disponibile in questo momento.'; return; }
+    $('#acc-send').disabled = true; msg.textContent = 'Invio in corso…';
+    CLOUD.client.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } })
+      .then(function (res) { if (res.error) throw res.error; msg.textContent = 'Email inviata a ' + email + ': apri il link che contiene (guarda anche nello spam). La pagina si aprirà già connessa e le lezioni si allineano da sole.'; })
+      .catch(function (e) { msg.textContent = 'Invio non riuscito: ' + (e.message || e); })
+      .then(function () { $('#acc-send').disabled = false; });
+  });
+  $('#acc-sync').addEventListener('click', function () { CLOUD.announce = true; runSync().then(function () { if ($('#dlg-account').open) fillAccountDialog(); }); });
+  $('#acc-logout').addEventListener('click', function () {
+    const done = function () { CLOUD.user = null; renderAccount(); $('#dlg-account').close(); toast('Sei uscito: le lezioni restano in questo browser e nel cloud'); };
+    if (CLOUD.client) CLOUD.client.auth.signOut({ scope: 'local' }).then(done, done); else done();   // solo questo browser: l'altro computer resta connesso
+  });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && CLOUD.sync && CLOUD.user && Date.now() - CLOUD.lastRun > 20000) runSync(); });
+  window.addEventListener('online', function () { if (CLOUD.sync && CLOUD.user) runSync(); });
 
   function studentPayload(lesson) {
     const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }).map(function (w) { return { id: w.id, word: w.word, translation: w.translation, image: w.image, selected: true, inExercise: w.inExercise }; }) } : undefined;
@@ -294,6 +425,7 @@
     $$('#nav button[data-view]').forEach(function (b) { b.classList.toggle('primary', b.dataset.view === view && view === 'new'); });
     window.scrollTo(0, 0);
     if (view !== 'editor' && view !== 'student') { stopLoop(); destroyPlayer(); }
+    if (!S.standalone) { renderAccount(); initCloud(); }   // solo per l'insegnante: gli studenti (link) non caricano la libreria del cloud
   }
   document.addEventListener('click', function (e) {
     const b = e.target.closest('[data-view]');
@@ -2681,6 +2813,6 @@
     if (id && S.lessons[id]) return q.get('mode') === 'student' ? openStudent(id) : openEditor(id);
     renderHome();
   }
-  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson };
+  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync };
   init();
 })();

@@ -2,7 +2,7 @@
 
 Genera esercizi di ascolto da un video YouTube: incolli il link e la trascrizione, scegli quanti esercizi vuoi e quanto deve durare il video per lo studente, e ottieni una bozza (segnaposto sulla timeline, 5 tipi di esercizio, parti da saltare) che puoi correggere in ogni dettaglio. Poi la apri in "modalità studente": il video salta le parti tagliate, si ferma da solo a ogni esercizio, lo studente può riascoltare la frase.
 
-Nessun server, nessun database: è una pagina statica. Le lezioni vivono nel browser (localStorage) e nei file JSON che esporti.
+È una pagina statica: le lezioni vivono nel browser (localStorage) e nei file JSON che esporti. Con «Accedi» (link via email, nessuna password) vengono salvate anche nel cloud (Supabase) e le ritrovi su ogni computer con la stessa email: ogni modifica si carica da sola, vince l'ultima modifica.
 
 ## Mettere online (GitHub Pages)
 
@@ -50,7 +50,8 @@ Gli studenti non hanno bisogno di account. I risultati compaiono a fine video so
 - Il bookmarklet dipende dalla grafica del pannello trascrizione di YouTube: se cambia, va aggiornato `bookmarklet.js` (resta il copia-incolla come riserva).
 - Se il proprietario disabilita l'embed o rimuove il video, la lezione smette di funzionare: controllalo prima di darla in classe.
 - Il pannello "Mostra trascrizione" dà i tempi a secondi interi: i confini delle frasi sono stimati (±1 s). L'intervallo di ascolto ha un margine di sicurezza e si può correggere a mano.
-- Le lezioni salvate nel browser si perdono se svuoti i dati del sito: esporta i JSON che ti interessano.
+- Senza accesso al cloud, le lezioni salvate nel browser si perdono se svuoti i dati del sito: esporta i JSON che ti interessano o accedi con l'email.
+- Il cloud usa il piano gratuito di Supabase: massimo 2 email di accesso all'ora (il link arriva via email) e il progetto si mette in pausa da solo dopo una settimana senza attività (un'azione GitHub lo interroga ogni 3 giorni per tenerlo sveglio; se si ferma lo stesso, si riattiva dalla dashboard di Supabase).
 
 ## Struttura
 
@@ -62,6 +63,7 @@ lang.js         stopword, CTA, coppie di parole per "wrong word", utilità di te
 generator.js    parser trascrizione (YouTube/SRT/VTT), chunk, punteggi, selezione frasi, piano dei tagli
 exercises.js    costruzione e correzione dei 5 tipi di esercizio
 ai.js           prompt, chiamata al modello dal browser, validazione del piano, completamento con le regole
+sync.js         lezioni nel cloud: unione locale/remoto (vince l'ultima modifica), adattatore Supabase, server finto per i test
 bookmarklet.js  pulsante per Chrome: legge il pannello trascrizione di YouTube e apre l'app con i dati (#import=…)
 demo-data.js    trascrizione inventata per la lezione demo (player finto)
 lessons/        JSON delle lezioni pubblicate (?lesson=nome)
@@ -74,6 +76,6 @@ Test: `node test/run.js && node test/ai.test.js`. Smoke test end-to-end (serve P
 
 ## Prossimi passi possibili
 
-- Salvare i risultati degli studenti (serve un backend minimo o un servizio tipo Supabase).
+- Salvare i risultati degli studenti (il progetto Supabase c'è già: serve una tabella e una pagina).
 - Esercizi di vocabolario prima del video (stile Wordwall) e slide, come blocchi della stessa "unità".
 - Profili insegnante, condivisione tra colleghi, pagamenti.

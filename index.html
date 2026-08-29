@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg?v=2">
-<link rel="stylesheet" href="styles.css?v=20260828-30">
+<link rel="stylesheet" href="styles.css?v=20260829-31">
 </head>
 <body>
 <header class="topbar">
@@ -14,6 +14,7 @@
     <button data-view="home">Portfolio</button>
     <button data-view="new" class="primary">Nuova lezione</button>
     <button id="btn-settings">Impostazioni AI</button>
+    <button id="btn-account" class="account" style="display:none" title="Salva le lezioni nel cloud per ritrovarle su ogni computer"><span class="dot off"></span> Accedi</button>
   </nav>
 </header>
 
@@ -29,7 +30,8 @@
         <input id="import-file" type="file" accept="application/json,.json" class="sr">
         <button id="btn-demo">Crea lezione demo (player finto)</button>
       </div>
-      <p class="hint">Aprendo una lezione dal portfolio vedi la versione pronta per la classe; "Modifica" apre l'editor. Le lezioni sono salvate in questo browser: per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
+      <p class="hint">Aprendo una lezione dal portfolio vedi la versione pronta per la classe; "Modifica" apre l'editor. Per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
+      <p class="hint" id="home-storage-hint">Le lezioni sono salvate in questo browser.</p>
     </div>
     <div class="card" id="bookmarklet-card">
       <h2>Pulsante per il browser: dal video alla bozza senza copia-incolla</h2>
@@ -256,6 +258,30 @@
   </div>
 </dialog>
 
+<dialog id="dlg-account">
+  <h2>Le mie lezioni nel cloud</h2>
+  <div id="acc-out">
+    <p class="hint">Con l'accesso le lezioni si salvano anche nel cloud e le ritrovi su ogni computer dove entri con la stessa email. Niente password: ricevi un link via email.</p>
+    <label for="acc-email">Email</label>
+    <input id="acc-email" type="email" placeholder="nome@esempio.it" autocomplete="email">
+    <div class="row" style="margin-top:14px">
+      <button id="acc-send" class="primary">Inviami il link di accesso</button>
+      <button id="acc-close">Chiudi</button>
+    </div>
+    <div id="acc-msg" class="hint" style="margin-top:8px"></div>
+  </div>
+  <div id="acc-in" style="display:none">
+    <p>Connesso come <b id="acc-who"></b></p>
+    <p id="acc-state" class="hint"></p>
+    <div class="row" style="margin-top:14px">
+      <button id="acc-sync" class="primary">Sincronizza ora</button>
+      <button id="acc-logout">Esci</button>
+      <button id="acc-close2">Chiudi</button>
+    </div>
+    <p class="hint" style="margin-top:10px">Ogni modifica viene caricata da sola; se due computer modificano la stessa lezione vince l'ultima modifica. Uscendo, le lezioni restano in questo browser e nel cloud. La chiave AI non viene mai caricata nel cloud.</p>
+  </div>
+</dialog>
+
 <dialog id="dlg-share">
   <h2>Link per gli studenti</h2>
   <p><b>1. Link con i dati inclusi</b> — funziona subito, da qualsiasi hosting; è lungo ma va bene per WhatsApp / Classroom.</p>
@@ -307,12 +333,13 @@
 <div id="overlay"><div><div class="loader-box"><img class="loader" src="https://cdn.dribbble.com/userupload/22076800/file/original-8e7ce77dec0edaf0105e8287038f6e60.gif" alt="" onerror="this.classList.add('off')"><div class="spinner"></div></div><div id="overlay-text">loading</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260828-30"></script>
-<script src="exercises.js?v=20260828-30"></script>
-<script src="generator.js?v=20260828-30"></script>
-<script src="ai.js?v=20260828-30"></script>
-<script src="demo-data.js?v=20260828-30"></script>
-<script src="bookmarklet.js?v=20260828-30"></script>
-<script src="app.js?v=20260828-30"></script>
+<script src="lang.js?v=20260829-31"></script>
+<script src="exercises.js?v=20260829-31"></script>
+<script src="generator.js?v=20260829-31"></script>
+<script src="ai.js?v=20260829-31"></script>
+<script src="demo-data.js?v=20260829-31"></script>
+<script src="bookmarklet.js?v=20260829-31"></script>
+<script src="sync.js?v=20260829-31"></script>
+<script src="app.js?v=20260829-31"></script>
 </body>
 </html>
