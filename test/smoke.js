@@ -366,7 +366,26 @@ async function startVideo(page) {
         assert.ok(clicked, 'chip ' + w);
       }
     } else if (ex.type === 'missing') {
-      await page.fill('#s-panel input[type=text]', ex.data.answer);
+      // gli spazi tra le parole: passando col mouse si apre quello vicino; senza scelta "Controlla" chiede prima di rispondere
+      const nSlots = await page.$$eval('#s-panel .gapfinder .slot', function (s) { return s.length; });
+      assert.strictEqual(nSlots, ex.data.tokens.length, 'uno spazio per ogni posizione (' + nSlots + ')');
+      assert.ok(!(await page.$('#s-panel input.gapfind')), 'niente campo finché non si sceglie lo spazio');
+      const firstWord = await page.$('#s-panel .gapfinder .w');
+      await firstWord.hover();
+      assert.ok(await page.$('#s-panel .gapfinder .slot.near'), 'lo spazio vicino al mouse si apre');
+      await page.click('#s-panel button:has-text("Controlla")');
+      assert.ok(/Prima rispondi/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })), 'senza spazio scelto non si controlla');
+      // posto sbagliato + parola giusta → non ancora, con il suggerimento sul posto
+      const wrongK = ex.data.missingIndex === 0 ? 1 : 0;
+      await page.click('#s-panel .gapfinder .slot[data-k="' + wrongK + '"]');
+      await page.fill('#s-panel input.gapfind', ex.data.answer);
+      await page.click('#s-panel button:has-text("Controlla")');
+      assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })), 'posto sbagliato = non ancora');
+      assert.ok(/Non è lì/.test(await page.$eval('#s-panel .gapfind-hint', function (f) { return f.textContent; })), 'suggerimento sul posto');
+      // "Aiuto" porta al posto giusto
+      await page.click('#s-panel button:has-text("Aiuto")');
+      assert.ok(await page.$('#s-panel .gapfinder .slot[data-k="' + ex.data.missingIndex + '"].sel'), 'aiuto = posto giusto');
+      await page.fill('#s-panel input.gapfind', ex.data.answer);
     } else if (ex.type === 'extra') {
       const chips = await page.$$('#s-panel .chips .chip');
       await chips[ex.data.extraIndex].click();
