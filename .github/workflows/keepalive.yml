@@ -1,0 +1,19 @@
+# Tiene sveglio il progetto Supabase del piano gratuito (si mette in pausa dopo 7 giorni senza attività):
+# ogni 3 giorni interroga la tabella delle lezioni con la chiave pubblicabile (risposta vuota: le RLS non mostrano nulla agli anonimi).
+name: Supabase keep-alive
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Interroga il progetto video-lezioni
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "apikey: sb_publishable_40BFSphEmaZ0u7FU9MI8_w_ZHEwunq-" \
+            -H "Authorization: Bearer sb_publishable_40BFSphEmaZ0u7FU9MI8_w_ZHEwunq-" \
+            "https://raakqcqrcgbfncevxauz.supabase.co/rest/v1/lessons?select=id&limit=1")
+          echo "HTTP $code"
+          test "$code" = "200"
