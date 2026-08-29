@@ -91,6 +91,20 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .ex-card.ai { border-left: 4px solid #8e7cf3; }
 .ex-card .head { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .ex-card .num { font-weight: 700; background: var(--marker); color: #fff; border-radius: 50%; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; }
+.ex-card .ex-title { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 18px; }
+.ex-card .ex-title b { font-weight: 800; }
+/* "trova la parola mancante": spazi cliccabili tra le parole; quello vicino al mouse si apre */
+.sentence.gapfinder { cursor: text; }
+.gapfinder .slot { display: inline-block; vertical-align: baseline; width: .4em; height: 1.15em; margin: 0 .04em; border-radius: 5px; position: relative; transition: width .18s ease, background .18s ease, box-shadow .18s ease; }
+.gapfinder .slot.near { width: 2.6em; background: #fff1c2; box-shadow: inset 0 -2px 0 0 #f5c400; cursor: pointer; }
+.gapfinder .slot.near::after { content: '+'; position: absolute; left: 0; right: 0; top: 0; bottom: 0; text-align: center; color: #b58900; font-weight: 700; font-size: .85em; line-height: 1.35em; }
+.gapfinder .slot.sel { width: auto; background: transparent; box-shadow: none; padding: 0 .1em; }
+.gapfinder .slot.sel::after { content: none; }
+.gapfinder .slot input.gap.gapfind { width: 5ch; min-width: 5ch; margin: 0; padding: 0 4px; text-align: center; }
+.gapfinder .slot.hinted input.gap.gapfind { box-shadow: 0 0 0 2px #ffe08a; }
+.gapfinder .slot.wrongpick { animation: slot-shake .5s; }
+.gapfinder .slot.wrongpick input.gap.gapfind { background: var(--bad-bg); border-color: var(--bad); }
+@keyframes slot-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .chip { background: var(--chip); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; user-select: none; }
 .chip.sel { background: #ffe8cc; border-color: var(--marker); }
@@ -99,8 +113,12 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .chip.good { background: var(--ok-bg) !important; border-color: var(--ok) !important; color: var(--ok); font-weight: 600; }
 .chip.wrongpick { background: var(--bad-bg) !important; border-color: var(--bad) !important; color: var(--bad); }
 .preview { background: #fafbfd; border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 15px; }
-.cut-row { display: grid; grid-template-columns: 7em 7em 1fr auto auto; gap: 8px; align-items: center; margin-bottom: 6px; }
-@media (max-width: 640px) { .cut-row { grid-template-columns: 1fr 1fr; } }
+.cut-row { display: grid; grid-template-columns: 6.5em 6.5em 1fr; grid-template-areas: "start end info" "btns btns btns"; gap: 6px 8px; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.cut-row > :nth-child(1) { grid-area: start; }
+.cut-row > :nth-child(2) { grid-area: end; }
+.cut-row > .hint { grid-area: info; margin: 0; }
+.cut-row .cut-btns { grid-area: btns; display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 640px) { .cut-row { grid-template-columns: 1fr 1fr; grid-template-areas: "start end" "info info" "btns btns"; } }
 .kv { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
 .kv b { color: var(--ink); }
 .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }

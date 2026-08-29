@@ -1294,8 +1294,12 @@
     });
     helperSel.addEventListener('change', function () { const k = parseInt(helperSel.value, 10); if (!isNaN(k) && cands[k]) applyCandidate(ls, ex, cands[k]); });
     const alignMarker = function () { ex.markerTime = Math.round((ex.segment.end + 0.1) * 10) / 10; };
-    const timesRow = el('div', { class: 'head' },
+    const lbl = EX.LABELS[ex.type] || ex.type, par = lbl.indexOf(' (');
+    card.appendChild(el('div', { class: 'ex-title' },
       el('span', { class: 'num', text: String(i + 1) }),
+      el('b', { text: par === -1 ? lbl : lbl.slice(0, par) }),
+      par === -1 ? null : el('span', { class: 'hint', text: lbl.slice(par + 1) })));
+    const timesRow = el('div', { class: 'head' },
       el('span', { class: 'hint', text: 'frase da' }),
       timeInput(ex.segment.start, function (t) { ex.segment.start = t; touch(ls); renderEditorBody(); }, ex.id + ':start'),
       el('span', { class: 'hint', text: 'a' }),
@@ -1617,14 +1621,15 @@
       timeInput(c.start, function (t) { c.start = t; touch(ls); renderEditorBody(); }),
       timeInput(c.end, function (t) { c.end = t; touch(ls); renderEditorBody(); }),
       el('span', { class: 'hint', text: fmtMin(c.end - c.start) + ' · ' + (c.reason || '') + (c.source === 'ai' ? ' (AI)' : '') }),
-      el('button', { class: 'small', text: '▶ Giunzione', title: 'Ascolta il punto di giunzione: 3 secondi prima del taglio, salto, 3 secondi dopo', onclick: function () { previewCut(ls, c); } }),
-      el('button', { class: 'small', text: '⇤⇥ Frasi intere', title: 'Allinea inizio e fine del taglio ai confini delle frasi della trascrizione', onclick: function () {
-        const sn = ls.chunks && ls.chunks.length ? G.snapCutToSentences(c, ls.chunks, { tol: 1.5, min: 2, duration: ls.duration }) : null;
-        if (!sn) return toast('Nessuna frase intera dentro questo taglio');
-        if (Math.abs(sn.start - c.start) < 0.05 && Math.abs(sn.end - c.end) < 0.05) return toast('Già allineato alle frasi');
-        c.start = sn.start; c.end = sn.end; touch(ls); renderEditorBody(); toast('Taglio allineato: da ' + fmt(c.start) + ' a ' + fmt(c.end));
-      } }),
-      el('button', { class: 'small danger', text: 'Rimuovi', onclick: function () { ls.cuts.splice(i, 1); touch(ls); renderEditorBody(); } })
+      el('div', { class: 'cut-btns' },
+        el('button', { class: 'small', text: '▶ Giunzione', title: 'Ascolta il punto di giunzione: 3 secondi prima del taglio, salto, 3 secondi dopo', onclick: function () { previewCut(ls, c); } }),
+        el('button', { class: 'small', text: '⇤⇥ Frasi intere', title: 'Allinea inizio e fine del taglio ai confini delle frasi della trascrizione', onclick: function () {
+          const sn = ls.chunks && ls.chunks.length ? G.snapCutToSentences(c, ls.chunks, { tol: 1.5, min: 2, duration: ls.duration }) : null;
+          if (!sn) return toast('Nessuna frase intera dentro questo taglio');
+          if (Math.abs(sn.start - c.start) < 0.05 && Math.abs(sn.end - c.end) < 0.05) return toast('Già allineato alle frasi');
+          c.start = sn.start; c.end = sn.end; touch(ls); renderEditorBody(); toast('Taglio allineato: da ' + fmt(c.start) + ' a ' + fmt(c.end));
+        } }),
+        el('button', { class: 'small danger', text: 'Rimuovi', onclick: function () { ls.cuts.splice(i, 1); touch(ls); renderEditorBody(); } }))
     );
   }
 
@@ -2215,32 +2220,70 @@
         if (res.correct) { const raws = L.tokenize(ex.sentence).map(function (t) { return t.raw; }); $$('.chip', ans).forEach(function (c, k) { if (raws[k]) c.textContent = raws[k]; }); starrableChips(ls, ans); pool.remove(); }
       };
     } else if (ex.type === 'missing') {
-      body.appendChild(starredSentence(ls, d.tokens.filter(function (t, i) { return i !== d.missingIndex; })));
-      const inp = el('input', { type: 'text', placeholder: 'Parola mancante', autocomplete: 'off', autocapitalize: 'off', style: 'margin-top:10px;max-width:16em' });
-      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
-      body.appendChild(inp);
-      getAnswer = function () { return inp.value; };
-      giveHint = function () { return sameWord(inp.value, d.answer) ? false : revealLetter(inp, d.answer); };
+      // lo studente sceglie DOVE manca la parola (tra due parole: passando col mouse si apre uno spazio, clic per sceglierlo)
+      // e poi la scrive nello spazio. Giusto solo se posto E parola sono giusti.
+      const visible = d.tokens.filter(function (t, i) { return i !== d.missingIndex; });
+      const sdiv = el('div', { class: 'sentence full gapfinder' });
+      const slots = [];
+      let selected = -1;
+      const inp = el('input', { type: 'text', class: 'gap gapfind', placeholder: '…', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'Parola mancante' });
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); checkBtn.click(); } });
+      inp.addEventListener('input', function () { inp.style.width = Math.max(5, inp.value.length + 2) + 'ch'; });
+      const choose = function (k) {
+        selected = k;
+        slots.forEach(function (s, j) { s.classList.toggle('sel', j === k); s.classList.remove('near'); });
+        slots[k].appendChild(inp);
+        inp.focus();
+      };
+      const makeSlot = function (k) {
+        const sl = el('span', { class: 'slot', 'data-k': String(k), title: 'Manca una parola qui? Clicca e scrivila' });
+        sl.addEventListener('click', function (e) { if (e.target === inp) return; e.stopPropagation(); choose(k); });
+        return sl;
+      };
+      visible.forEach(function (t, k) { const sl = makeSlot(k); slots.push(sl); sdiv.appendChild(sl); sdiv.appendChild(starSpan(ls, t)); });
+      const lastSlot = makeSlot(visible.length); slots.push(lastSlot); sdiv.appendChild(lastSlot);
+      // lo spazio si apre dove sta il mouse: lo slot più vicino al puntatore, sulla stessa riga
+      const nearest = function (x, y) {
+        let best = -1, bd = Infinity;
+        slots.forEach(function (sl, j) {
+          const r = sl.getBoundingClientRect(); if (!r.height) return;
+          const dy = Math.abs((r.top + r.bottom) / 2 - y); if (dy > r.height * 0.9 + 4) return;
+          const dx = Math.abs((r.left + r.right) / 2 - x); const dd = dx + dy * 3;
+          if (dd < bd) { bd = dd; best = j; }
+        });
+        return best;
+      };
+      sdiv.addEventListener('mousemove', function (e) { const j = nearest(e.clientX, e.clientY); slots.forEach(function (sl, i) { sl.classList.toggle('near', i === j && i !== selected); }); });
+      sdiv.addEventListener('mouseleave', function () { slots.forEach(function (sl) { sl.classList.remove('near'); }); });
+      // clic in un punto qualsiasi della frase (non su una parola: quella è per la stella): lo spazio più vicino
+      sdiv.addEventListener('click', function (e) { if (e.target.closest('.slot') || e.target.closest('.w') || e.target === inp) return; const j = nearest(e.clientX, e.clientY); if (j >= 0) choose(j); });
+      body.appendChild(sdiv);
+      const gfHint = el('div', { class: 'hint gapfind-hint', text: 'Dove manca la parola? Passa il mouse sulla frase: lo spazio si apre. Clicca e scrivila.' });
+      body.appendChild(gfHint);
+      getAnswer = function () { return selected === -1 ? null : { index: selected, word: inp.value }; };
+      giveHint = function () {
+        // primo aiuto: il posto giusto; poi una lettera in più della parola
+        if (selected !== d.missingIndex) { choose(d.missingIndex); slots[d.missingIndex].classList.add('hinted'); return true; }
+        return sameWord(inp.value, d.answer) ? false : revealLetter(inp, d.answer);
+      };
       markResult = function (res) {
         inp.classList.toggle('ok', res.correct); inp.classList.toggle('bad', !res.correct);
         if (res.correct) {
-          inp.remove();   // la parola è già nella frase sopra, evidenziata: il campo non serve più
-          const sdiv = body.querySelector('.sentence');
-          if (sdiv) {
-            sdiv.style.color = 'var(--ok)';
-            // la parola mancante entra nella frase con un'animazione che sposta il resto per farle spazio
-            if (!sdiv.querySelector('.insert-in')) {
-              const spans = $$('.w', sdiv);
-              const ins = starSpan(ls, d.tokens[d.missingIndex]);
-              ins.classList.add('insert-in');
-              const at = spans[d.missingIndex];
-              if (at) { sdiv.insertBefore(ins, at); sdiv.insertBefore(document.createTextNode(' '), at); }
-              else { sdiv.appendChild(document.createTextNode(' ')); sdiv.appendChild(ins); }
-            }
-          }
+          // la parola prende il posto dello spazio scelto, con l'animazione di ingresso; gli altri spazi diventano spazi normali
+          const sl = slots[selected];
+          inp.remove();
+          const ins = starSpan(ls, d.tokens[d.missingIndex]); ins.classList.add('insert-in');
+          sl.replaceWith(ins);
+          slots.forEach(function (x) { if (x !== sl) x.replaceWith(document.createTextNode(' ')); });
+          ins.parentNode.insertBefore(document.createTextNode(' '), ins); ins.parentNode.insertBefore(document.createTextNode(' '), ins.nextSibling);
+          sdiv.classList.remove('gapfinder'); sdiv.style.color = 'var(--ok)';
+          gfHint.remove();
+        } else {
+          const dt = res.detail || {};
+          if (dt.index === false && selected >= 0) { const sl = slots[selected]; sl.classList.add('wrongpick'); setTimeout(function () { sl.classList.remove('wrongpick'); }, 900); }
+          gfHint.textContent = dt.index === false ? 'Non è lì che manca la parola: guarda meglio dove la frase "salta".' : 'Il posto è giusto: la parola no. Riascolta.';
         }
       };
-      if (!preview) setTimeout(function () { inp.focus(); }, 50);
     } else if (ex.type === 'mc') {
       let selected = -1;   // indice ORIGINALE (quello salvato), non la posizione mostrata
       body.appendChild(el('div', { class: 'sentence question', text: d.question || '' }));

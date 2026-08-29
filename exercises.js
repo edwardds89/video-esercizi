@@ -19,7 +19,7 @@
     gap: 'Ascolta e scrivi le parole mancanti.',
     gapbank: 'Ascolta e metti negli spazi le parole giuste: nella lista ce ne sono anche di sbagliate.',
     scramble: 'Tocca le parole nell\'ordine giusto per ricostruire la frase che hai sentito.',
-    missing: 'In questa frase manca una parola rispetto a quello che hai sentito: scrivila.',
+    missing: 'In questa frase manca una parola rispetto a quello che hai sentito: trova dove manca (clicca lo spazio) e scrivila.',
     extra: 'In questa frase c\'è una parola in più rispetto a quello che hai sentito: toccala.',
     wrong: 'In questa frase c\'è una parola diversa da quella che hai sentito: toccala e scrivi quella giusta.',
     mc: 'Ascolta e scegli la risposta giusta.'
@@ -253,8 +253,15 @@
         const want = d.words.map(function (w) { return L.normalize(w, { accents: strict }); });
         return { correct: sameSeq(got, want), detail: got.map(function (w, i) { return w === want[i]; }) };
       }
-      case 'missing':
+      case 'missing': {
+        // risposta nuova: { index, word } (dove manca + quale parola); vecchia: solo la parola
+        if (answer && typeof answer === 'object') {
+          const okIdx = Number(answer.index) === d.missingIndex;
+          const okWord = eq(answer.word || '', d.answer, strict);
+          return { correct: okIdx && okWord, detail: { index: okIdx, word: okWord } };
+        }
         return { correct: eq(answer || '', d.answer, strict), detail: null };
+      }
       case 'mc':
         return { correct: Number(answer) === d.correct, detail: null };
       case 'extra':
@@ -275,7 +282,10 @@
     switch (exercise.type) {
       case 'gap': case 'gapbank': return gapRuns(d).map(function (r) { return r.answer; }).join(', ');   // uno spazio unito = una voce ("i nostri oceani, solamente una nostra")
       case 'scramble': return d.words.join(' ');
-      case 'missing': return d.answer;
+      case 'missing': {
+        const before = d.tokens[d.missingIndex - 1], after = d.tokens[d.missingIndex + 1];
+        return d.answer + (before || after ? ' (' + (before ? '…' + before + ' ' : '') + '[' + d.answer + ']' + (after ? ' ' + after + '…' : '') + ')' : '');
+      }
       case 'mc': return d.options[d.correct];
       case 'extra': return d.extraWord;
       case 'wrong': return d.wrongWord + ' → ' + d.answer;
