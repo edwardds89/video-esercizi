@@ -197,7 +197,12 @@
     $('#acc-send').disabled = true; msg.textContent = 'Invio in corso…';
     CLOUD.client.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } })
       .then(function (res) { if (res.error) throw res.error; msg.textContent = 'Email inviata a ' + email + ': apri il link che contiene (guarda anche nello spam). La pagina si aprirà già connessa e le lezioni si allineano da sole.'; })
-      .catch(function (e) { msg.textContent = 'Invio non riuscito: ' + (e.message || e); })
+      .catch(function (e) {
+        const m = String(e && e.message || e);
+        msg.textContent = /rate limit/i.test(m)
+          ? 'Troppe email in poco tempo: il servizio ne manda al massimo 2 all\'ora per tutta l\'app. Se hai già ricevuto un link, usalo (vale un\'ora; guarda anche nello spam); altrimenti riprova più tardi.'
+          : 'Invio non riuscito: ' + m;
+      })
       .then(function () { $('#acc-send').disabled = false; });
   });
   $('#acc-sync').addEventListener('click', function () { CLOUD.announce = true; runSync().then(function () { if ($('#dlg-account').open) fillAccountDialog(); }); });
