@@ -606,6 +606,75 @@ async function startVideo(page) {
   const err = await page.$eval('#f-error', function (e) { return e.textContent; });
   assert.ok(/non è utilizzabile/i.test(err), 'errore in pagina: ' + err);
 
+  console.log('8. cloud: due browser con lo stesso account (adattatore finto)');
+  // il cloud finto vive in window.__vlCloud (rows in window.__rows); tra i due browser le righe si copiano a mano
+  const fakeCloud = function (rows) {
+    return '(function () { window.__rows = ' + JSON.stringify(rows) + ';' +
+      'function sortKeys(v) { if (Array.isArray(v)) return v.map(sortKeys); if (v && typeof v === "object") { var o = {}; Object.keys(v).sort().forEach(function (k) { o[k] = sortKeys(v[k]); }); return o; } return v; }' +
+      'window.__vlCloud = {' +
+      ' user: async function () { return { id: "u-test", email: "prof@esempio.it" }; },' +
+      ' list: async function () { return Object.values(window.__rows).map(function (r) { return { id: r.id, title: r.title, updated_at: r.updated_at, deleted: r.deleted }; }); },' +
+      ' get: async function (ids) { return ids.map(function (id) { return window.__rows[id]; }).filter(Boolean).map(function (r) { return { id: r.id, title: r.title, data: r.data ? sortKeys(JSON.parse(JSON.stringify(r.data))) : null, updated_at: r.updated_at, deleted: r.deleted }; }); },' +
+      ' upsert: async function (rs) { rs.forEach(function (r) { window.__rows[r.id] = Object.assign({}, window.__rows[r.id], r); }); },' +
+      ' remove: async function (rs) { rs.forEach(function (r) { window.__rows[r.id] = Object.assign({}, window.__rows[r.id], r); }); } }; })();';
+  };
+  const ctxA = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxA.addInitScript(fakeCloud({}));
+  const pa = await ctxA.newPage();
+  pa.on('pageerror', function (e) { errors.push('pageerror(A): ' + e.message); });
+  await pa.goto(BASE + '?mock=1&speed=8');
+  await pa.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.email === 'prof@esempio.it'; }, null, { timeout: 5000 });
+  assert.ok(await pa.$eval('#btn-account', function (b) { return b.style.display !== 'none' && /prof@esempio\.it/.test(b.textContent); }), 'pulsante account con l\'email');
+  assert.ok(/nel cloud/.test(await pa.$eval('#home-storage-hint', function (h) { return h.textContent; })), 'avviso "salvate nel cloud"');
+  await pa.click('#btn-demo');
+  await pa.waitForSelector('#view-editor.active', { timeout: 15000 });
+  await pa.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  await pa.waitForFunction(function () { return Object.keys(window.__rows).length === 1 && window.VLApp.cloud.sync.pending() === 0; }, null, { timeout: 8000 });
+  const rowA = await pa.evaluate(function () { const r = Object.values(window.__rows)[0]; return { id: r.id, title: r.title, deleted: r.deleted, hasLines: Array.isArray(r.data.lines) && r.data.lines.length > 0, owner: r.owner, cache: JSON.stringify(r.data).indexOf('"_') !== -1 }; });
+  assert.ok(rowA.title && rowA.hasLines && rowA.owner === 'u-test' && !rowA.deleted && !rowA.cache, 'lezione caricata nel cloud (con trascrizione, senza cache): ' + JSON.stringify(rowA));
+  assert.ok(await pa.$eval('#btn-account .dot', function (d) { return d.classList.contains('ok'); }), 'pallino verde dopo il caricamento');
+  await pa.click('#nav button[data-view=home]');
+  await pa.click('#btn-account');
+  await pa.waitForSelector('#dlg-account[open]');
+  assert.ok(/prof@esempio\.it/.test(await pa.$eval('#acc-who', function (w) { return w.textContent; })), 'finestra account: connesso come');
+  assert.ok(/Sincronizzato/.test(await pa.$eval('#acc-state', function (w) { return w.textContent; })), 'stato sincronizzato');
+  await pa.click('#acc-close2');
+  const rowsA = await pa.evaluate(function () { return window.__rows; });
+  // secondo browser: parte vuoto, trova la lezione nel cloud
+  const ctxB = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxB.addInitScript(fakeCloud(rowsA));
+  const pb = await ctxB.newPage();
+  pb.on('pageerror', function (e) { errors.push('pageerror(B): ' + e.message); });
+  await pb.goto(BASE + '?mock=1&speed=8');
+  await pb.waitForFunction(function () { return document.querySelectorAll('#lesson-list .lesson-card').length === 1; }, null, { timeout: 8000 });
+  assert.strictEqual(await pb.$eval('#lesson-list .lesson-card .title', function (t) { return t.textContent; }), rowA.title, 'lezione scaricata sul secondo browser');
+  assert.strictEqual(await pb.evaluate(function () { return window.VLApp.cloud.sync.pending(); }), 0, 'niente da caricare dopo il pull');
+  // B modifica il titolo dall'editor → il cloud riceve la modifica; poi B elimina → tombstone
+  await pb.click('#lesson-list .lesson-card button:has-text("Modifica")');
+  await pb.waitForSelector('#view-editor.active');
+  await pb.fill('#e-title', 'Titolo cambiato su B');
+  await pb.click('#btn-save');
+  await pb.waitForFunction(function () { return Object.values(window.__rows)[0].title === 'Titolo cambiato su B' && window.VLApp.cloud.sync.pending() === 0; }, null, { timeout: 8000 });
+  const rowsB = await pb.evaluate(function () { return window.__rows; });
+  // A riceve il nuovo titolo (copiamo le righe del cloud finto in A e forziamo la sincronizzazione)
+  await pa.evaluate(function (rows) { window.__rows = rows; return window.VLApp.runSync(); }, rowsB);
+  await pa.waitForFunction(function () { return Object.values(window.VLApp.S.lessons)[0].title === 'Titolo cambiato su B'; }, null, { timeout: 5000 });
+  assert.ok(/Titolo cambiato su B/.test(await pa.$eval('#lesson-list', function (l) { return l.textContent; })), 'portfolio di A aggiornato');
+  pb.once('dialog', function (d) { d.accept(); });
+  await pb.click('#nav button[data-view=home]');
+  await pb.click('#lesson-list .lesson-card button:has-text("Elimina")');
+  await pb.waitForFunction(function () { return Object.values(window.__rows)[0].deleted === true && window.VLApp.cloud.sync.pending() === 0; }, null, { timeout: 8000 });
+  const rowsB2 = await pb.evaluate(function () { return window.__rows; });
+  await pa.evaluate(function (rows) { window.__rows = rows; return window.VLApp.runSync(); }, rowsB2);
+  await pa.waitForFunction(function () { return Object.keys(window.VLApp.S.lessons).length === 0; }, null, { timeout: 5000 });
+  assert.ok(/Nessuna lezione/.test(await pa.$eval('#lesson-list', function (l) { return l.textContent; })), 'eliminazione arrivata su A');
+  // link studente: niente cloud, pulsante nascosto
+  const linkB = await pa.evaluate(function (row) { return location.origin + location.pathname + '?mock=1#d=' + btoa(unescape(encodeURIComponent(JSON.stringify(Object.assign({}, row.data, { id: 'x' }))))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }, Object.values(rowsA)[0]);
+  await pb.goto(linkB);
+  await pb.waitForSelector('#view-student.active', { timeout: 8000 });
+  assert.ok(await pb.$eval('#btn-account', function (b) { return b.style.display === 'none'; }), 'link studente: pulsante account nascosto');
+  await ctxA.close(); await ctxB.close();
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
