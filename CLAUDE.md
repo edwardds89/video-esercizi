@@ -40,6 +40,7 @@
 - Correzione al volo (insegnante, lezione del portfolio): ⌘/Alt + clic su una parola nel pop-up → `quickEditWord` (prompt) ricostruisce l'esercizio con la stessa struttura (choices dai dati attuali) e salva; per la parola "in più"/"sostituita" corregge quella.
 - `migrateLesson` (loadState/openStudent): lezioni vecchie → riordino ricostruito con maiuscola e punto.
 - Soluzione del fill the gaps: una voce per spazio unito (`gapRuns`), non una per parola.
+- "Parliamone" (`ls.talk.questions[{id,text,help}]`): domande di conversazione aperte, dopo l'ultimo esercizio e prima del riepilogo (`onEnded` → `renderTalk`), una alla volta, grande, con le espressioni utili come chip (`help` separato da "·"); nessuna correzione; Traduci (AI) e stelle sulle parole. Editor: card `#e-talk-card` (righe domanda + espressioni, ↑↓, ✕, "✨ Proponi con l'AI" = `AI.suggestDiscussion`). Viaggia nel `studentPayload`.
 - Traduzione AI (`AI.translateSentence`, inglese britannico) dal pop-up: tutta la frase o solo il testo selezionato col mouse.
 - Suono "Giusto!": Web Audio (`playWinSound`), nessun file.
 - Schermata di attesa (`#overlay`, `overlay(true, 'loading')`): testo solo "loading" e gif scelta da Edoardo, caricata da cdn.dribbble.com (opera di un designer su Dribbble, NON nostra e NON nel repo: hotlink per uso personale); `mix-blend-mode: multiply` toglie lo sfondo bianco; se la gif non carica (`onerror` → `.off`) ricompare lo spinner CSS.

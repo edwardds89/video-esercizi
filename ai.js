@@ -312,6 +312,29 @@
     return { vocab: cleanVocab(plan.vocab), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
+  /**
+   * Domande per parlare dopo il video: aperte, personali, sul tema (non sui dettagli), nella lingua del video,
+   * ciascuna con 2-3 espressioni utili per rispondere. params: { chunks, lang, level, n, focus, apiKey, model, fetchImpl }
+   * → { questions: [{ text, help }] }
+   */
+  async function suggestDiscussion(params) {
+    const lang = params.lang || 'it';
+    const level = params.level || 'B1';
+    const n = params.n || 6;
+    const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
+    const system = 'You help a language teacher prepare a speaking activity after a video. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + level,
+      'Write ' + n + ' conversation questions in ' + lang + ' for AFTER the video. They are for SPEAKING practice: each question must be open (never answerable with yes/no or one word), personal or opinion-based ("E tu…?", "Secondo te…?", "Cosa faresti…?"), about the TOPIC of the video, not about its details or numbers. Order them from easy and concrete to more abstract. Language and grammar suited to a ' + level + ' student; short, one sentence each.' +
+      ' For each question give "help": 2 or 3 short chunks or expressions (in ' + lang + ', separated by " · ") the student can use to answer, e.g. "Secondo me… · Non sono d\'accordo perché… · Mi è capitato di…".' +
+      (params.focus ? ' Teacher\'s note: ' + params.focus : ''),
+      'SCHEMA: {"questions":[{"text":"...","help":"... · ... · ..."}]}', '',
+      'VIDEO TEXT:', text].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
+    const plan = extractJSON(res.text);
+    const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) { return { text: String((q && q.text) || '').trim(), help: String((q && q.help) || '').trim() }; }).filter(function (q) { return q.text; }).slice(0, 12);
+    return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
   /** Mescola le opzioni di una scelta multipla (il modello mette quasi sempre quella giusta per prima) e rimappa gli indici. */
   function shuffleMC(options, correct, tricky, rand) {
     const r = typeof rand === 'function' ? rand : Math.random;
@@ -412,5 +435,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion };
 });

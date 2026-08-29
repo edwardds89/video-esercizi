@@ -80,7 +80,8 @@
   function studentPayload(lesson) {
     const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }).map(function (w) { return { id: w.id, word: w.word, translation: w.translation, image: w.image, selected: true, inExercise: w.inExercise }; }) } : undefined;
     return { v: 1, id: lesson.id, title: lesson.title, videoId: lesson.videoId, lang: lesson.lang, duration: lesson.duration,
-      exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb, lines: lesson.videoId === 'demo' ? lesson.lines : undefined };
+      exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb, talk: lesson.talk && lesson.talk.questions && lesson.talk.questions.length ? { questions: lesson.talk.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help }; }) } : undefined,
+      lines: lesson.videoId === 'demo' ? lesson.lines : undefined };
   }
 
   // ---------- video ----------
@@ -742,6 +743,8 @@
     if (S.editor.previewId) { const pe = ls.exercises.find(function (e) { return e.id === S.editor.previewId; }); if (pe) openPreview(ls, pe, false); }
     // parole utili
     renderVocabEditor(ls);
+    // domande per parlare (dopo il video)
+    renderTalkEditor(ls);
     // esercizi
     const box = $('#e-exercises'); box.innerHTML = '';
     if (!ls.exercises.length) box.appendChild(el('p', { class: 'muted', text: 'Nessun esercizio. Aggiungine uno dal tempo corrente o rigenera la bozza.' }));
@@ -836,6 +839,49 @@
     if (c && c.url === w.image) return (w._imgIdx + 1) + '/' + w._imgs.length + ' · ' + c.title + ' (' + c.source + ')';
     try { return new URL(w.image).hostname; } catch (e) { return ''; }
   }
+  /** ls.talk = { questions: [{ id, text, help }] }: domande di conversazione mostrate dopo l'ultimo esercizio (nessuna correzione). */
+  function talkState(ls) {
+    if (!ls.talk) ls.talk = { questions: [] };
+    if (!Array.isArray(ls.talk.questions)) ls.talk.questions = [];
+    return ls.talk;
+  }
+  function renderTalkEditor(ls) {
+    const tk = talkState(ls);
+    $('#btn-talk-ai').style.display = S.settings.apiKey ? '' : 'none';
+    const box = $('#e-talk'); box.innerHTML = '';
+    if (!tk.questions.length) { box.appendChild(el('p', { class: 'muted', text: 'Nessuna domanda: proponile con l\'AI o scrivile a mano (una domanda aperta + le espressioni utili per rispondere).' })); return; }
+    tk.questions.forEach(function (q, i) {
+      const row = el('div', { class: 'talk-row' });
+      row.appendChild(el('span', { class: 'num', text: String(i + 1) }));
+      const qi = el('input', { type: 'text', value: q.text || '', placeholder: 'Domanda (aperta, personale)' });
+      qi.addEventListener('change', function () { q.text = qi.value.trim(); touch(ls); });
+      const hi = el('input', { type: 'text', value: q.help || '', placeholder: 'Espressioni utili, separate da · (facoltative)' });
+      hi.addEventListener('change', function () { q.help = hi.value.trim(); touch(ls); });
+      row.appendChild(qi); row.appendChild(hi);
+      row.appendChild(el('div', { class: 'row', style: 'gap:4px' },
+        el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { tk.questions.splice(i - 1, 0, tk.questions.splice(i, 1)[0]); touch(ls); renderTalkEditor(ls); } }),
+        el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === tk.questions.length - 1 ? 'disabled' : null, onclick: function () { tk.questions.splice(i + 1, 0, tk.questions.splice(i, 1)[0]); touch(ls); renderTalkEditor(ls); } }),
+        el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { tk.questions.splice(i, 1); touch(ls); renderTalkEditor(ls); } })));
+      box.appendChild(row);
+    });
+  }
+  $('#btn-talk-add').addEventListener('click', function () { const ls = current(); if (!ls) return; talkState(ls).questions.push({ id: uid(), text: '', help: '' }); touch(ls); renderTalkEditor(ls); const rows = $$('#e-talk .talk-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('input').focus(); });
+  $('#btn-talk-ai').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    if (!S.settings.apiKey) return toast('Serve la chiave API (Impostazioni AI)');
+    const st = $('#e-talk-status'); st.textContent = 'Chiedo al modello…';
+    const chunks = ls.chunks && ls.chunks.length ? ls.chunks : G.annotate(G.buildChunks(ls.lines || [], { duration: ls.duration, lang: ls.lang }), { lang: ls.lang, duration: ls.duration });
+    AI.suggestDiscussion({ chunks: chunks, lang: ls.lang, level: ls.level, n: 6, focus: ls.params && ls.params.focus, apiKey: S.settings.apiKey, model: S.settings.model })
+      .then(function (r) {
+        const tk = talkState(ls);
+        const have = new Set(tk.questions.map(function (q) { return L.normalize(q.text); }));
+        let added = 0;
+        r.questions.forEach(function (q) { if (have.has(L.normalize(q.text))) return; tk.questions.push({ id: uid(), text: q.text, help: q.help }); added++; });
+        touch(ls); renderTalkEditor(ls);
+        st.textContent = added + ' domande proposte' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '');
+      })
+      .catch(function (e) { st.textContent = 'AI: ' + e.message; });
+  });
   function readyText(ls) {
     const ready = cardVocab(ls).length;
     return selectedVocab(ls).length + ' selezionate, ' + ready + ' pronte per le schede (con traduzione o foto)' + (ready < 3 ? ' — ne servono almeno 3 per la scheda di abbinamento' : '');
@@ -1679,7 +1725,45 @@
   function onEnded() {
     const st = S.student; if (!st || st.ended || st.blocked) return;
     st.ended = true;
-    renderSummary();
+    const qs = talkState(st.lesson).questions.filter(function (q) { return q.text; });
+    if (qs.length) { st.talkIdx = 0; renderTalk(qs); } else renderSummary();
+  }
+  /** "Parliamone": una domanda alla volta, grande, con le espressioni utili; si parla, non si scrive. Poi il riepilogo. */
+  function renderTalk(qs) {
+    const st = S.student; const ls = st.lesson;
+    const p = $('#s-panel'); p.innerHTML = '';
+    dock('#s-stage', true);
+    $('#s-stage').classList.add('cards');
+    if (S.player) S.player.pause();
+    const i = st.talkIdx || 0, q = qs[i];
+    cardHeader(p, 'Parliamone', (i + 1) + ' di ' + qs.length, 'dopo il video');
+    p.appendChild(el('div', { class: 'instr', text: 'Rispondi a voce, con calma: non c\'è una risposta giusta. Clicca una parola per la stella ★.' }));
+    const qd = el('div', { class: 'talk-q' });
+    qd.appendChild(starredSentence(ls, L.tokenize(q.text).map(function (t) { return t.raw; })));
+    p.appendChild(qd);
+    const helps = String(q.help || '').split(/\s*[·|;]\s*/).map(function (h) { return h.trim(); }).filter(Boolean);
+    if (helps.length) {
+      p.appendChild(el('div', { class: 'hint', text: 'Per rispondere puoi usare:' }));
+      p.appendChild(el('div', { class: 'talk-help' }, helps.map(function (h) { return el('span', { class: 'chip', text: h }); })));
+    }
+    const fb = el('div', { class: 'feedback' });
+    const nav = el('div', { class: 'row fc-nav' });
+    nav.appendChild(el('button', { class: 'small', text: '◀ Indietro', disabled: i === 0 ? 'disabled' : null, onclick: function () { st.talkIdx = i - 1; renderTalk(qs); } }));
+    if (S.settings.apiKey) {
+      const trBtn = el('button', { class: 'small', text: '🌐 Traduci', title: 'Traduzione della domanda' });
+      trBtn.addEventListener('click', function () {
+        trBtn.disabled = true; trBtn.textContent = '… traduco';
+        AI.translateSentence({ text: q.text, whole: true, sentence: q.text, lang: ls.lang, context: '', apiKey: S.settings.apiKey, model: S.settings.model })
+          .then(function (r) { fb.textContent = r.translation; fb.style.color = 'var(--muted)'; })
+          .catch(function (e) { toast('AI: ' + e.message, 6000); })
+          .then(function () { trBtn.disabled = false; trBtn.textContent = '🌐 Traduci'; });
+      });
+      nav.appendChild(trBtn);
+    }
+    nav.appendChild(el('button', { class: 'primary big', text: i + 1 < qs.length ? 'Prossima ▶' : 'Vai al riepilogo ▶', onclick: function () { if (i + 1 < qs.length) { st.talkIdx = i + 1; renderTalk(qs); } else renderSummary(); } }));
+    p.appendChild(nav);
+    p.appendChild(fb);
+    p.appendChild(el('div', { class: 'actions' }, el('button', { class: 'link', text: 'Salta le domande e vai al riepilogo', onclick: renderSummary })));
   }
   function replaySegment(ex) {
     const st = S.student;
@@ -2330,10 +2414,10 @@
     } else textBack();
     return d;
   }
-  function cardHeader(p, title, sub) {
+  function cardHeader(p, title, sub, badge) {
     p.appendChild(el('div', { class: 'row ex-head' },
       el('h3', { class: 'ex-title' }, [document.createTextNode(title), sub ? el('span', { class: 'sub', text: ' ' + sub }) : null]),
-      el('span', { class: 'badge right', text: 'prima del video' })));
+      el('span', { class: 'badge right', text: badge || 'prima del video' })));
   }
   function cardFooter(p, st, onDone) {
     const row = el('div', { class: 'actions' });
