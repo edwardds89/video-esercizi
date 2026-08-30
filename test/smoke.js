@@ -4,12 +4,15 @@ const { chromium } = require('playwright');
 const assert = require('assert');
 
 const BASE = process.env.BASE || 'http://localhost:8123/';
-/** "Inizia" e, se compaiono le schede delle parole, salta tutto e vai al video. */
+/** "Inizia" e salta tutte le sezioni prima del video (schede delle parole, "Parliamone" per entrare nel tema). */
 async function startVideo(page) {
   await page.click('#btn-start');
-  await page.waitForTimeout(250);
-  const skip = await page.$('#s-panel button:has-text("Salta tutto")');
-  if (skip) await skip.click();
+  for (let i = 0; i < 8; i++) {
+    if (await page.evaluate(function () { return window.VLApp.S.student.started; })) break;
+    await page.waitForTimeout(200);
+    const skip = await page.$('#s-panel button:has-text("Salta tutto"), #s-panel button:has-text("Salta le schede"), #s-panel button:has-text("Salta le domande"), #s-panel button:has-text("Guarda il video")');
+    if (skip) await skip.click();
+  }
   await page.waitForFunction(function () { return window.VLApp.S.student.started; }, null, { timeout: 5000 });
 }
 
@@ -228,12 +231,35 @@ async function startVideo(page) {
   await page.waitForSelector('#view-editor.active');
   assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (els) { return els.length; }), 8);
 
-  // "Parliamone": due domande scritte a mano nell'editor; lo studente le vede dopo l'ultimo esercizio, prima del riepilogo
-  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(1) textarea.q', 'Secondo te, perché dormiamo?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) textarea.q', 'change');
-  await page.fill('#e-talk .talk-row:nth-child(1) textarea.h', 'Secondo me… · Penso che…'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) textarea.h', 'change');
-  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(2) textarea.q', 'Ti è mai capitato di dimenticare qualcosa di importante?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(2) textarea.q', 'change');
+  // "Parliamone" (dopo il video): due domande scritte a mano nella card della sezione t1
+  await page.click('.talk-card[data-tid="t1"] button:has-text("+ Domanda")');
+  await page.fill('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) textarea.q', 'Secondo te, perché dormiamo?'); await page.dispatchEvent('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) textarea.q', 'change');
+  await page.fill('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) textarea.h', 'Secondo me… · Penso che…'); await page.dispatchEvent('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) textarea.h', 'change');
+  await page.click('.talk-card[data-tid="t1"] button:has-text("+ Domanda")');
+  await page.fill('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(2) textarea.q', 'Ti è mai capitato di dimenticare qualcosa di importante?'); await page.dispatchEvent('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(2) textarea.q', 'change');
   await page.waitForTimeout(600);
-  assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].talk.questions.length; }), 2, 'due domande salvate');
+  assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].talks[0].questions.length; }), 2, 'due domande salvate');
+
+  // struttura della lezione: "+ Parliamone" aggiunge una sezione che entra PRIMA del video (per entrare nel tema)
+  assert.strictEqual(await page.$$eval('#e-flow .flow-chip', function (c) { return c.length; }), 3, 'tre sezioni in partenza');
+  await page.click('#btn-flow-talk');
+  await page.waitForSelector('.talk-card[data-tid="t2"]');
+  assert.ok(/prima del video/.test(await page.$eval('.talk-card[data-tid="t2"] .row .hint', function (h) { return h.textContent; })), 'la nuova sezione è prima del video');
+  assert.deepStrictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].flow.map(function (s) { return s.kind + (s.id ? ':' + s.id : ''); }); }), ['vocab', 'talk:t2', 'video', 'talk:t1'], 'ordine della struttura');
+  // le card della colonna destra seguono l'ordine della struttura
+  assert.deepStrictEqual(await page.$$eval('.editor-right > .card', function (cs) { return cs.map(function (c) { return c.id || c.getAttribute('data-tid'); }); }), ['e-flow-card', 'e-vocab-card', 't2', 'e-video-card', 't1'], 'card riordinate');
+  await page.click('.talk-card[data-tid="t2"] button:has-text("+ Domanda")');
+  await page.fill('.talk-card[data-tid="t2"] .talk-box .talk-row:nth-child(1) textarea.q', 'Cosa sai già del sonno?'); await page.dispatchEvent('.talk-card[data-tid="t2"] .talk-box .talk-row:nth-child(1) textarea.q', 'change');
+  // ◀ ▶ spostano la sezione attorno al video (e il badge cambia)
+  const t2chips = await page.$$('#e-flow .flow-chip');
+  await (await t2chips[1].$('button:has-text("▶")')).click();
+  await page.waitForTimeout(100);
+  assert.ok(/dopo il video/.test(await page.$eval('.talk-card[data-tid="t2"] .row .hint', function (h) { return h.textContent; })), 'spostata dopo il video');
+  const t2chips2 = await page.$$('#e-flow .flow-chip');
+  await (await t2chips2[2].$('button:has-text("◀")')).click();
+  await page.waitForTimeout(100);
+  assert.ok(/prima del video/.test(await page.$eval('.talk-card[data-tid="t2"] .row .hint', function (h) { return h.textContent; })), 'riportata prima del video');
+  await page.waitForTimeout(600);
 
   console.log('3. modalità studente: percorso completo');
   await page.click('#btn-student');
@@ -285,6 +311,11 @@ async function startVideo(page) {
     if (btn) { await btn.click(); await page.waitForTimeout(80); } else break;
   }
   await page.click('#s-panel button:has-text("Continua")');
+  // dopo le schede, PRIMA del video: la sezione "Parliamone" per entrare nel tema (struttura: vocab → talk t2 → video → talk t1)
+  await page.waitForSelector('#s-panel .talk-q', { timeout: 5000 });
+  assert.ok(/prima del video/.test(await page.$eval('#s-panel .badge', function (b) { return b.textContent; })), 'badge "prima del video"');
+  assert.ok(/Cosa sai già del sonno/.test(await page.$eval('#s-panel .talk-q', function (q) { return q.textContent; })), 'domanda per entrare nel tema');
+  await page.click('#s-panel button:has-text("Guarda il video")');
   await page.waitForFunction(function () { return window.VLApp.S.student.started; }, null, { timeout: 5000 });
   assert.ok(!(await page.$('#s-stage.docked')), 'dopo le schede il video è grande');
   const lesson = await page.evaluate(function () { return JSON.parse(JSON.stringify(window.VLApp.S.student.lesson)); });
