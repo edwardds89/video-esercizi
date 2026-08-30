@@ -1,7 +1,7 @@
 /* app.js — interfaccia: lezioni, generazione bozza, editor, modalità studente */
 (function () {
   'use strict';
-  const L = window.VLLang, EX = window.VLEx, G = window.VLGen, AI = window.VLAI;
+  const L = window.VLLang, EX = window.VLEx, G = window.VLGen, AI = window.VLAI, ACT = window.VLAct;
   const $ = function (s, r) { return (r || document).querySelector(s); };
   const $$ = function (s, r) { return Array.from((r || document).querySelectorAll(s)); };
 
@@ -72,22 +72,27 @@
     }
     delete ls.talk;
     ls.talks.forEach(function (sec, i) { if (!sec.id) sec.id = 't' + (i + 1); if (!Array.isArray(sec.questions)) sec.questions = []; });
+    if (!Array.isArray(ls.acts)) ls.acts = [];   // attività-gioco dentro la lezione (Memory, Quiz, …)
+    ls.acts.forEach(function (a, i) { if (!a.id) a.id = 'a' + (i + 1); if (!a.data) a.data = {}; });
     if (!Array.isArray(ls.flow)) ls.flow = [{ kind: 'vocab' }, { kind: 'video' }, { kind: 'talk', id: ls.talks[0].id }];
     // integrità: niente doppioni, niente sezioni fantasma, tutte le sezioni presenti
-    const seen = { vocab: false, video: false, talk: {} };
+    const seen = { vocab: false, video: false, talk: {}, act: {} };
     ls.flow = ls.flow.filter(function (s) {
       if (!s || !s.kind) return false;
       if (s.kind === 'vocab') { if (seen.vocab) return false; seen.vocab = true; return true; }
       if (s.kind === 'video') { if (seen.video) return false; seen.video = true; return true; }
       if (s.kind === 'talk') { if (!s.id || seen.talk[s.id] || !ls.talks.some(function (t) { return t.id === s.id; })) return false; seen.talk[s.id] = true; return true; }
+      if (s.kind === 'act') { if (!s.id || seen.act[s.id] || !ls.acts.some(function (a) { return a.id === s.id; })) return false; seen.act[s.id] = true; return true; }
       return false;
     });
     if (!seen.video) ls.flow.push({ kind: 'video' });
     if (!seen.vocab) ls.flow.unshift({ kind: 'vocab' });
     ls.talks.forEach(function (t) { if (!seen.talk[t.id]) ls.flow.push({ kind: 'talk', id: t.id }); });
+    ls.acts.forEach(function (a) { if (!seen.act[a.id]) ls.flow.push({ kind: 'act', id: a.id }); });
     return ls.flow;
   }
   function talkSection(ls, id) { return (ls.talks || []).find(function (t) { return t.id === id; }); }
+  function actSection(ls, id) { return (ls.acts || []).find(function (a) { return a.id === id; }); }
   /** true se la sezione "Parliamone" sta prima del video (domande per entrare nel tema). */
   function talkBefore(ls, id) {
     const f = lessonFlow(ls);
@@ -253,6 +258,7 @@
       exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb,
       flow: lessonFlow(lesson),
       talks: (lesson.talks || []).map(function (sec) { return { id: sec.id, questions: sec.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help }; }) }; }),
+      acts: (lesson.acts || []).filter(function (a) { return ACT.validate(a).length === 0; }).map(function (a) { return { id: a.id, type: a.type, theme: a.theme, title: a.title, data: a.data }; }),
       lines: lesson.videoId === 'demo' ? lesson.lines : undefined };
   }
 
@@ -499,6 +505,25 @@
     const items = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
     if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con "Nuova lezione" (o con il pulsante per il browser) oppure prova la demo.' })); return; }
     items.forEach(function (ls) {
+      // attività standalone: card con l'emoji del tipo, Apri = gioca
+      if (ls.activity && !Array.isArray(ls.exercises)) {
+        const t = ACT.TYPES[ls.activity.type] || { emoji: '🎲', label: 'Attività' };
+        const th = ACT.THEMES.find(function (x) { return x.id === ls.activity.theme; });
+        const openA = function () { openActPlay(ls.id); };
+        const nItems = (ls.activity.data.pairs || ls.activity.data.questions || ls.activity.data.words || ls.activity.data.items || []).length;
+        const cardA = el('div', { class: 'lesson-card' },
+          el('div', { class: 'thumb act-thumb', onclick: openA, title: 'Gioca' }, t.emoji),
+          el('div', { class: 'body' },
+            el('div', { class: 'title', text: ls.title || '(attività senza titolo)', onclick: openA }),
+            el('div', { class: 'meta', text: t.label + ' · ' + nItems + ' elementi' + (th ? ' · tema ' + th.name : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            el('div', { class: 'actions' },
+              el('button', { class: 'small primary', text: '▶ Gioca', onclick: openA }),
+              el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openActEditor(ls.id); } }),
+              el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'attivita') + '.json', JSON.stringify(actPayload(ls), null, 1)); } }),
+              el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'attività senza titolo') + '"?')) { delete S.lessons[ls.id]; saveLessons(); renderHome(); } } }))));
+        list.appendChild(cardA);
+        return;
+      }
       const eff = G.effectiveDuration(ls.cuts || [], ls.duration);
       const thumbStyle = ls.videoId && ls.videoId !== 'demo' ? 'background-image:url(https://i.ytimg.com/vi/' + ls.videoId + '/mqdefault.jpg)' : '';
       const open = function () { openStudent(ls.id); };
@@ -521,6 +546,12 @@
     r.onload = function () {
       try {
         const ls = JSON.parse(r.result);
+        if (ls && ls.activity && !Array.isArray(ls.exercises)) {
+          ls.id = ls.id && !S.lessons[ls.id] ? ls.id : uid();
+          ls.updatedAt = new Date().toISOString();
+          S.lessons[ls.id] = ls; saveLessons(); renderHome(); toast('Attività importata');
+          return;
+        }
         if (!ls || !Array.isArray(ls.exercises)) throw new Error('formato non riconosciuto');
         ls.id = ls.id && !S.lessons[ls.id] ? ls.id : uid();
         ls.options = ls.options || { strict: false, fx: true };
@@ -532,6 +563,7 @@
     r.readAsText(f);
     e.target.value = '';
   });
+  $('#btn-new-act').addEventListener('click', function () { openActNew(newActivity); });
   $('#btn-demo').addEventListener('click', function () {
     if (!window.VL_DEMO) return toast('Dati demo non trovati');
     const parsed = G.parseTranscript(window.VL_DEMO.transcript);
@@ -1057,6 +1089,7 @@
   function flowLabel(ls, s, idx) {
     if (s.kind === 'vocab') return '🃏 Parole utili';
     if (s.kind === 'video') return '▶ Video + esercizi';
+    if (s.kind === 'act') { const a = actSection(ls, s.id); const t = a && ACT.TYPES[a.type]; return t ? t.emoji + ' ' + t.label : '🎲 Attività'; }
     const n = ls.talks.length > 1 ? ' ' + (ls.talks.findIndex(function (t) { return t.id === s.id; }) + 1) : '';
     return '💬 Parliamone' + n;
   }
@@ -1077,13 +1110,17 @@
       bar.appendChild(chip);
       if (i < ls.flow.length - 1) bar.appendChild(el('span', { class: 'flow-sep', text: '→' }));
     });
-    // card "Parliamone": una per sezione, rigenerate
+    // card "Parliamone" e delle attività: una per sezione, rigenerate
     $$('.talk-card').forEach(function (n) { n.remove(); });
+    $$('.act-card').forEach(function (n) { n.remove(); });
     const right = document.querySelector('.editor-right');
     ls.talks.forEach(function (sec) { right.appendChild(renderTalkCard(ls, sec)); });
+    ls.acts.forEach(function (a) { right.appendChild(renderActCard(ls, a)); });
     // le card della colonna destra seguono l'ordine della struttura (la barra resta in cima)
     ls.flow.forEach(function (s) {
-      const node = s.kind === 'vocab' ? $('#e-vocab-card') : s.kind === 'video' ? $('#e-video-card') : document.querySelector('.talk-card[data-tid="' + s.id + '"]');
+      const node = s.kind === 'vocab' ? $('#e-vocab-card') : s.kind === 'video' ? $('#e-video-card')
+        : s.kind === 'act' ? document.querySelector('.act-card[data-aid="' + s.id + '"]')
+          : document.querySelector('.talk-card[data-tid="' + s.id + '"]');
       if (node) right.appendChild(node);
     });
   }
@@ -1163,6 +1200,273 @@
     });
     return card;
   }
+
+  // ---------- ATTIVITÀ (Memory, Quiz, Anagramma, Ruota): standalone nel portfolio o sezione della lezione ----------
+  function actOpts(extra) {
+    const o = {
+      celebrate: function (box) { const fb = el('div', { class: 'feedback' }); box.appendChild(fb); try { celebrate(box, fb); } catch (e) { /* ignore */ } },
+      sound: playWinSound
+    };
+    if (extra) for (const k in extra) o[k] = extra[k];
+    return o;
+  }
+  /** Chips dei temi (Classico, Nero puro, Arcobaleno, Estate, Natale). */
+  function themeChips(current, onPick) {
+    const box = el('div', { class: 'chips', style: 'gap:8px' });
+    ACT.THEMES.forEach(function (t) {
+      const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), text: t.emoji + ' ' + t.name });
+      c.addEventListener('click', function () { onPick(t.id); });
+      box.appendChild(c);
+    });
+    return box;
+  }
+  /** Campi dell'editor per il tipo di attività. ctx: { lesson (o null se standalone), redraw(), changed() }. */
+  function renderActFields(box, act, ctx) {
+    box.innerHTML = '';
+    const d = act.data;
+    const changed = ctx.changed, redraw = ctx.redraw;
+    const rowBtns = function (arr, i) {
+      return el('div', { class: 'row', style: 'gap:4px' },
+        el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { arr.splice(i, 1); changed(); redraw(); } }));
+    };
+    if (act.type === 'memory') {
+      if (!Array.isArray(d.pairs)) d.pairs = [];
+      box.appendChild(el('p', { class: 'hint', style: 'margin-top:0', text: 'Da 3 a 12 coppie: parola davanti, traduzione (o foto) dietro. Se metti l\'URL di una foto, la carta mostra la foto.' }));
+      d.pairs.forEach(function (p, i) {
+        const row = el('div', { class: 'af-row' });
+        const a = el('input', { type: 'text', placeholder: 'Parola', value: p.a || '' }); a.addEventListener('change', function () { p.a = a.value.trim(); changed(); });
+        const b = el('input', { type: 'text', placeholder: 'Traduzione (o vuoto se c\'è la foto)', value: p.b || '' }); b.addEventListener('change', function () { p.b = b.value.trim(); changed(); });
+        row.appendChild(a); row.appendChild(b); row.appendChild(rowBtns(d.pairs, i));
+        const img = el('input', { type: 'text', placeholder: 'URL foto (facoltativo)', value: p.image || '', style: 'grid-column:1 / -2;font-size:13px;color:var(--muted)' });
+        img.addEventListener('change', function () { p.image = img.value.trim(); changed(); });
+        row.appendChild(img);
+        box.appendChild(row);
+      });
+      const r = el('div', { class: 'row', style: 'margin-top:10px' });
+      r.appendChild(el('button', { class: 'small', text: '+ Coppia', onclick: function () { d.pairs.push({ a: '', b: '', image: '' }); changed(); redraw(); } }));
+      if (ctx.lesson) r.appendChild(el('button', { class: 'small', text: '🃏 Usa le Parole utili', title: 'Importa le parole selezionate con traduzione o foto', onclick: function () {
+        const have = new Set(d.pairs.map(function (p) { return L.normalize(p.a || ''); }));
+        let n = 0;
+        cardVocab(ctx.lesson).forEach(function (w) { if (d.pairs.length >= 12 || have.has(L.normalize(w.word))) return; d.pairs.push({ a: w.word, b: w.translation || '', image: w.image || '' }); n++; });
+        changed(); redraw(); toast(n ? n + ' coppie importate dalle Parole utili' : 'Niente di nuovo da importare');
+      } }));
+      box.appendChild(r);
+    }
+    if (act.type === 'quiz') {
+      if (!Array.isArray(d.questions)) d.questions = [];
+      box.appendChild(el('p', { class: 'hint', style: 'margin-top:0', text: 'Domande a scelta multipla: segna la risposta giusta con il pallino. Le risposte compaiono mescolate.' }));
+      d.questions.forEach(function (q, i) {
+        if (!Array.isArray(q.options)) q.options = ['', '', '', ''];
+        const card = el('div', { class: 'af-quiz' });
+        const qrow = el('div', { class: 'qrow' });
+        const qi = el('input', { type: 'text', placeholder: 'Domanda ' + (i + 1), value: q.q || '', style: 'font-weight:600' });
+        qi.addEventListener('change', function () { q.q = qi.value.trim(); changed(); });
+        qrow.appendChild(qi); qrow.appendChild(rowBtns(d.questions, i));
+        card.appendChild(qrow);
+        q.options.forEach(function (op, k) {
+          const orow = el('div', { class: 'orow' });
+          const radio = el('input', { type: 'radio', name: 'aq-' + act.id + '-' + i, title: 'Risposta giusta' });
+          radio.checked = q.correct === k;
+          radio.addEventListener('change', function () { q.correct = k; changed(); });
+          const oi = el('input', { type: 'text', placeholder: 'Risposta ' + (k + 1) + (k > 1 ? ' (facoltativa)' : ''), value: op || '' });
+          oi.addEventListener('change', function () { q.options[k] = oi.value.trim(); changed(); });
+          orow.appendChild(radio); orow.appendChild(oi);
+          card.appendChild(orow);
+        });
+        box.appendChild(card);
+      });
+      const r = el('div', { class: 'row', style: 'margin-top:10px' });
+      r.appendChild(el('button', { class: 'small', text: '+ Domanda', onclick: function () { d.questions.push({ q: '', options: ['', '', '', ''], correct: 0 }); changed(); redraw(); } }));
+      const aiBtn = el('button', { class: 'small', text: '✨ Proponi con l\'AI' });
+      if (!S.settings.apiKey) aiBtn.style.display = 'none';
+      const st = el('span', { class: 'hint' });
+      aiBtn.addEventListener('click', function () {
+        if (!S.settings.apiKey) return toast('Serve la chiave API (Impostazioni AI)');
+        let topic = '';
+        if (!ctx.lesson) {
+          topic = (act.title || '').trim();
+          if (!topic) return toast('Scrivi prima il titolo: è l\'argomento su cui l\'AI inventa le domande (es. "Il cibo italiano")', 5000);
+        }
+        st.textContent = 'Chiedo al modello…';
+        const chunks = ctx.lesson ? (ctx.lesson.chunks && ctx.lesson.chunks.length ? ctx.lesson.chunks : G.annotate(G.buildChunks(ctx.lesson.lines || [], { duration: ctx.lesson.duration, lang: ctx.lesson.lang }), { lang: ctx.lesson.lang, duration: ctx.lesson.duration })) : null;
+        AI.generateQuizSet({ topic: topic, chunks: chunks, lang: ctx.lesson ? ctx.lesson.lang : (act.lang || 'it'), level: ctx.lesson ? ctx.lesson.level : 'B1', n: 6, apiKey: S.settings.apiKey, model: S.settings.model })
+          .then(function (r2) {
+            r2.questions.forEach(function (q) { d.questions.push(q); });
+            changed(); redraw();
+            toast(r2.questions.length + ' domande proposte' + (r2.ai && r2.ai.cost != null ? ' · ' + (r2.ai.cost * 100).toFixed(1) + ' cent' : ''));
+          })
+          .catch(function (e) { st.textContent = ''; toast('AI: ' + e.message, 6000); });
+      });
+      r.appendChild(aiBtn); r.appendChild(st);
+      box.appendChild(r);
+    }
+    if (act.type === 'anagram') {
+      if (!Array.isArray(d.words)) d.words = [];
+      box.appendChild(el('p', { class: 'hint', style: 'margin-top:0', text: 'Parole da ricomporre (almeno 3 lettere), con un indizio: la traduzione, una definizione o una foto (URL).' }));
+      d.words.forEach(function (w, i) {
+        const row = el('div', { class: 'af-row' });
+        const a = el('input', { type: 'text', placeholder: 'Parola', value: w.word || '' }); a.addEventListener('change', function () { w.word = a.value.trim(); changed(); });
+        const b = el('input', { type: 'text', placeholder: 'Indizio (traduzione o definizione)', value: w.hint || '' }); b.addEventListener('change', function () { w.hint = b.value.trim(); changed(); });
+        row.appendChild(a); row.appendChild(b); row.appendChild(rowBtns(d.words, i));
+        box.appendChild(row);
+      });
+      const r = el('div', { class: 'row', style: 'margin-top:10px' });
+      r.appendChild(el('button', { class: 'small', text: '+ Parola', onclick: function () { d.words.push({ word: '', hint: '' }); changed(); redraw(); } }));
+      if (ctx.lesson) r.appendChild(el('button', { class: 'small', text: '🃏 Usa le Parole utili', onclick: function () {
+        const have = new Set(d.words.map(function (w) { return L.normalize(w.word || ''); }));
+        let n = 0;
+        cardVocab(ctx.lesson).forEach(function (w) { if (have.has(L.normalize(w.word))) return; d.words.push({ word: w.word, hint: w.translation || '', image: w.image || '' }); n++; });
+        changed(); redraw(); toast(n ? n + ' parole importate' : 'Niente di nuovo da importare');
+      } }));
+      box.appendChild(r);
+    }
+    if (act.type === 'wheel') {
+      if (!Array.isArray(d.items)) d.items = [];
+      box.appendChild(el('p', { class: 'hint', style: 'margin-top:0', text: 'Le voci sulla ruota: domande per parlare, parole, compiti ("Descrivi la tua giornata"). Almeno 2.' }));
+      d.items.forEach(function (it, i) {
+        const row = el('div', { class: 'af-row one' });
+        const a = el('input', { type: 'text', placeholder: 'Voce ' + (i + 1), value: it.text || '' }); a.addEventListener('change', function () { it.text = a.value.trim(); changed(); });
+        row.appendChild(a); row.appendChild(rowBtns(d.items, i));
+        box.appendChild(row);
+      });
+      const r = el('div', { class: 'row', style: 'margin-top:10px' });
+      r.appendChild(el('button', { class: 'small', text: '+ Voce', onclick: function () { d.items.push({ text: '' }); changed(); redraw(); } }));
+      if (ctx.lesson) r.appendChild(el('button', { class: 'small', text: '💬 Usa le domande di Parliamone', onclick: function () {
+        const have = new Set(d.items.map(function (x) { return L.normalize(x.text || ''); }));
+        let n = 0;
+        (ctx.lesson.talks || []).forEach(function (sec) { sec.questions.forEach(function (q) { if (!q.text || have.has(L.normalize(q.text))) return; d.items.push({ text: q.text }); n++; }); });
+        changed(); redraw(); toast(n ? n + ' domande importate' : 'Niente di nuovo da importare');
+      } }));
+      box.appendChild(r);
+    }
+  }
+  /** Prova un'attività nel dialog (editor della lezione o standalone). */
+  function tryActivity(act) {
+    const dlg = $('#dlg-act-try');
+    ACT.render($('#at-stage'), act, actOpts({ onDone: function () { dlg.close(); }, doneLabel: 'Chiudi' }));
+    dlg.showModal();
+  }
+  $('#at-close').addEventListener('click', function () { $('#dlg-act-try').close(); $('#at-stage').innerHTML = ''; });
+  /** Dialog "Nuova attività": onPick(type) decide cosa farne (portfolio o sezione della lezione). */
+  function openActNew(onPick) {
+    const box = $('#an-types'); box.innerHTML = '';
+    Object.keys(ACT.TYPES).forEach(function (type) {
+      const t = ACT.TYPES[type];
+      const b = el('button', { type: 'button' },
+        el('span', { class: 'em', text: t.emoji }),
+        el('b', { text: t.label }),
+        el('span', { class: 'hint', text: t.hint }));
+      b.addEventListener('click', function () { $('#dlg-act-new').close(); onPick(type); });
+      box.appendChild(b);
+    });
+    $('#dlg-act-new').showModal();
+  }
+  $('#an-close').addEventListener('click', function () { $('#dlg-act-new').close(); });
+  /** Card di una sezione-attività nell'editor della lezione. */
+  function renderActCard(ls, act) {
+    const t = ACT.TYPES[act.type] || { emoji: '🎲', label: 'Attività', hint: '' };
+    const card = el('div', { class: 'card act-card', 'data-aid': act.id });
+    const head = el('div', { class: 'row' });
+    head.appendChild(el('h2', { style: 'margin:0', text: t.emoji + ' ' + t.label }));
+    head.appendChild(el('span', { class: 'hint', text: t.hint }));
+    head.appendChild(el('button', { class: 'small right', text: '▶ Prova', onclick: function () { tryActivity(act); } }));
+    const rm = el('button', { class: 'small danger', text: '✕ Sezione', title: 'Togli questa attività dalla lezione' });
+    rm.addEventListener('click', function () {
+      const full = ACT.validate(act).length === 0;
+      if (full && !rm._armed) { rm._armed = true; rm.textContent = 'Sicuro? ✕'; setTimeout(function () { rm._armed = false; rm.textContent = '✕ Sezione'; }, 3000); return; }
+      ls.acts = ls.acts.filter(function (a) { return a.id !== act.id; });
+      ls.flow = ls.flow.filter(function (s) { return !(s.kind === 'act' && s.id === act.id); });
+      touch(ls); renderFlow(ls);
+    });
+    head.appendChild(rm);
+    card.appendChild(head);
+    card.appendChild(el('div', { class: 'row', style: 'margin:8px 0 2px' }, el('span', { class: 'hint', text: 'Tema:' })));
+    card.appendChild(themeChips(act.theme || 'classic', function (id) { act.theme = id; touch(ls); renderFlow(ls); }));
+    const fields = el('div');
+    card.appendChild(fields);
+    renderActFields(fields, act, { lesson: ls, changed: function () { touch(ls); }, redraw: function () { renderFlow(ls); } });
+    return card;
+  }
+  $('#btn-flow-act').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    openActNew(function (type) {
+      lessonFlow(ls);
+      const id = 'a' + (Math.max.apply(null, [0].concat(ls.acts.map(function (a) { return parseInt(String(a.id).replace(/\D/g, ''), 10) || 0; }))) + 1);
+      ls.acts.push({ id: id, type: type, theme: 'classic', data: {} });
+      const vi = ls.flow.findIndex(function (s) { return s.kind === 'video'; });
+      ls.flow.splice(vi + 1, 0, { kind: 'act', id: id });   // di default subito dopo il video: si sposta con ◀ ▶
+      touch(ls); renderFlow(ls);
+      const node = document.querySelector('.act-card[data-aid="' + id + '"]');
+      if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  // ---------- attività standalone (portfolio) ----------
+  function newActivity(type) {
+    const t = ACT.TYPES[type];
+    const ls = { id: uid(), title: '', activity: { id: 'a1', type: type, theme: 'classic', data: {} }, updatedAt: new Date().toISOString() };
+    S.lessons[ls.id] = ls; saveLessons();
+    openActEditor(ls.id);
+  }
+  function openActEditor(id) {
+    const ls = S.lessons[id]; if (!ls || !ls.activity) return renderHome();
+    S.currentId = id;
+    show('act');
+    const act = ls.activity;
+    const t = ACT.TYPES[act.type] || { emoji: '🎲', label: 'Attività', hint: '' };
+    $('#a-emoji').textContent = t.emoji;
+    $('#a-type-hint').textContent = t.label + ' — ' + t.hint;
+    const ti = $('#a-title'); ti.value = ls.title || '';
+    ti.onchange = function () { ls.title = ti.value.trim(); act.title = ls.title; touch(ls); };
+    const redraw = function () {
+      const th = $('#a-themes'); th.innerHTML = '';
+      th.appendChild(themeChips(act.theme || 'classic', function (tid) { act.theme = tid; touch(ls); redraw(); }));
+      renderActFields($('#a-fields'), act, { lesson: null, changed: function () { touch(ls); }, redraw: redraw });
+    };
+    redraw();
+  }
+  function actPayload(ls) {
+    const a = ls.activity;
+    return { v: 1, id: ls.id, title: ls.title, activity: { id: a.id, type: a.type, theme: a.theme, title: ls.title, data: a.data } };
+  }
+  $('#a-save').addEventListener('click', function () { saveLessons(); renderHome(); });
+  $('#a-try').addEventListener('click', function () {
+    const ls = current(); if (!ls || !ls.activity) return;
+    const errs = ACT.validate(ls.activity);
+    if (errs.length) return toast(errs.join(' '), 5000);
+    ls.activity.title = ls.title;
+    tryActivity(ls.activity);
+  });
+  $('#a-share').addEventListener('click', function () {
+    const ls = current(); if (!ls || !ls.activity) return;
+    const errs = ACT.validate(ls.activity);
+    if (errs.length) return toast(errs.join(' '), 5000);
+    ls.activity.title = ls.title;
+    const base = location.origin + location.pathname;
+    const link = base + '#d=' + b64url(actPayload(ls));
+    copyText(link);
+    toast('Link copiato: aprilo per giocare (funziona su qualsiasi computer)');
+  });
+  $('#a-export').addEventListener('click', function () { const ls = current(); if (!ls || !ls.activity) return; download(slugify(ls.title || 'attivita') + '.json', JSON.stringify(actPayload(ls), null, 1)); });
+  $('#a-delete').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    if (!confirm('Eliminare "' + (ls.title || 'attività senza titolo') + '"?')) return;
+    delete S.lessons[ls.id]; saveLessons(); renderHome();
+  });
+  /** Gioco a tutta pagina (Apri dal portfolio o link studente). */
+  function openActPlay(id, obj) {
+    const ls = obj || S.lessons[id]; if (!ls || !ls.activity) return renderHome();
+    S.currentId = ls.id;
+    document.body.classList.toggle('standalone', !!S.standalone);
+    show('actplay');
+    const act = ls.activity;
+    act.title = ls.title || act.title;
+    $('#ap-title').textContent = ls.title || (ACT.TYPES[act.type] ? ACT.TYPES[act.type].label : 'Attività');
+    $('#ap-edit').style.display = (!S.standalone && S.lessons[ls.id]) ? '' : 'none';
+    $('#ap-edit').onclick = function () { openActEditor(ls.id); };
+    ACT.render($('#ap-stage'), act, actOpts({}));
+  }
+
   function readyText(ls) {
     const ready = cardVocab(ls).length;
     return selectedVocab(ls).length + ' selezionate, ' + ready + ' pronte per le schede (con traduzione o foto)' + (ready < 3 ? ' — ne servono almeno 3 per la scheda di abbinamento' : '');
@@ -1964,6 +2268,23 @@
       dock('#s-stage', true);
       $('#s-stage').classList.add('cards');
       renderVocabCard();
+      return;
+    }
+    if (step.kind === 'act') {
+      // attività-gioco: solo se completa, altrimenti avanti
+      const act = actSection(st.lesson, step.id);
+      if (!act || ACT.validate(act).length) return advancePhase();
+      st.phase = 'act';
+      $('#btn-start').style.display = 'none';
+      if (S.player) S.player.pause();
+      dock('#s-stage', true);
+      $('#s-stage').classList.add('cards');
+      const p = $('#s-panel'); p.innerHTML = '';
+      const holder = el('div', { class: 'act-holder' });
+      p.appendChild(holder);
+      const nxt = st.queue[0] || null;
+      ACT.render(holder, act, actOpts({ onDone: function () { advancePhase(); }, doneLabel: nxt ? (nxt.kind === 'video' ? 'Guarda il video ▶' : 'Continua ▶') : 'Vai al riepilogo ▶' }));
+      p.appendChild(el('div', { class: 'actions' }, el('button', { class: 'link', text: 'Salta questa attività', onclick: advancePhase })));
       return;
     }
     // "Parliamone": solo le domande scritte; sezione vuota → avanti
@@ -3027,8 +3348,9 @@
     if (h.indexOf('#d=') === 0) {
       try {
         const ls = JSON.parse(unb64url(h.slice(3)));
-        ls.options = ls.options || {}; ls.cuts = ls.cuts || [];
         S.standalone = true;
+        if (ls.activity && !Array.isArray(ls.exercises)) return openActPlay(null, ls);   // link di un'attività-gioco
+        ls.options = ls.options || {}; ls.cuts = ls.cuts || [];
         return openStudent(null, false, ls);
       } catch (e) { toast('Link non valido: ' + e.message); }
     }
@@ -3041,7 +3363,11 @@
       return;
     }
     const id = q.get('id');
-    if (id && S.lessons[id]) return q.get('mode') === 'student' ? openStudent(id) : openEditor(id);
+    if (id && S.lessons[id]) {
+      const it = S.lessons[id];
+      if (it.activity && !Array.isArray(it.exercises)) return q.get('mode') === 'student' ? openActPlay(id) : openActEditor(id);
+      return q.get('mode') === 'student' ? openStudent(id) : openEditor(id);
+    }
     renderHome();
   }
   window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync };

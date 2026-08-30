@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg?v=2">
-<link rel="stylesheet" href="styles.css?v=20260830-36">
+<link rel="stylesheet" href="styles.css?v=20260830-37">
 </head>
 <body>
 <header class="topbar">
@@ -26,6 +26,7 @@
       <div id="lesson-list" class="lesson-grid"></div>
       <div class="row" style="margin-top:12px">
         <button data-view="new" class="primary">+ Nuova lezione</button>
+        <button id="btn-new-act">🎲 Nuova attività</button>
         <label for="import-file" class="chip" style="margin:0">Importa JSON…</label>
         <input id="import-file" type="file" accept="application/json,.json" class="sr">
         <button id="btn-demo">Crea lezione demo (player finto)</button>
@@ -174,7 +175,8 @@
       <div class="editor-right">
         <div class="card" id="e-flow-card">
           <div class="row"><h2 style="margin:0">Struttura della lezione</h2>
-            <button id="btn-flow-talk" class="small right">+ Parliamone</button></div>
+            <button id="btn-flow-act" class="small right">+ Attività (gioco)</button>
+            <button id="btn-flow-talk" class="small">+ Parliamone</button></div>
           <div id="e-flow"></div>
           <p class="hint">Le sezioni nell'ordine in cui le vedrà lo studente: spostale con ◀ ▶ attorno al video. "Parliamone" prima del video = domande per entrare nel tema; dopo = domande personali e di comprensione. Puoi avere più sezioni "Parliamone" (es. una prima e una dopo).</p>
         </div>
@@ -227,7 +229,48 @@
       </div>
     </div>
   </section>
+
+  <!-- ATTIVITÀ: editor -->
+  <section id="view-act" class="view">
+    <div class="row editor-bar">
+      <span id="a-emoji" style="font-size:28px"></span>
+      <input id="a-title" type="text" class="grow" style="font-size:18px;font-weight:600" placeholder="Titolo dell'attività">
+      <button id="a-save" class="primary" title="Salva e torna al portfolio">💾 Salva e torna al portfolio</button>
+      <button id="a-try">▶ Prova</button>
+      <button id="a-share">Link studente</button>
+      <button id="a-export">Esporta JSON</button>
+      <button id="a-delete" class="danger">Elimina</button>
+    </div>
+    <div class="card">
+      <div class="row"><h3 style="margin:0">Tema</h3><span id="a-type-hint" class="hint"></span></div>
+      <div id="a-themes" class="chips" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div id="a-fields"></div>
+    </div>
+  </section>
+
+  <!-- ATTIVITÀ: gioco (studente) -->
+  <section id="view-actplay" class="view">
+    <div class="row" style="margin-bottom:8px">
+      <h1 id="ap-title" style="margin:0;font-size:22px" class="grow"></h1>
+      <button id="ap-edit" class="small">✎ Modifica</button>
+    </div>
+    <div id="ap-stage" class="ap-stage"></div>
+  </section>
 </main>
+
+<dialog id="dlg-act-new">
+  <h2>Nuova attività</h2>
+  <p class="hint">Un gioco pronto da condividere con un link o da inserire in una lezione. Scegli il tipo:</p>
+  <div id="an-types" class="act-type-grid"></div>
+  <div class="row" style="margin-top:12px"><button id="an-close">Annulla</button></div>
+</dialog>
+
+<dialog id="dlg-act-try">
+  <div id="at-stage" class="at-stage"></div>
+  <div class="row" style="margin-top:10px"><button id="at-close">Chiudi</button></div>
+</dialog>
 
 <dialog id="dlg-stars">
   <h2>★ Parole con la stella</h2>
@@ -330,13 +373,14 @@
 <div id="overlay"><div><div class="loader-box"><img class="loader" src="https://cdn.dribbble.com/userupload/22076800/file/original-8e7ce77dec0edaf0105e8287038f6e60.gif" alt="" onerror="this.classList.add('off')"><div class="spinner"></div></div><div id="overlay-text">loading</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260830-36"></script>
-<script src="exercises.js?v=20260830-36"></script>
-<script src="generator.js?v=20260830-36"></script>
-<script src="ai.js?v=20260830-36"></script>
-<script src="demo-data.js?v=20260830-36"></script>
-<script src="bookmarklet.js?v=20260830-36"></script>
-<script src="sync.js?v=20260830-36"></script>
-<script src="app.js?v=20260830-36"></script>
+<script src="lang.js?v=20260830-37"></script>
+<script src="exercises.js?v=20260830-37"></script>
+<script src="generator.js?v=20260830-37"></script>
+<script src="activities.js?v=20260830-37"></script>
+<script src="ai.js?v=20260830-37"></script>
+<script src="demo-data.js?v=20260830-37"></script>
+<script src="bookmarklet.js?v=20260830-37"></script>
+<script src="sync.js?v=20260830-37"></script>
+<script src="app.js?v=20260830-37"></script>
 </body>
 </html>

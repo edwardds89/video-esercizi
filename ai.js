@@ -346,6 +346,29 @@
     return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
+  /** Serie di domande a scelta multipla per l'attività Quiz: da un argomento (topic) o dal testo di un video (chunks).
+   *  params: { topic?, chunks?, lang, level, n, apiKey, model, fetchImpl } → { questions:[{q,options,correct}], ai } */
+  async function generateQuizSet(params) {
+    const lang = params.lang || 'it';
+    const level = params.level || 'B1';
+    const n = params.n || 6;
+    const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
+    const system = 'You write engaging quiz questions for language students. Output ONLY a JSON object, no prose, no markdown fences.';
+    const src = text ? 'about the VIDEO TEXT below (comprehension of its ideas and vocabulary, not tiny details or exact numbers)' : 'about this topic: "' + String(params.topic || '') + '"';
+    const user = ['LANGUAGE: ' + lang + '   STUDENT LEVEL: ' + level,
+      'Write ' + n + ' multiple-choice questions in ' + lang + ' ' + src + '. Four short options each, exactly one correct ("correct" = its index). Wrong options plausible and of the same kind as the right one. Questions and options suited to a ' + level + ' student, short and clear. Vary what is asked (meaning, vocabulary, usage, true facts).',
+      'SCHEMA: {"questions":[{"q":"...","options":["a","b","c","d"],"correct":0}]}',
+      text ? '\nVIDEO TEXT:\n' + text : ''].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 2000, fetchImpl: params.fetchImpl });
+    const plan = extractJSON(res.text);
+    const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) {
+      const options = (Array.isArray(q && q.options) ? q.options : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 4);
+      const correct = Math.max(0, Math.min(options.length - 1, parseInt(q && q.correct, 10) || 0));
+      return { q: String((q && q.q) || '').trim(), options: options, correct: correct };
+    }).filter(function (q) { return q.q && q.options.length >= 2; }).slice(0, 15);
+    return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
   /** Mescola le opzioni di una scelta multipla (il modello mette quasi sempre quella giusta per prima) e rimappa gli indici. */
   function shuffleMC(options, correct, tricky, rand) {
     const r = typeof rand === 'function' ? rand : Math.random;
@@ -446,5 +469,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, generateQuizSet: generateQuizSet };
 });
