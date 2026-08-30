@@ -328,14 +328,18 @@
     const lang = params.lang || 'it';
     const level = params.level || 'B1';
     const n = params.n || 6;
+    const warmup = params.mode === 'warmup';
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
-    const system = 'You help a language teacher prepare a speaking activity after a video. Output ONLY a JSON object, no prose, no markdown fences.';
+    const system = 'You help a language teacher prepare a speaking activity ' + (warmup ? 'BEFORE' : 'after') + ' a video. Output ONLY a JSON object, no prose, no markdown fences.';
+    const task = warmup
+      ? 'Write ' + n + ' warm-up questions in ' + lang + ' for BEFORE the video: they activate prior knowledge and spark curiosity about the TOPIC. The students have NOT seen the video yet: never mention what the video says, never quote its facts or numbers, no spoilers. Each question must be open (never answerable with yes/no or one word), personal and concrete ("Ti è mai capitato…?", "Cosa sai di…?", "Secondo te…?"). Order them from easy and personal to more general. Language and grammar suited to a ' + level + ' student; short, one sentence each.'
+      : 'Write ' + n + ' conversation questions in ' + lang + ' for AFTER the video. They are for SPEAKING practice: each question must be open (never answerable with yes/no or one word), personal or opinion-based ("E tu…?", "Secondo te…?", "Cosa faresti…?"), about the TOPIC of the video, not about its details or numbers. Order them from easy and concrete to more abstract. Language and grammar suited to a ' + level + ' student; short, one sentence each.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + level,
-      'Write ' + n + ' conversation questions in ' + lang + ' for AFTER the video. They are for SPEAKING practice: each question must be open (never answerable with yes/no or one word), personal or opinion-based ("E tu…?", "Secondo te…?", "Cosa faresti…?"), about the TOPIC of the video, not about its details or numbers. Order them from easy and concrete to more abstract. Language and grammar suited to a ' + level + ' student; short, one sentence each.' +
+      task +
       ' For each question give "help": 2 or 3 short chunks or expressions (in ' + lang + ', separated by " · ") the student can use to answer, e.g. "Secondo me… · Non sono d\'accordo perché… · Mi è capitato di…".' +
       (params.focus ? ' Teacher\'s note: ' + params.focus : ''),
       'SCHEMA: {"questions":[{"text":"...","help":"... · ... · ..."}]}', '',
-      'VIDEO TEXT:', text].join('\n');
+      'VIDEO TEXT' + (warmup ? ' (for your eyes only — the questions must not reveal it)' : '') + ':', text].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
     const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) { return { text: String((q && q.text) || '').trim(), help: String((q && q.help) || '').trim() }; }).filter(function (q) { return q.text; }).slice(0, 12);

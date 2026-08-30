@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Esercizi</title>
 <link rel="icon" type="image/svg+xml" href="logo.svg?v=2">
-<link rel="stylesheet" href="styles.css?v=20260829-35">
+<link rel="stylesheet" href="styles.css?v=20260830-36">
 </head>
 <body>
 <header class="topbar">
@@ -172,9 +172,15 @@
         </div>
       </div>
       <div class="editor-right">
+        <div class="card" id="e-flow-card">
+          <div class="row"><h2 style="margin:0">Struttura della lezione</h2>
+            <button id="btn-flow-talk" class="small right">+ Parliamone</button></div>
+          <div id="e-flow"></div>
+          <p class="hint">Le sezioni nell'ordine in cui le vedrà lo studente: spostale con ◀ ▶ attorno al video. "Parliamone" prima del video = domande per entrare nel tema; dopo = domande personali e di comprensione. Puoi avere più sezioni "Parliamone" (es. una prima e una dopo).</p>
+        </div>
         <div class="card" id="e-vocab-card">
           <div class="row"><h2 style="margin:0">Parole utili</h2>
-            <span class="hint">schede prima del video · stelle per il Quizlet</span>
+            <span class="hint">schede di parole · stelle per il Quizlet</span>
             <button id="btn-vocab-ai" class="small right">✨ Proponi con l'AI</button>
             <button id="btn-vocab-rules" class="small">Proponi (regole)</button>
             <button id="btn-vocab-add" class="small">+ Parola</button></div>
@@ -188,16 +194,7 @@
           <div class="row" style="margin-top:6px"><button id="btn-vocab-translate" class="small">🌐 Traduci le parole senza traduzione (AI)</button><span id="e-vocab-status" class="hint"></span></div>
           <p class="hint">Seleziona le parole da usare nelle schede iniziali; ogni parola ha bisogno di una traduzione o di una foto ("🔍 Foto" cerca su Wikipedia e Wikimedia Commons; "↻ Altra" ne propone un'altra). Le parole che compaiono nelle frasi degli esercizi sono segnate.</p>
         </div>
-        <div class="card" id="e-talk-card">
-          <div class="row"><h2 style="margin:0">Parliamone</h2>
-            <span class="hint">domande per parlare, dopo il video</span>
-            <button id="btn-talk-ai" class="small right">✨ Proponi con l'AI</button>
-            <button id="btn-talk-add" class="small">+ Domanda</button></div>
-          <div id="e-talk"></div>
-          <div class="row" style="margin-top:6px"><span id="e-talk-status" class="hint"></span></div>
-          <p class="hint">Domande aperte e personali sul tema del video, per la conversazione: lo studente le vede una alla volta dopo l'ultimo esercizio, con le espressioni utili per rispondere. Nessuna correzione automatica: si parla.</p>
-        </div>
-        <div class="card">
+        <div class="card" id="e-video-card">
           <div class="row"><h2 style="margin:0">Esercizi</h2>
             <button id="btn-add-ex" class="small right">+ Esercizio al tempo corrente</button></div>
           <p class="hint">Clicca un numero sulla linea del tempo (o "Anteprima" nella scheda) per vedere l'esercizio come lo vedrà lo studente, nell'area del video. "▶" accanto ai tempi riproduce esattamente la frase da inizio a fine; nei campi tempo le frecce ↑↓ spostano di 0,1 s (con Maiusc di 1 s). "Altra frase" propone la successiva migliore vicino allo stesso punto.</p>
@@ -333,13 +330,13 @@
 <div id="overlay"><div><div class="loader-box"><img class="loader" src="https://cdn.dribbble.com/userupload/22076800/file/original-8e7ce77dec0edaf0105e8287038f6e60.gif" alt="" onerror="this.classList.add('off')"><div class="spinner"></div></div><div id="overlay-text">loading</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260829-35"></script>
-<script src="exercises.js?v=20260829-35"></script>
-<script src="generator.js?v=20260829-35"></script>
-<script src="ai.js?v=20260829-35"></script>
-<script src="demo-data.js?v=20260829-35"></script>
-<script src="bookmarklet.js?v=20260829-35"></script>
-<script src="sync.js?v=20260829-35"></script>
-<script src="app.js?v=20260829-35"></script>
+<script src="lang.js?v=20260830-36"></script>
+<script src="exercises.js?v=20260830-36"></script>
+<script src="generator.js?v=20260830-36"></script>
+<script src="ai.js?v=20260830-36"></script>
+<script src="demo-data.js?v=20260830-36"></script>
+<script src="bookmarklet.js?v=20260830-36"></script>
+<script src="sync.js?v=20260830-36"></script>
+<script src="app.js?v=20260830-36"></script>
 </body>
 </html>
