@@ -725,6 +725,91 @@ async function startVideo(page) {
   assert.ok(await pb.$eval('#btn-account', function (b) { return b.style.display === 'none'; }), 'link studente: pulsante account nascosto');
   await ctxA.close(); await ctxB.close();
 
+  console.log('9. attività: Quiz standalone con tema Natale e Memory dentro la lezione');
+  await page.goto(BASE + '?mock=1&speed=8');
+  await page.waitForSelector('#view-home.active');
+  // 9a. quiz standalone: crea, compila due domande, tema, prova, gioca dalla card
+  await page.click('#btn-new-act');
+  await page.waitForSelector('#dlg-act-new[open]');
+  await page.click('#an-types button:has-text("Quiz gioco")');
+  await page.waitForSelector('#view-act.active');
+  await page.fill('#a-title', 'Quiz di prova'); await page.dispatchEvent('#a-title', 'change');
+  await page.click('#a-fields button:has-text("+ Domanda")');
+  await page.click('#a-fields button:has-text("+ Domanda")');
+  const qcards = await page.$$('#a-fields .af-quiz');
+  assert.strictEqual(qcards.length, 2, 'due domande nel form');
+  const fillQ = async function (card, q, o1, o2) {
+    const qi = await card.$('.qrow input'); await qi.fill(q); await qi.dispatchEvent('change');
+    const os = await card.$$('.orow input[type=text]');
+    await os[0].fill(o1); await os[0].dispatchEvent('change');
+    await os[1].fill(o2); await os[1].dispatchEvent('change');
+  };
+  await fillQ(qcards[0], 'Come si dice "hello"?', 'ciao', 'pane');
+  await fillQ(qcards[1], 'Come si dice "thanks"?', 'grazie', 'scusa');
+  await page.click('#a-themes .theme-chip:has-text("Natale")');
+  await page.waitForSelector('#a-themes .theme-chip.sel:has-text("Natale")');
+  await page.click('#a-try');
+  await page.waitForSelector('#dlg-act-try[open] .act[data-theme="christmas"] .quiz-q');
+  // due risposte giuste di fila: 100 + 120 = 220 punti
+  await page.click('#dlg-act-try .quiz-opt:has-text("ciao"), #dlg-act-try .quiz-opt:has-text("grazie")');
+  await page.waitForTimeout(1100);
+  await page.click('#dlg-act-try .quiz-opt:has-text("ciao"), #dlg-act-try .quiz-opt:has-text("grazie")');
+  await page.waitForSelector('#dlg-act-try .act-end');
+  assert.ok(/2 su 2/.test(await page.$eval('#dlg-act-try .act-end h2', function (h) { return h.textContent; })), 'quiz: 2 su 2');
+  assert.ok(/220/.test(await page.$eval('#dlg-act-try .act-end', function (b) { return b.textContent; })), 'punteggio 220 con la serie');
+  await page.click('#at-close');
+  await page.click('#a-save');
+  await page.waitForSelector('#view-home.active');
+  const actCard = await page.$('#lesson-list .lesson-card:has(.act-thumb)');
+  assert.ok(actCard, 'card dell\'attività nel portfolio');
+  assert.ok(/Quiz gioco · 2 elementi · tema Natale/.test(await actCard.$eval('.meta', function (m) { return m.textContent; })), 'meta della card');
+  await (await actCard.$('button:has-text("▶ Gioca")')).click();
+  await page.waitForSelector('#view-actplay.active .act[data-theme="christmas"] .quiz-q');
+  await page.click('#nav button[data-view=home]');
+  await page.waitForSelector('#view-home.active');
+  // 9b. memory dentro la lezione demo: dalle Parole utili, tema Estate, sezione spostata prima del video e giocata dallo studente
+  const demoTitle = await page.evaluate(function () { return window.VL_DEMO.title; });
+  await page.click('#lesson-list .lesson-card:has-text("' + demoTitle + '") button:has-text("Modifica")');
+  await page.waitForSelector('#view-editor.active');
+  await page.click('#btn-flow-act');
+  await page.waitForSelector('#dlg-act-new[open]');
+  await page.click('#an-types button:has-text("Memory")');
+  await page.waitForSelector('.act-card[data-aid]');
+  await page.click('.act-card button:has-text("Usa le Parole utili")');
+  await page.waitForTimeout(300);
+  const pairsN = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.acts[0].data.pairs.length; });
+  assert.ok(pairsN >= 3, 'coppie importate dalle Parole utili: ' + pairsN);
+  assert.deepStrictEqual(await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.flow.map(function (s) { return s.kind + (s.id ? ':' + s.id : ''); }); }), ['vocab', 'talk:t2', 'video', 'act:a1', 'talk:t1'], 'attività subito dopo il video');
+  await page.click('.act-card .theme-chip:has-text("Estate")');
+  await page.waitForSelector('.act-card .theme-chip.sel:has-text("Estate")');
+  await page.click('.act-card button:has-text("▶ Prova")');
+  await page.waitForSelector('#dlg-act-try[open] .act[data-theme="summer"] .mem-grid');
+  const nCardsMem = await page.$$eval('#dlg-act-try .mem-card', function (c) { return c.length; });
+  assert.ok(nCardsMem >= 6 && nCardsMem % 2 === 0, 'carte del memory: ' + nCardsMem);
+  await page.click('#at-close');
+  // la sezione si sposta PRIMA del video con una freccia ◀ (indice 3 nella barra)
+  const chips9 = await page.$$('#e-flow .flow-chip');
+  await (await chips9[3].$('button:has-text("◀")')).click();
+  await page.waitForTimeout(200);
+  assert.deepStrictEqual(await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.flow.map(function (s) { return s.kind; }); }), ['vocab', 'talk', 'act', 'video', 'talk'], 'attività prima del video');
+  // studente: schede (salta) → warmup (salta) → memory: una coppia giusta, poi salta al video
+  await page.click('#btn-student');
+  await page.waitForSelector('#view-student.active');
+  await page.waitForSelector('#btn-start:visible');
+  await page.click('#btn-start');
+  await page.waitForSelector('#s-panel .match', { timeout: 5000 });
+  await page.click('#s-panel button:has-text("Salta le schede")');
+  await page.waitForSelector('#s-panel .talk-q', { timeout: 5000 });
+  await page.click('#s-panel button:has-text("Salta le domande")');
+  await page.waitForSelector('#s-panel .mem-grid', { timeout: 5000 });
+  const pair0 = await page.evaluate(function () { const ls = window.VLApp.S.student.lesson; return ls.acts[0].data.pairs[0]; });
+  await page.click('#s-panel .mem-card:has-text("' + pair0.a + '")');
+  await page.click('#s-panel .mem-card:has-text("' + pair0.b + '")');
+  await page.waitForSelector('#s-panel .mem-card.done', { timeout: 3000 });
+  assert.strictEqual(await page.$$eval('#s-panel .mem-card.done', function (c) { return c.length; }), 2, 'coppia trovata nel memory della lezione');
+  await page.click('#s-panel button:has-text("Salta questa attività")');
+  await page.waitForFunction(function () { return window.VLApp.S.student.started; }, null, { timeout: 5000 });
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
