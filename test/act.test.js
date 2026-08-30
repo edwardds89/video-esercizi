@@ -86,9 +86,46 @@ t('validate: memory richiede 3 coppie complete, quiz una domanda vera', function
   assert.ok(A.validate({ type: 'boh' }).length > 0);
 });
 
-t('temi e tipi dichiarati', function () {
-  assert.deepStrictEqual(A.THEMES.map(function (t2) { return t2.id; }), ['classic', 'night', 'rainbow', 'summer', 'christmas']);
+t('10 template dichiarati (dal sobrio al festoso), con movimento e anteprima', function () {
+  assert.deepStrictEqual(A.THEMES.map(function (t2) { return t2.id; }), ['classic', 'blackboard', 'night', 'space', 'ocean', 'spring', 'summer', 'rainbow', 'halloween', 'christmas']);
+  A.THEMES.forEach(function (t2) { assert.ok(t2.name && t2.emoji && t2.sw && ['float', 'fall', 'rise', 'twinkle'].indexOf(t2.motion) >= 0, t2.id); });
   assert.deepStrictEqual(Object.keys(A.TYPES), ['memory', 'quiz', 'anagram', 'wheel']);
+});
+
+t('trasforma: coppie ⇄ Memory/Anagramma, coppie → Quiz con distrattori veri, tutto → Ruota', function () {
+  const mem = { type: 'memory', data: { pairs: [{ a: 'cane', b: 'dog' }, { a: 'gatto', b: 'cat' }, { a: 'pane', b: 'bread' }, { a: 'mare', b: 'sea' }] } };
+  assert.deepStrictEqual(A.convertTargets(mem).sort(), ['anagram', 'quiz', 'wheel']);
+  const ana = A.convert(mem, 'anagram', A.rng(3));
+  assert.strictEqual(ana.data.words.length, 4);
+  assert.strictEqual(ana.data.words[0].word, 'cane');
+  assert.strictEqual(ana.data.words[0].hint, 'dog');
+  const back = A.convert({ type: 'anagram', data: ana.data }, 'memory', A.rng(3));
+  assert.deepStrictEqual(back.data.pairs.map(function (p) { return p.a + '/' + p.b; }), ['cane/dog', 'gatto/cat', 'pane/bread', 'mare/sea']);
+  const quiz = A.convert(mem, 'quiz', A.rng(9));
+  assert.strictEqual(quiz.data.questions.length, 4);
+  quiz.data.questions.forEach(function (q) {
+    assert.ok(q.options.length >= 2 && q.options.length <= 4);
+    const pair = mem.data.pairs.find(function (p) { return p.a === q.q; });
+    assert.strictEqual(q.options[q.correct], pair.b, 'la giusta è la traduzione');
+    q.options.forEach(function (o) { assert.ok(mem.data.pairs.some(function (p) { return p.b === o; }), 'distrattore preso dalle altre coppie'); });
+  });
+  const wheel = A.convert(mem, 'wheel', A.rng(2));
+  assert.deepStrictEqual(wheel.data.items.map(function (x) { return x.text; }), ['cane', 'gatto', 'pane', 'mare']);
+});
+
+t('trasforma: il Quiz diventa Ruota (le domande) e Memory (domanda ↔ risposta giusta); la Ruota non si trasforma', function () {
+  const quiz = { type: 'quiz', data: { questions: [
+    { q: 'Come si dice hello?', options: ['ciao', 'pane', 'sole', 'cane'], correct: 0 },
+    { q: 'Come si dice thanks?', options: ['scusa', 'grazie'], correct: 1 },
+    { q: 'Come si dice bye?', options: ['arrivederci', 'buongiorno'], correct: 0 }
+  ] } };
+  const wheel = A.convert(quiz, 'wheel', A.rng(4));
+  assert.strictEqual(wheel.data.items.length, 3);
+  const mem = A.convert(quiz, 'memory', A.rng(4));
+  assert.strictEqual(mem.data.pairs.length, 3);
+  assert.deepStrictEqual(mem.data.pairs[0], { a: 'Come si dice hello?', b: 'ciao', image: '' });
+  assert.deepStrictEqual(A.convertTargets({ type: 'wheel', data: { items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }] } }), []);
+  assert.strictEqual(A.convert(quiz, 'quiz', A.rng(1)), null, 'stesso tipo: niente');
 });
 
 console.log('\n' + n + ' test superati');
