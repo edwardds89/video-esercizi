@@ -10,13 +10,21 @@
    *  sw = anteprima per il chip del selettore. */
   const THEMES = [
     { id: 'classic', name: 'Classico', emoji: '📖', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#f6f1e6,#dcd0b6)' },
+    { id: 'notebook', name: 'Quaderno', emoji: '📝', deco: [], motion: 'float', sw: 'linear-gradient(180deg,#fdfdf6 60%,#bcd6ee)' },
     { id: 'blackboard', name: 'Lavagna', emoji: '✏️', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#33473d,#2b3d34)' },
+    { id: 'coffee', name: 'Caffè', emoji: '☕', deco: ['☕', '🥐', '🫘'], motion: 'float', sw: 'linear-gradient(135deg,#efe4d2,#8a5a33)' },
     { id: 'night', name: 'Nero puro', emoji: '✦', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#000,#17171d)' },
+    { id: 'tvshow', name: 'Gioco a premi', emoji: '🏆', deco: ['✨', '★', '✨', '✦'], motion: 'twinkle', sw: 'linear-gradient(135deg,#0d1440,#e8b93d)' },
     { id: 'space', name: 'Spazio', emoji: '🪐', deco: ['✦', '✧', '⭐', '🪐', '✦', '✧', '💫'], motion: 'twinkle', sw: 'linear-gradient(135deg,#0b1030,#3a1a6e)' },
+    { id: 'synth', name: 'Neon retrò', emoji: '👾', deco: [], motion: 'float', sw: 'linear-gradient(180deg,#1a0b33,#ff3ec8)' },
     { id: 'ocean', name: 'Oceano', emoji: '🐚', deco: ['🫧', '🐠', '🫧', '🐟', '🫧', '🐙', '🫧'], motion: 'rise', sw: 'linear-gradient(180deg,#0c86c8,#0a3d62)' },
+    { id: 'jungle', name: 'Giungla', emoji: '🦜', deco: ['🍃', '🌿', '🦜', '🌺', '🐒', '🍃'], motion: 'float', sw: 'linear-gradient(135deg,#1d5a30,#123b22)' },
     { id: 'spring', name: 'Primavera', emoji: '🌸', deco: ['🌸', '🌷', '🦋', '🌼', '🌸', '🍃'], motion: 'fall', sw: 'linear-gradient(135deg,#eafbe7,#ffe3ef)' },
     { id: 'summer', name: 'Estate', emoji: '🌞', deco: ['🌞', '🌊', '🍉', '🐚', '🌴'], motion: 'float', sw: 'linear-gradient(180deg,#bfe9fb,#f3e3b8)' },
+    { id: 'autumn', name: 'Autunno', emoji: '🍁', deco: ['🍁', '🍂', '🍂', '🌰', '🍁'], motion: 'fall', sw: 'linear-gradient(135deg,#f5e5c2,#c65d2e)' },
+    { id: 'winter', name: 'Inverno', emoji: '⛄', deco: ['❄', '❅', '❄', '❆', '❄'], motion: 'fall', sw: 'linear-gradient(180deg,#f0f8ff,#bcdcf0)' },
     { id: 'rainbow', name: 'Arcobaleno', emoji: '🌈', deco: ['🌈', '✨', '🎈', '⭐'], motion: 'float', sw: 'linear-gradient(90deg,#ff8a8a,#ffc86b,#7fd98a,#6db3ff,#b98aff)' },
+    { id: 'candy', name: 'Caramelle', emoji: '🍭', deco: ['🍬', '🍭', '🧁', '🍬', '🍩'], motion: 'float', sw: 'linear-gradient(135deg,#ffd9ec,#ff4f9a)' },
     { id: 'halloween', name: 'Halloween', emoji: '🎃', deco: ['🦇', '👻', '🎃', '🕸', '🦇', '✨'], motion: 'float', sw: 'linear-gradient(135deg,#140a1e,#ff8c1a)' },
     { id: 'christmas', name: 'Natale', emoji: '🎄', deco: ['❄', '❅', '❄', '⭐', '❄', '🎁'], motion: 'fall', sw: 'linear-gradient(135deg,#14301f,#b23a33)' }
   ];

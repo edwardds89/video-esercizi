@@ -393,6 +393,18 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
   --act-display: 'Fraunces', Georgia, 'Times New Roman', serif; }
 .act[data-theme="classic"] { box-shadow: inset 0 0 0 1px #e6ddc9, inset 0 0 0 7px var(--act-bg), inset 0 0 0 8px #d8cdb2; }
 
+/* Quaderno — carta a righe, margine rosso, scrittura a mano: caldo e familiare per la scuola */
+.act[data-theme="notebook"] { --act-ink: #24344a; --act-muted: #7d8aa0; --act-card: #ffffff; --act-card-ink: #24344a;
+  --act-line: #c8d8ea; --act-accent: #2456c9; --act-accent-ink: #fff; --act-good: #2e7d4f; --act-bad: #c9302e;
+  --act-back: repeating-linear-gradient(180deg, #fdfdf6 0 9px, #cfe0f0 9px 10px); --act-back-ink: #b3452f;
+  --act-display: 'Caveat', 'Segoe Script', cursive;
+  background:
+    linear-gradient(90deg, transparent 0 56px, rgba(214,72,56,.55) 56px 58px, transparent 58px),
+    repeating-linear-gradient(180deg, transparent 0 33px, rgba(90,150,205,.28) 33px 34.5px),
+    #fdfdf6; }
+.act[data-theme="notebook"] .act-title, .act[data-theme="notebook"] .quiz-q { font-size: clamp(28px, 4vw, 44px); }
+.act[data-theme="notebook"] .act-stage { padding-left: clamp(70px, 8vw, 90px); }
+
 /* Lavagna — verde ardesia, aloni di gesso, cornice di legno, scrittura a mano (sobria) */
 .act[data-theme="blackboard"] { --act-ink: #f2f5f0; --act-muted: #b7c4b8; --act-card: #3a4f43; --act-card-ink: #f2f5f0;
   --act-line: rgba(255,255,255,.35); --act-accent: #f5d76e; --act-accent-ink: #33301c; --act-good: #8fd694; --act-bad: #ff9d8a;
@@ -409,12 +421,36 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .act[data-theme="blackboard"] .mem-back, .act[data-theme="blackboard"] .mem-front, .act[data-theme="blackboard"] .quiz-opt, .act[data-theme="blackboard"] .ana-tile { border: 2px dashed rgba(255,255,255,.45); box-shadow: none; }
 .act[data-theme="blackboard"] .act-stat { background: transparent; color: var(--act-ink); border: 1.5px dashed rgba(255,255,255,.4); }
 
+/* Caffè — crema e legno, tazzine discrete: caldo, adulto, da conversazione */
+.act[data-theme="coffee"] { --act-ink: #3a2a1c; --act-muted: #93816e; --act-card: #fffaf1; --act-card-ink: #3a2a1c;
+  --act-line: #e4d5be; --act-accent: #8a5a33; --act-accent-ink: #fff; --act-good: #5e7d3a; --act-bad: #b3402e;
+  --act-back: linear-gradient(135deg, #a9764a, #7a5030); --act-back-ink: #f0e2cc;
+  --act-display: 'Fraunces', Georgia, serif;
+  background:
+    radial-gradient(circle 150px at 88% 16%, rgba(138,90,51,.10), transparent 70%),
+    radial-gradient(circle 110px at 8% 74%, rgba(138,90,51,.09), transparent 70%),
+    radial-gradient(ellipse 130% 20% at 50% 108%, rgba(90,56,30,.28), transparent 62%),
+    linear-gradient(165deg, #f2e8d6, #e9dcc4); }
+
 /* Nero puro — nero vero, minimale, accento neon */
 .act[data-theme="night"] { --act-bg: #000; --act-ink: #f2f2f6; --act-muted: #8f8f9c; --act-card: #141419; --act-card-ink: #f2f2f6;
   --act-line: #2a2a33; --act-accent: #38e07d; --act-accent-ink: #06130b; --act-good: #38e07d; --act-bad: #ff5a6a;
   --act-back: linear-gradient(135deg, #17171d, #0c0c10); --act-back-ink: #3c3c48;
   --act-display: 'Space Grotesk', var(--font); }
 .act[data-theme="night"] .act-btn.primary { box-shadow: 0 0 14px rgba(56,224,125,.35); }
+
+/* Gioco a premi — studio TV: faretti, oro, pavimento lucido. Fatto per il Quiz */
+.act[data-theme="tvshow"] { --act-ink: #f5f0dd; --act-muted: #9aa0c9; --act-card: #141d4d; --act-card-ink: #f5f0dd;
+  --act-line: #3a4487; --act-accent: #e8b93d; --act-accent-ink: #2a1e05; --act-good: #45d68a; --act-bad: #ff5a6a;
+  --act-back: linear-gradient(135deg, #1a2560, #101740); --act-back-ink: #e8b93d;
+  --act-display: 'Space Grotesk', var(--font);
+  background:
+    conic-gradient(from 200deg at 8% -6%, transparent 0deg, rgba(232,185,61,.14) 12deg, transparent 26deg),
+    conic-gradient(from 130deg at 92% -6%, transparent 0deg, rgba(120,150,255,.14) 12deg, transparent 26deg),
+    radial-gradient(ellipse 120% 22% at 50% 106%, rgba(140,160,255,.16), transparent 60%),
+    linear-gradient(175deg, #0a0f30, #101a4d 65%, #131f56); }
+.act[data-theme="tvshow"] .quiz-opt, .act[data-theme="tvshow"] .mem-front { box-shadow: 0 0 0 1px rgba(232,185,61,.30), 0 3px 10px rgba(0,0,0,.4); }
+.act[data-theme="tvshow"] .act-stat.score { border-color: #e8b93d; color: #e8b93d; }
 
 /* Spazio — notte stellata (stelle fisse a tre profondità), viola cosmico, stelle che brillano */
 .act[data-theme="space"] { --act-ink: #eceafc; --act-muted: #9a93c9; --act-card: #191a3f; --act-card-ink: #eceafc;
@@ -432,6 +468,22 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
     linear-gradient(165deg, #0b1030, #1c1148 55%, #2a1560); }
 .act[data-theme="space"] .mem-front, .act[data-theme="space"] .quiz-opt { box-shadow: 0 0 0 1px rgba(143,123,255,.25), 0 2px 8px rgba(0,0,0,.4); }
 
+/* Neon retrò — tramonto synth, griglia luminosa sul pavimento, neon rosa e ciano */
+.act[data-theme="synth"] { --act-ink: #f5eaff; --act-muted: #a58cc9; --act-card: #1c1038; --act-card-ink: #f5eaff;
+  --act-line: #452a72; --act-accent: #ff3ec8; --act-accent-ink: #fff; --act-good: #29e6ff; --act-bad: #ff5a6a;
+  --act-back: linear-gradient(135deg, #2a1454, #180b33); --act-back-ink: #ff3ec8;
+  --act-display: 'Space Grotesk', var(--font);
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 79px, rgba(255,62,200,.16) 79px 80px),
+    repeating-linear-gradient(180deg, transparent 0 26px, rgba(255,62,200,.2) 26px 27px),
+    radial-gradient(circle 130px at 50% 30%, rgba(255,120,80,.55), rgba(255,62,200,.25) 60%, transparent 72%),
+    linear-gradient(180deg, #12082b 0%, #1f0d40 45%, #3a1058 100%);
+  background-size: 100% 34%, 100% 34%, 100% 100%, 100% 100%;
+  background-position: left bottom, left bottom, center top, center top;
+  background-repeat: no-repeat; }
+.act[data-theme="synth"] .quiz-opt:hover, .act[data-theme="synth"] .ana-tile:hover { border-color: #29e6ff; }
+.act[data-theme="synth"] .act-btn.primary { box-shadow: 0 0 16px rgba(255,62,200,.5); }
+
 /* Oceano — profondità blu, raggio di luce, sabbia sul fondo, bolle che salgono */
 .act[data-theme="ocean"] { --act-ink: #eef8fd; --act-muted: #9cc6d8; --act-card: #ffffff; --act-card-ink: #14424f;
   --act-line: #cfe6ee; --act-accent: #ff8c42; --act-accent-ink: #fff; --act-good: #1f9d7a; --act-bad: #e05252;
@@ -441,6 +493,18 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
     linear-gradient(115deg, transparent 42%, rgba(255,255,255,.10) 50%, transparent 58%),
     radial-gradient(ellipse 130% 26% at 50% 106%, rgba(232,215,166,.5), transparent 62%),
     linear-gradient(180deg, #0c86c8, #0a5a92 55%, #083d62); }
+
+/* Giungla — verde fitto, fogliame agli angoli, pappagalli: avventura per i più giovani */
+.act[data-theme="jungle"] { --act-ink: #eef7e8; --act-muted: #9dbf9c; --act-card: #fdf7e4; --act-card-ink: #2c4224;
+  --act-line: #d8e0c0; --act-accent: #e8712e; --act-accent-ink: #fff; --act-good: #4fae4e; --act-bad: #d64545;
+  --act-back: linear-gradient(135deg, #2e7040, #1d5028); --act-back-ink: #bfe3a8;
+  --act-display: 'Nunito', var(--font);
+  background:
+    radial-gradient(ellipse 46% 34% at -6% -8%, rgba(60,140,70,.55), transparent 70%),
+    radial-gradient(ellipse 42% 30% at 106% -6%, rgba(45,120,60,.5), transparent 70%),
+    radial-gradient(ellipse 55% 30% at 108% 108%, rgba(40,110,55,.6), transparent 70%),
+    radial-gradient(ellipse 50% 26% at -8% 106%, rgba(55,130,65,.55), transparent 70%),
+    linear-gradient(165deg, #17472a, #123b22 60%, #0e3019); }
 
 /* Primavera — pastelli, colline sul fondo, petali che cadono */
 .act[data-theme="spring"] { --act-ink: #37474a; --act-muted: #85978f; --act-card: #ffffff; --act-card-ink: #37474a;
@@ -462,6 +526,26 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 26'><path d='M0 16 Q15 5 30 16 T60 16 T90 16 T120 16 V26 H0 Z' fill='%23ffffff' fill-opacity='.45'/></svg>") repeat-x left bottom 14% / 120px 24px,
     linear-gradient(180deg, #bfe9fb 0%, #cfeefb 52%, #59b8dd 62%, #7fcbe6 74%, #f6efd3 76%, #f3e3b8 100%); }
 
+/* Autunno — ambra e ruggine, foglie che cadono, luce bassa */
+.act[data-theme="autumn"] { --act-ink: #4a3624; --act-muted: #9c8467; --act-card: #fffaf0; --act-card-ink: #4a3624;
+  --act-line: #e8d8be; --act-accent: #c65d2e; --act-accent-ink: #fff; --act-good: #6b8a2e; --act-bad: #b3402e;
+  --act-back: linear-gradient(135deg, #d98a3d, #b35c28); --act-back-ink: #ffe9c9;
+  --act-display: 'Fraunces', Georgia, serif;
+  background:
+    radial-gradient(ellipse 70% 36% at 50% -14%, rgba(232,170,80,.4), transparent 70%),
+    radial-gradient(ellipse 130% 22% at 50% 108%, rgba(150,90,40,.30), transparent 62%),
+    linear-gradient(170deg, #f7ead2, #f0dcb4 60%, #ecd2a4); }
+
+/* Inverno — ghiaccio chiaro e quieto (niente rosso: non è Natale), neve leggera */
+.act[data-theme="winter"] { --act-ink: #1e3c50; --act-muted: #7d9cb0; --act-card: #ffffff; --act-card-ink: #1e3c50;
+  --act-line: #d0e4f0; --act-accent: #2a7fb8; --act-accent-ink: #fff; --act-good: #2e7d5a; --act-bad: #c9506a;
+  --act-back: linear-gradient(135deg, #dceefb, #b8d9ee); --act-back-ink: #6da3c9;
+  --act-display: 'Nunito', var(--font);
+  background:
+    radial-gradient(ellipse 140% 20% at 50% 108%, rgba(255,255,255,.9), transparent 62%),
+    radial-gradient(circle 100px at 14% 12%, rgba(255,255,255,.55), transparent 70%),
+    linear-gradient(180deg, #ddf0fb, #eaf6fd 55%, #f6fbff); }
+
 /* Arcobaleno — pastelli in festa, dorso delle carte a spettro */
 .act[data-theme="rainbow"] { --act-ink: #33304a; --act-muted: #8d88a8; --act-card: #ffffff; --act-card-ink: #33304a;
   --act-line: #e8e2f5; --act-accent: #7c4dff; --act-accent-ink: #fff; --act-good: #21a05f; --act-bad: #e04f5f;
@@ -471,6 +555,21 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
     radial-gradient(ellipse 70% 40% at 50% -18%, rgba(255,255,255,.75), transparent 70%),
     linear-gradient(160deg, #ffe9ec, #fff6dc 30%, #e7fbe9 55%, #e3f1ff 80%, #f3e8ff); }
 .act[data-theme="rainbow"] .act-bar .fill { background: linear-gradient(90deg, #ff8a8a, #ffc86b, #7fd98a, #6db3ff, #b98aff); }
+
+/* Caramelle — zucchero filato, pois, dorso a bastoncino di zucchero */
+.act[data-theme="candy"] { --act-ink: #6a2c4e; --act-muted: #b98aa4; --act-card: #ffffff; --act-card-ink: #6a2c4e;
+  --act-line: #f5d5e6; --act-accent: #ff4f9a; --act-accent-ink: #fff; --act-good: #35b96a; --act-bad: #e0455c;
+  --act-back: repeating-linear-gradient(45deg, #ff9dc6 0 14px, #fff2f8 14px 28px); --act-back-ink: #d6488a;
+  --act-display: 'Nunito', var(--font);
+  background:
+    radial-gradient(circle 5px at 12% 22%, rgba(255,255,255,.8) 42%, transparent 50%),
+    radial-gradient(circle 4px at 78% 14%, rgba(255,255,255,.8) 42%, transparent 50%),
+    radial-gradient(circle 5px at 88% 68%, rgba(255,255,255,.8) 42%, transparent 50%),
+    radial-gradient(circle 4px at 30% 82%, rgba(255,255,255,.8) 42%, transparent 50%),
+    radial-gradient(circle 5px at 55% 40%, rgba(255,255,255,.7) 42%, transparent 50%),
+    radial-gradient(circle 4px at 8% 60%, rgba(255,255,255,.7) 42%, transparent 50%),
+    linear-gradient(160deg, #ffd9ec, #ffe9f4 55%, #fde0ff); }
+.act[data-theme="candy"] .act-btn.primary { border-radius: 999px; }
 
 /* Halloween — notte viola, luna, zucca: festoso ma leggibile */
 .act[data-theme="halloween"] { --act-ink: #f5ead9; --act-muted: #a893c2; --act-card: #241533; --act-card-ink: #f5ead9;
