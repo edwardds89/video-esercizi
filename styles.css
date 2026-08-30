@@ -359,9 +359,12 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 @media (prefers-reduced-motion: reduce) { .w.insert-in { animation: none; max-width: none; } }
 
 /* Parliamone: domande di conversazione dopo il video */
-.talk-row { display: grid; grid-template-columns: 28px 1fr 1fr auto; gap: 6px; align-items: center; margin-top: 6px; }
-.talk-row .num { color: var(--muted); font-size: 13px; text-align: right; }
-.talk-row input[type=text] { padding: 4px 8px; }
+.talk-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 6px 8px; align-items: start; margin-top: 12px; }
+.talk-row .num { color: var(--muted); font-size: 13px; text-align: right; padding-top: 8px; }
+.talk-row .talk-btns { padding-top: 4px; }
+.talk-fields { display: flex; flex-direction: column; gap: 4px; }
+.talk-row textarea.talk-in { min-height: 34px; resize: none; overflow: hidden; padding: 6px 9px; line-height: 1.45; }
+.talk-row textarea.talk-in.h { color: var(--muted); font-size: 14px; background: #fafbfd; }
 .talk-q { font-size: clamp(28px, 4vw, 52px); font-weight: 700; line-height: 1.3; margin: 8vh 0 24px; }
 .talk-help { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 28px; }
 .talk-help .chip { font-size: clamp(18px, 1.8vw, 24px); padding: 10px 16px; cursor: default; background: #fff1c2; border-color: #f5c400; }

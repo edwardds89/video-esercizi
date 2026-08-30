@@ -1030,19 +1030,26 @@
     tk.questions.forEach(function (q, i) {
       const row = el('div', { class: 'talk-row' });
       row.appendChild(el('span', { class: 'num', text: String(i + 1) }));
-      const qi = el('input', { type: 'text', value: q.text || '', placeholder: 'Domanda (aperta, personale)' });
+      // caselle che crescono col testo: domanda ed espressioni si leggono per intero, una sopra l'altra
+      const grow = function (t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
+      const qi = el('textarea', { class: 'talk-in q', rows: '1', placeholder: 'Domanda (aperta, personale)' });
+      qi.value = q.text || '';
+      qi.addEventListener('input', function () { grow(qi); });
       qi.addEventListener('change', function () { q.text = qi.value.trim(); touch(ls); });
-      const hi = el('input', { type: 'text', value: q.help || '', placeholder: 'Espressioni utili, separate da · (facoltative)' });
+      const hi = el('textarea', { class: 'talk-in h', rows: '1', placeholder: 'Espressioni utili, separate da · (facoltative)' });
+      hi.value = q.help || '';
+      hi.addEventListener('input', function () { grow(hi); });
       hi.addEventListener('change', function () { q.help = hi.value.trim(); touch(ls); });
-      row.appendChild(qi); row.appendChild(hi);
-      row.appendChild(el('div', { class: 'row', style: 'gap:4px' },
+      row.appendChild(el('div', { class: 'talk-fields' }, qi, hi));
+      row.appendChild(el('div', { class: 'row talk-btns', style: 'gap:4px' },
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { tk.questions.splice(i - 1, 0, tk.questions.splice(i, 1)[0]); touch(ls); renderTalkEditor(ls); } }),
         el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === tk.questions.length - 1 ? 'disabled' : null, onclick: function () { tk.questions.splice(i + 1, 0, tk.questions.splice(i, 1)[0]); touch(ls); renderTalkEditor(ls); } }),
         el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { tk.questions.splice(i, 1); touch(ls); renderTalkEditor(ls); } })));
       box.appendChild(row);
+      grow(qi); grow(hi);   // dopo l'inserimento nel DOM: l'altezza si misura solo da attaccati
     });
   }
-  $('#btn-talk-add').addEventListener('click', function () { const ls = current(); if (!ls) return; talkState(ls).questions.push({ id: uid(), text: '', help: '' }); touch(ls); renderTalkEditor(ls); const rows = $$('#e-talk .talk-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('input').focus(); });
+  $('#btn-talk-add').addEventListener('click', function () { const ls = current(); if (!ls) return; talkState(ls).questions.push({ id: uid(), text: '', help: '' }); touch(ls); renderTalkEditor(ls); const rows = $$('#e-talk .talk-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('textarea, input').focus(); });
   $('#btn-talk-ai').addEventListener('click', function () {
     const ls = current(); if (!ls) return;
     if (!S.settings.apiKey) return toast('Serve la chiave API (Impostazioni AI)');
