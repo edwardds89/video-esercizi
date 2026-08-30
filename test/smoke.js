@@ -229,9 +229,9 @@ async function startVideo(page) {
   assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (els) { return els.length; }), 8);
 
   // "Parliamone": due domande scritte a mano nell'editor; lo studente le vede dopo l'ultimo esercizio, prima del riepilogo
-  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(1) input:nth-of-type(1)', 'Secondo te, perché dormiamo?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) input:nth-of-type(1)', 'change');
-  await page.fill('#e-talk .talk-row:nth-child(1) input:nth-of-type(2)', 'Secondo me… · Penso che…'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) input:nth-of-type(2)', 'change');
-  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(2) input:nth-of-type(1)', 'Ti è mai capitato di dimenticare qualcosa di importante?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(2) input:nth-of-type(1)', 'change');
+  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(1) textarea.q', 'Secondo te, perché dormiamo?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) textarea.q', 'change');
+  await page.fill('#e-talk .talk-row:nth-child(1) textarea.h', 'Secondo me… · Penso che…'); await page.dispatchEvent('#e-talk .talk-row:nth-child(1) textarea.h', 'change');
+  await page.click('#btn-talk-add'); await page.fill('#e-talk .talk-row:nth-child(2) textarea.q', 'Ti è mai capitato di dimenticare qualcosa di importante?'); await page.dispatchEvent('#e-talk .talk-row:nth-child(2) textarea.q', 'change');
   await page.waitForTimeout(600);
   assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].talk.questions.length; }), 2, 'due domande salvate');
 
