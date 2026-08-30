@@ -86,9 +86,11 @@ t('validate: memory richiede 3 coppie complete, quiz una domanda vera', function
   assert.ok(A.validate({ type: 'boh' }).length > 0);
 });
 
-t('10 template dichiarati (dal sobrio al festoso), con movimento e anteprima', function () {
-  assert.deepStrictEqual(A.THEMES.map(function (t2) { return t2.id; }), ['classic', 'blackboard', 'night', 'space', 'ocean', 'spring', 'summer', 'rainbow', 'halloween', 'christmas']);
+t('18 template dichiarati (dal sobrio al festoso), con movimento e anteprima', function () {
+  assert.deepStrictEqual(A.THEMES.map(function (t2) { return t2.id; }), ['classic', 'notebook', 'blackboard', 'coffee', 'night', 'tvshow', 'space', 'synth', 'ocean', 'jungle', 'spring', 'summer', 'autumn', 'winter', 'rainbow', 'candy', 'halloween', 'christmas']);
   A.THEMES.forEach(function (t2) { assert.ok(t2.name && t2.emoji && t2.sw && ['float', 'fall', 'rise', 'twinkle'].indexOf(t2.motion) >= 0, t2.id); });
+  const ids = new Set(A.THEMES.map(function (t2) { return t2.id; }));
+  assert.strictEqual(ids.size, 18, 'id unici');
   assert.deepStrictEqual(Object.keys(A.TYPES), ['memory', 'quiz', 'anagram', 'wheel']);
 });
 
