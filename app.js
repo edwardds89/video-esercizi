@@ -1210,15 +1210,35 @@
     if (extra) for (const k in extra) o[k] = extra[k];
     return o;
   }
-  /** Chips dei temi (Classico, Nero puro, Arcobaleno, Estate, Natale). */
+  /** Chips dei 10 template visivi, con l'anteprima dei colori. */
   function themeChips(current, onPick) {
     const box = el('div', { class: 'chips', style: 'gap:8px' });
     ACT.THEMES.forEach(function (t) {
-      const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), text: t.emoji + ' ' + t.name });
+      const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), title: t.name },
+        el('span', { class: 'sw', style: 'background:' + t.sw }),
+        t.emoji + ' ' + t.name);
       c.addEventListener('click', function () { onPick(t.id); });
       box.appendChild(c);
     });
     return box;
+  }
+  /** "Trasforma in…": stesso contenuto, altro tipo di attività (un click). onDone(newType) dopo la conversione. */
+  function convertRow(act, onDone) {
+    const targets = ACT.convertTargets(act);
+    if (!targets.length) return null;
+    const row = el('div', { class: 'row', style: 'margin-top:8px;gap:6px' });
+    row.appendChild(el('span', { class: 'hint', text: '⇄ Trasforma in:' }));
+    targets.forEach(function (to) {
+      const t = ACT.TYPES[to];
+      row.appendChild(el('button', { class: 'small', text: t.emoji + ' ' + t.label, title: 'Stesso contenuto, gioco diverso', onclick: function () {
+        const out = ACT.convert(act, to, Math.random);
+        if (!out) return toast('Con questo contenuto non si può');
+        act.type = out.type; act.data = out.data;
+        onDone(to);
+        toast('Trasformata in ' + t.label + ' (stesso contenuto)');
+      } }));
+    });
+    return row;
   }
   /** Campi dell'editor per il tipo di attività. ctx: { lesson (o null se standalone), redraw(), changed() }. */
   function renderActFields(box, act, ctx) {
@@ -1380,8 +1400,10 @@
     });
     head.appendChild(rm);
     card.appendChild(head);
-    card.appendChild(el('div', { class: 'row', style: 'margin:8px 0 2px' }, el('span', { class: 'hint', text: 'Tema:' })));
+    card.appendChild(el('div', { class: 'row', style: 'margin:8px 0 2px' }, el('span', { class: 'hint', text: 'Template:' })));
     card.appendChild(themeChips(act.theme || 'classic', function (id) { act.theme = id; touch(ls); renderFlow(ls); }));
+    const conv = convertRow(act, function () { touch(ls); renderFlow(ls); });
+    if (conv) card.appendChild(conv);
     const fields = el('div');
     card.appendChild(fields);
     renderActFields(fields, act, { lesson: ls, changed: function () { touch(ls); }, redraw: function () { renderFlow(ls); } });
@@ -1419,8 +1441,13 @@
     const ti = $('#a-title'); ti.value = ls.title || '';
     ti.onchange = function () { ls.title = ti.value.trim(); act.title = ls.title; touch(ls); };
     const redraw = function () {
+      const t2 = ACT.TYPES[act.type] || t;
+      $('#a-emoji').textContent = t2.emoji;
+      $('#a-type-hint').textContent = t2.label + ' — ' + t2.hint;
       const th = $('#a-themes'); th.innerHTML = '';
       th.appendChild(themeChips(act.theme || 'classic', function (tid) { act.theme = tid; touch(ls); redraw(); }));
+      const conv = convertRow(act, function () { touch(ls); redraw(); });
+      if (conv) th.appendChild(conv);
       renderActFields($('#a-fields'), act, { lesson: null, changed: function () { touch(ls); }, redraw: redraw });
     };
     redraw();

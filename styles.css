@@ -375,26 +375,123 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
   background: var(--act-bg); color: var(--act-ink); font-family: var(--act-font, var(--font)); }
 .act-stage { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; padding: 18px clamp(12px, 3vw, 30px) 22px; max-width: 980px; margin: 0 auto; width: 100%; }
 .act-deco { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.act-deco span { position: absolute; opacity: .16; animation: act-float linear infinite; }
+.act-deco span { position: absolute; opacity: .16; animation: act-float ease-in-out infinite; }
+.act-deco.m-fall span { animation-name: act-fall; animation-timing-function: linear; opacity: .5; }
+.act-deco.m-rise span { animation-name: act-rise; animation-timing-function: linear; opacity: .35; }
+.act-deco.m-twinkle span { animation-name: act-twinkle; animation-direction: alternate; animation-timing-function: ease-in-out; opacity: .4; }
 @keyframes act-float { 0% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-18px) rotate(6deg); } 100% { transform: translateY(0) rotate(-6deg); } }
-@media (prefers-reduced-motion: reduce) { .act-deco span { animation: none; } }
+@keyframes act-fall { 0% { transform: translateY(-110vh) rotate(0); } 100% { transform: translateY(110vh) rotate(200deg); } }
+@keyframes act-rise { 0% { transform: translateY(110vh); } 100% { transform: translateY(-110vh); } }
+@keyframes act-twinkle { 0% { opacity: .08; transform: scale(.75); } 100% { opacity: .55; transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .act-deco span { animation: none !important; } }
 
-/* tema di default: Classico (carta, sobrio, per adulti) */
+/* ---- I 10 TEMI (dal più sobrio al più festoso). Ogni tema: sfondo disegnato, palette, dorso delle carte, font, movimento. ---- */
+/* default: Classico — carta avorio, serif elegante, per adulti */
 .act { --act-bg: #f6f1e6; --act-ink: #2b2a26; --act-muted: #8a8478; --act-card: #fffdf6; --act-card-ink: #2b2a26;
   --act-line: #e0d8c6; --act-accent: #3d5a80; --act-accent-ink: #fff; --act-good: #2e7d4f; --act-bad: #b3402e;
-  --act-back: linear-gradient(135deg, #ece3d0, #dcd0b6); --act-back-ink: #a89b7f; --act-display: Georgia, 'Times New Roman', serif; }
-.act[data-theme="night"] { --act-bg: #0a0a0d; --act-ink: #f2f2f6; --act-muted: #9a9aa6; --act-card: #17171d; --act-card-ink: #f2f2f6;
-  --act-line: #2c2c36; --act-accent: #38e07d; --act-accent-ink: #06130b; --act-good: #38e07d; --act-bad: #ff5a6a;
-  --act-back: linear-gradient(135deg, #17171d, #101014); --act-back-ink: #3c3c48; --act-display: var(--font); }
-.act[data-theme="rainbow"] { --act-bg: linear-gradient(160deg, #ffe9ec, #fff6dc 30%, #e7fbe9 55%, #e3f1ff 80%, #f3e8ff); --act-ink: #33304a; --act-muted: #8d88a8;
-  --act-card: #ffffff; --act-card-ink: #33304a; --act-line: #e8e2f5; --act-accent: #7c4dff; --act-accent-ink: #fff; --act-good: #21a05f; --act-bad: #e04f5f;
-  --act-back: linear-gradient(135deg, #ff8a8a, #ffc86b 30%, #7fd98a 55%, #6db3ff 80%, #b98aff); --act-back-ink: #ffffff; --act-display: var(--font); }
-.act[data-theme="summer"] { --act-bg: linear-gradient(180deg, #cfeefb, #f6efd3 75%, #f3e3b8); --act-ink: #23404e; --act-muted: #6e8a96;
-  --act-card: #ffffff; --act-card-ink: #23404e; --act-line: #d9e8ee; --act-accent: #ff7043; --act-accent-ink: #fff; --act-good: #1f9d63; --act-bad: #d64545;
-  --act-back: linear-gradient(135deg, #ffd66b, #ff9e5c); --act-back-ink: #b06818; --act-display: var(--font); }
-.act[data-theme="christmas"] { --act-bg: linear-gradient(180deg, #0f2a1a, #16371f); --act-ink: #f4efe2; --act-muted: #9ab5a0;
-  --act-card: #fffaf0; --act-card-ink: #35261f; --act-line: #2c5238; --act-accent: #d6453d; --act-accent-ink: #fff; --act-good: #47c078; --act-bad: #ff7b6d;
-  --act-back: linear-gradient(135deg, #b23a33, #8e2b26); --act-back-ink: #e8b93d; --act-display: Georgia, 'Times New Roman', serif; }
+  --act-back: linear-gradient(135deg, #ece3d0, #dcd0b6); --act-back-ink: #a89b7f;
+  --act-display: 'Fraunces', Georgia, 'Times New Roman', serif; }
+.act[data-theme="classic"] { box-shadow: inset 0 0 0 1px #e6ddc9, inset 0 0 0 7px var(--act-bg), inset 0 0 0 8px #d8cdb2; }
+
+/* Lavagna — verde ardesia, aloni di gesso, cornice di legno, scrittura a mano (sobria) */
+.act[data-theme="blackboard"] { --act-ink: #f2f5f0; --act-muted: #b7c4b8; --act-card: #3a4f43; --act-card-ink: #f2f5f0;
+  --act-line: rgba(255,255,255,.35); --act-accent: #f5d76e; --act-accent-ink: #33301c; --act-good: #8fd694; --act-bad: #ff9d8a;
+  --act-back: linear-gradient(135deg, #3a4f43, #2e4038); --act-back-ink: #cfdacd;
+  --act-display: 'Caveat', 'Segoe Script', cursive;
+  border: 10px solid #7d5433; border-radius: 8px;
+  background:
+    radial-gradient(ellipse 340px 70px at 18% 88%, rgba(255,255,255,.05), transparent 60%),
+    radial-gradient(ellipse 280px 60px at 74% 24%, rgba(255,255,255,.045), transparent 60%),
+    radial-gradient(ellipse 200px 50px at 45% 55%, rgba(255,255,255,.035), transparent 60%),
+    linear-gradient(160deg, #33473d, #2b3d34);
+  box-shadow: inset 0 0 46px rgba(0,0,0,.4); }
+.act[data-theme="blackboard"] .act-title, .act[data-theme="blackboard"] .quiz-q { letter-spacing: .4px; font-size: clamp(26px, 3.8vw, 42px); }
+.act[data-theme="blackboard"] .mem-back, .act[data-theme="blackboard"] .mem-front, .act[data-theme="blackboard"] .quiz-opt, .act[data-theme="blackboard"] .ana-tile { border: 2px dashed rgba(255,255,255,.45); box-shadow: none; }
+.act[data-theme="blackboard"] .act-stat { background: transparent; color: var(--act-ink); border: 1.5px dashed rgba(255,255,255,.4); }
+
+/* Nero puro — nero vero, minimale, accento neon */
+.act[data-theme="night"] { --act-bg: #000; --act-ink: #f2f2f6; --act-muted: #8f8f9c; --act-card: #141419; --act-card-ink: #f2f2f6;
+  --act-line: #2a2a33; --act-accent: #38e07d; --act-accent-ink: #06130b; --act-good: #38e07d; --act-bad: #ff5a6a;
+  --act-back: linear-gradient(135deg, #17171d, #0c0c10); --act-back-ink: #3c3c48;
+  --act-display: 'Space Grotesk', var(--font); }
+.act[data-theme="night"] .act-btn.primary { box-shadow: 0 0 14px rgba(56,224,125,.35); }
+
+/* Spazio — notte stellata (stelle fisse a tre profondità), viola cosmico, stelle che brillano */
+.act[data-theme="space"] { --act-ink: #eceafc; --act-muted: #9a93c9; --act-card: #191a3f; --act-card-ink: #eceafc;
+  --act-line: #35357a; --act-accent: #8f7bff; --act-accent-ink: #fff; --act-good: #35e0a1; --act-bad: #ff6a8a;
+  --act-back: linear-gradient(135deg, #241a55, #14103a); --act-back-ink: #6a5fc9;
+  --act-display: 'Space Grotesk', var(--font);
+  background:
+    radial-gradient(1.6px 1.6px at 22% 34%, rgba(255,255,255,.95), transparent 55%),
+    radial-gradient(1.4px 1.4px at 68% 14%, rgba(255,255,255,.9), transparent 55%),
+    radial-gradient(1.8px 1.8px at 84% 62%, rgba(255,255,255,.85), transparent 55%),
+    radial-gradient(1.2px 1.2px at 38% 76%, rgba(255,255,255,.8), transparent 55%),
+    radial-gradient(1.3px 1.3px at 10% 60%, rgba(255,255,255,.75), transparent 55%),
+    radial-gradient(1.5px 1.5px at 55% 48%, rgba(255,255,255,.85), transparent 55%),
+    radial-gradient(circle 260px at 82% -8%, rgba(143,123,255,.28), transparent 70%),
+    linear-gradient(165deg, #0b1030, #1c1148 55%, #2a1560); }
+.act[data-theme="space"] .mem-front, .act[data-theme="space"] .quiz-opt { box-shadow: 0 0 0 1px rgba(143,123,255,.25), 0 2px 8px rgba(0,0,0,.4); }
+
+/* Oceano — profondità blu, raggio di luce, sabbia sul fondo, bolle che salgono */
+.act[data-theme="ocean"] { --act-ink: #eef8fd; --act-muted: #9cc6d8; --act-card: #ffffff; --act-card-ink: #14424f;
+  --act-line: #cfe6ee; --act-accent: #ff8c42; --act-accent-ink: #fff; --act-good: #1f9d7a; --act-bad: #e05252;
+  --act-back: linear-gradient(160deg, #1493c9, #0b5c8f); --act-back-ink: #bfe8f7;
+  --act-display: 'Nunito', var(--font);
+  background:
+    linear-gradient(115deg, transparent 42%, rgba(255,255,255,.10) 50%, transparent 58%),
+    radial-gradient(ellipse 130% 26% at 50% 106%, rgba(232,215,166,.5), transparent 62%),
+    linear-gradient(180deg, #0c86c8, #0a5a92 55%, #083d62); }
+
+/* Primavera — pastelli, colline sul fondo, petali che cadono */
+.act[data-theme="spring"] { --act-ink: #37474a; --act-muted: #85978f; --act-card: #ffffff; --act-card-ink: #37474a;
+  --act-line: #e2eede; --act-accent: #e0559a; --act-accent-ink: #fff; --act-good: #3aa858; --act-bad: #d64545;
+  --act-back: linear-gradient(135deg, #ffdff0, #d9f2d4); --act-back-ink: #c98cae;
+  --act-display: 'Nunito', var(--font);
+  background:
+    radial-gradient(ellipse 90% 26% at 18% 106%, rgba(140,200,120,.35), transparent 65%),
+    radial-gradient(ellipse 90% 22% at 86% 105%, rgba(120,190,110,.28), transparent 65%),
+    linear-gradient(170deg, #f0fbe9, #fdf3f7 60%, #ffe9f2); }
+
+/* Estate — cielo, sole, mare con le onde e la sabbia */
+.act[data-theme="summer"] { --act-ink: #23404e; --act-muted: #6e8a96; --act-card: #ffffff; --act-card-ink: #23404e;
+  --act-line: #d9e8ee; --act-accent: #ff7043; --act-accent-ink: #fff; --act-good: #1f9d63; --act-bad: #d64545;
+  --act-back: linear-gradient(135deg, #ffd66b, #ff9e5c); --act-back-ink: #b06818;
+  --act-display: 'Nunito', var(--font);
+  background:
+    radial-gradient(circle 110px at 84% 10%, rgba(255,214,80,.95), rgba(255,214,80,0) 70%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 26'><path d='M0 16 Q15 5 30 16 T60 16 T90 16 T120 16 V26 H0 Z' fill='%23ffffff' fill-opacity='.45'/></svg>") repeat-x left bottom 14% / 120px 24px,
+    linear-gradient(180deg, #bfe9fb 0%, #cfeefb 52%, #59b8dd 62%, #7fcbe6 74%, #f6efd3 76%, #f3e3b8 100%); }
+
+/* Arcobaleno — pastelli in festa, dorso delle carte a spettro */
+.act[data-theme="rainbow"] { --act-ink: #33304a; --act-muted: #8d88a8; --act-card: #ffffff; --act-card-ink: #33304a;
+  --act-line: #e8e2f5; --act-accent: #7c4dff; --act-accent-ink: #fff; --act-good: #21a05f; --act-bad: #e04f5f;
+  --act-back: linear-gradient(135deg, #ff8a8a, #ffc86b 30%, #7fd98a 55%, #6db3ff 80%, #b98aff); --act-back-ink: #ffffff;
+  --act-display: 'Nunito', var(--font);
+  background:
+    radial-gradient(ellipse 70% 40% at 50% -18%, rgba(255,255,255,.75), transparent 70%),
+    linear-gradient(160deg, #ffe9ec, #fff6dc 30%, #e7fbe9 55%, #e3f1ff 80%, #f3e8ff); }
+.act[data-theme="rainbow"] .act-bar .fill { background: linear-gradient(90deg, #ff8a8a, #ffc86b, #7fd98a, #6db3ff, #b98aff); }
+
+/* Halloween — notte viola, luna, zucca: festoso ma leggibile */
+.act[data-theme="halloween"] { --act-ink: #f5ead9; --act-muted: #a893c2; --act-card: #241533; --act-card-ink: #f5ead9;
+  --act-line: #45305e; --act-accent: #ff8c1a; --act-accent-ink: #241205; --act-good: #7ed957; --act-bad: #ff5a6a;
+  --act-back: linear-gradient(135deg, #3a2054, #241233); --act-back-ink: #ff8c1a;
+  --act-display: 'Fraunces', Georgia, serif;
+  background:
+    radial-gradient(circle 74px at 87% 24%, rgba(255,236,190,.9), rgba(255,236,190,.12) 60%, transparent 72%),
+    radial-gradient(ellipse 130% 24% at 50% 108%, rgba(0,0,0,.5), transparent 60%),
+    linear-gradient(170deg, #140a1e, #251238 60%, #31173f); }
+
+/* Natale — abete, rosso e oro, neve che cade e neve a terra */
+.act[data-theme="christmas"] { --act-ink: #f4efe2; --act-muted: #9ab5a0; --act-card: #fffaf0; --act-card-ink: #35261f;
+  --act-line: #2c5238; --act-accent: #d6453d; --act-accent-ink: #fff; --act-good: #47c078; --act-bad: #ff7b6d;
+  --act-back: linear-gradient(135deg, #b23a33, #8e2b26); --act-back-ink: #f0d488;
+  --act-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  background:
+    radial-gradient(ellipse 140% 22% at 50% 107%, rgba(255,255,255,.8), transparent 62%),
+    radial-gradient(ellipse 60% 30% at 50% -12%, rgba(230,190,80,.16), transparent 70%),
+    linear-gradient(180deg, #0f2a1a, #16371f); }
+.act[data-theme="christmas"] .mem-back { box-shadow: inset 0 0 0 2px rgba(240,212,136,.5), 0 2px 6px rgba(0,0,0,.25); }
 
 .act-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .act-title { font-family: var(--act-display); font-size: clamp(20px, 2.6vw, 30px); font-weight: 700; letter-spacing: .2px; }
@@ -491,7 +588,8 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .act-type-grid .em { font-size: 30px; }
 .act-type-grid b { font-size: 16px; }
 .act-type-grid .hint { margin: 0; }
-.theme-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; background: #fff; font-weight: 600; }
+.theme-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px 5px 6px; cursor: pointer; background: #fff; font-weight: 600; font-size: 14px; }
+.theme-chip .sw { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); flex: 0 0 auto; }
 .theme-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(31, 111, 235, .25); }
 .ap-stage .act { min-height: min(76vh, 720px); }
 .at-stage { width: min(92vw, 900px); }

@@ -5,13 +5,20 @@
 })(typeof self !== 'undefined' ? self : this, function (L) {
   'use strict';
 
-  /** Temi visivi condivisi da tutte le attività: palette + decorazioni. Il CSS usa .act[data-theme=…]. */
+  /** Temi visivi condivisi da tutte le attività (dal più sobrio al più festoso): palette + decorazioni + movimento.
+   *  Il CSS li disegna con .act[data-theme=…]; motion: float (fluttuano), fall (cadono: neve, petali), rise (salgono: bolle), twinkle (brillano: stelle).
+   *  sw = anteprima per il chip del selettore. */
   const THEMES = [
-    { id: 'classic', name: 'Classico', emoji: '📖', deco: [] },                       // carta avorio, sobrio: per adulti
-    { id: 'night', name: 'Nero puro', emoji: '⬛', deco: [] },                         // nero, accento neon: sobrio scuro
-    { id: 'rainbow', name: 'Arcobaleno', emoji: '🌈', deco: ['🌈', '✨', '🎈', '⭐'] },
-    { id: 'summer', name: 'Estate', emoji: '🌞', deco: ['🌞', '🌊', '🍉', '🐚', '🌴'] },
-    { id: 'christmas', name: 'Natale', emoji: '🎄', deco: ['❄', '🎄', '⭐', '❄', '🎁'] }
+    { id: 'classic', name: 'Classico', emoji: '📖', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#f6f1e6,#dcd0b6)' },
+    { id: 'blackboard', name: 'Lavagna', emoji: '✏️', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#33473d,#2b3d34)' },
+    { id: 'night', name: 'Nero puro', emoji: '✦', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#000,#17171d)' },
+    { id: 'space', name: 'Spazio', emoji: '🪐', deco: ['✦', '✧', '⭐', '🪐', '✦', '✧', '💫'], motion: 'twinkle', sw: 'linear-gradient(135deg,#0b1030,#3a1a6e)' },
+    { id: 'ocean', name: 'Oceano', emoji: '🐚', deco: ['🫧', '🐠', '🫧', '🐟', '🫧', '🐙', '🫧'], motion: 'rise', sw: 'linear-gradient(180deg,#0c86c8,#0a3d62)' },
+    { id: 'spring', name: 'Primavera', emoji: '🌸', deco: ['🌸', '🌷', '🦋', '🌼', '🌸', '🍃'], motion: 'fall', sw: 'linear-gradient(135deg,#eafbe7,#ffe3ef)' },
+    { id: 'summer', name: 'Estate', emoji: '🌞', deco: ['🌞', '🌊', '🍉', '🐚', '🌴'], motion: 'float', sw: 'linear-gradient(180deg,#bfe9fb,#f3e3b8)' },
+    { id: 'rainbow', name: 'Arcobaleno', emoji: '🌈', deco: ['🌈', '✨', '🎈', '⭐'], motion: 'float', sw: 'linear-gradient(90deg,#ff8a8a,#ffc86b,#7fd98a,#6db3ff,#b98aff)' },
+    { id: 'halloween', name: 'Halloween', emoji: '🎃', deco: ['🦇', '👻', '🎃', '🕸', '🦇', '✨'], motion: 'float', sw: 'linear-gradient(135deg,#140a1e,#ff8c1a)' },
+    { id: 'christmas', name: 'Natale', emoji: '🎄', deco: ['❄', '❅', '❄', '⭐', '❄', '🎁'], motion: 'fall', sw: 'linear-gradient(135deg,#14301f,#b23a33)' }
   ];
   const THEME_IDS = THEMES.map(function (t) { return t.id; });
 
@@ -82,6 +89,44 @@
     return Math.floor(a / per) % n;
   }
 
+  /** Il contenuto come coppie {a,b,image}: base comune per trasformare un'attività in un'altra. */
+  function pairsOf(act) {
+    if (!act || !act.data) return [];
+    if (act.type === 'memory') return (act.data.pairs || []).filter(function (p) { return p.a; }).map(function (p) { return { a: p.a, b: p.b || '', image: p.image || '' }; });
+    if (act.type === 'anagram') return (act.data.words || []).filter(function (w) { return w.word; }).map(function (w) { return { a: w.word, b: w.hint || '', image: w.image || '' }; });
+    if (act.type === 'quiz') return (act.data.questions || []).filter(function (q) { return q.q && Array.isArray(q.options) && q.options[q.correct]; }).map(function (q) { return { a: q.q, b: q.options[q.correct], image: '' }; });
+    return [];   // la ruota ha solo voci singole: non basta per ricostruire coppie
+  }
+  /** Trasforma il CONTENUTO di un'attività in un altro tipo (un click, stesso materiale): {type, data} o null se non compatibile.
+   *  parola+traduzione ⇄ Memory/Anagramma; coppie → Quiz (la giusta = la traduzione, i distrattori = le altre); tutto → Ruota (le voci). */
+  function convert(act, to, rand) {
+    if (!act || !TYPES[to] || to === act.type) return null;
+    const r = rand || Math.random;
+    const pairs = pairsOf(act);
+    let data = null;
+    if (to === 'memory') data = { pairs: pairs.filter(function (p) { return p.b || p.image; }).slice(0, 12) };
+    if (to === 'anagram') data = { words: pairs.filter(function (p) { return Array.from(String(p.a).trim()).length >= 3; }).map(function (p) { return { word: p.a, hint: p.b, image: p.image }; }) };
+    if (to === 'wheel') {
+      const items = act.type === 'quiz' ? (act.data.questions || []).filter(function (q) { return q.q; }).map(function (q) { return { text: q.q }; }) : pairs.map(function (p) { return { text: p.a }; });
+      data = { items: items };
+    }
+    if (to === 'quiz') {
+      const withB = pairs.filter(function (p) { return p.b; });
+      data = { questions: withB.map(function (p, i) {
+        const others = shuffle(withB.filter(function (x, j) { return j !== i && x.b !== p.b; }).map(function (x) { return x.b; }), r).slice(0, 3);
+        const options = shuffle([p.b].concat(others), r);
+        return { q: p.a, options: options, correct: options.indexOf(p.b) };
+      }).filter(function (q) { return q.options.length >= 2; }) };
+    }
+    if (!data) return null;
+    const out = { type: to, data: data };
+    return validate(out).length ? null : out;
+  }
+  /** In quali tipi si può trasformare questa attività (con il contenuto che ha adesso). */
+  function convertTargets(act) {
+    return Object.keys(TYPES).filter(function (to) { return convert(act, to, rng(5)) !== null; });
+  }
+
   /** Un'attività è giocabile? Ritorna la lista dei problemi (vuota = ok). */
   function validate(act) {
     const errs = [];
@@ -128,15 +173,17 @@
     const rootEl = h('div', { class: 'act', 'data-theme': themeOf(act), 'data-type': act.type });
     const th = THEMES.find(function (t) { return t.id === themeOf(act); });
     if (th && th.deco.length && !(opts && opts.fx === false)) {
-      const deco = h('div', { class: 'act-deco', 'aria-hidden': 'true' });
+      const motion = th.motion || 'float';
+      const dur = { float: [7, 8], fall: [9, 9], rise: [8, 8], twinkle: [1.8, 2.2] }[motion];
+      const deco = h('div', { class: 'act-deco m-' + motion, 'aria-hidden': 'true' });
       const r = rng(act.id ? String(act.id).length * 97 + 13 : 41);
       for (let i = 0; i < 14; i++) {
         const e = h('span', { text: th.deco[i % th.deco.length] });
         e.style.left = (r() * 96) + '%';
         e.style.top = (r() * 92) + '%';
         e.style.fontSize = (16 + r() * 26) + 'px';
-        e.style.animationDelay = (r() * 6).toFixed(2) + 's';
-        e.style.animationDuration = (7 + r() * 8).toFixed(2) + 's';
+        e.style.animationDelay = '-' + (r() * 12).toFixed(2) + 's';   // negativo: il movimento è già in corso all'apertura
+        e.style.animationDuration = (dur[0] + r() * dur[1]).toFixed(2) + 's';
         deco.appendChild(e);
       }
       rootEl.appendChild(deco);
@@ -473,5 +520,5 @@
     if (act.type === 'wheel') return renderWheel(container, act, opts || {});
   }
 
-  return { THEMES: THEMES, TYPES: TYPES, render: render, validate: validate, memoryDeck: memoryDeck, memoryCols: memoryCols, quizOrder: quizOrder, quizPoints: quizPoints, anagramLetters: anagramLetters, wheelIndexAt: wheelIndexAt, rng: rng, shuffle: shuffle };
+  return { THEMES: THEMES, TYPES: TYPES, render: render, validate: validate, convert: convert, convertTargets: convertTargets, pairsOf: pairsOf, memoryDeck: memoryDeck, memoryCols: memoryCols, quizOrder: quizOrder, quizPoints: quizPoints, anagramLetters: anagramLetters, wheelIndexAt: wheelIndexAt, rng: rng, shuffle: shuffle };
 });
