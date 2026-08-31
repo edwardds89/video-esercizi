@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260830-39">
+<link rel="stylesheet" href="styles.css?v=20260830-40">
 </head>
 <body>
 <header class="topbar">
@@ -245,7 +245,7 @@
       <button id="a-delete" class="danger">Elimina</button>
     </div>
     <div class="card">
-      <div class="row"><h3 style="margin:0">Tema</h3><span id="a-type-hint" class="hint"></span></div>
+      <div class="row"><h3 style="margin:0">Template</h3><span id="a-type-hint" class="hint"></span></div>
       <div id="a-themes" class="chips" style="margin-top:8px"></div>
     </div>
     <div class="card">
@@ -264,10 +264,11 @@
 </main>
 
 <dialog id="dlg-act-new">
-  <h2>Nuova attività</h2>
-  <p class="hint">Un gioco pronto da condividere con un link o da inserire in una lezione. Scegli il tipo:</p>
+  <h2 id="an-title">Nuova attività</h2>
+  <p id="an-hint" class="hint">Un gioco pronto da condividere con un link o da inserire in una lezione. Scegli il tipo:</p>
   <div id="an-types" class="act-type-grid"></div>
-  <div class="row" style="margin-top:12px"><button id="an-close">Annulla</button></div>
+  <div id="an-themes" class="an-theme-grid" hidden></div>
+  <div class="row" style="margin-top:12px"><button id="an-back" hidden>◀ Cambia tipo</button><button id="an-close">Annulla</button></div>
 </dialog>
 
 <dialog id="dlg-act-try">
@@ -376,14 +377,14 @@
 <div id="overlay"><div><div class="loader-box"><img class="loader" src="https://cdn.dribbble.com/userupload/22076800/file/original-8e7ce77dec0edaf0105e8287038f6e60.gif" alt="" onerror="this.classList.add('off')"><div class="spinner"></div></div><div id="overlay-text">loading</div></div></div>
 <div id="toast"></div>
 
-<script src="lang.js?v=20260830-39"></script>
-<script src="exercises.js?v=20260830-39"></script>
-<script src="generator.js?v=20260830-39"></script>
-<script src="activities.js?v=20260830-39"></script>
-<script src="ai.js?v=20260830-39"></script>
-<script src="demo-data.js?v=20260830-39"></script>
-<script src="bookmarklet.js?v=20260830-39"></script>
-<script src="sync.js?v=20260830-39"></script>
-<script src="app.js?v=20260830-39"></script>
+<script src="lang.js?v=20260830-40"></script>
+<script src="exercises.js?v=20260830-40"></script>
+<script src="generator.js?v=20260830-40"></script>
+<script src="activities.js?v=20260830-40"></script>
+<script src="ai.js?v=20260830-40"></script>
+<script src="demo-data.js?v=20260830-40"></script>
+<script src="bookmarklet.js?v=20260830-40"></script>
+<script src="sync.js?v=20260830-40"></script>
+<script src="app.js?v=20260830-40"></script>
 </body>
 </html>

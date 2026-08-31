@@ -1210,14 +1210,43 @@
     if (extra) for (const k in extra) o[k] = extra[k];
     return o;
   }
-  /** Chips dei 10 template visivi, con l'anteprima dei colori. */
+  /** Anteprima di un template: un Quiz VERO reso in scala dentro un riquadro (pointer-events: none), animazioni vive. */
+  function themePreviewNode(themeId, scale) {
+    const th = ACT.THEMES.find(function (t) { return t.id === themeId; }) || ACT.THEMES[0];
+    const wrap = el('div', { class: 'tp-wrap' });
+    wrap.style.width = Math.round(900 * scale) + 'px'; wrap.style.height = Math.round(620 * scale) + 'px';
+    const inner = el('div', { class: 'tp-scale' }); inner.style.transform = 'scale(' + scale + ')';
+    wrap.appendChild(inner);
+    ACT.render(inner, { id: 'tp-' + themeId, type: 'quiz', theme: themeId, title: th.emoji + ' ' + th.name, data: { questions: [{ q: 'Come si dice "thank you"?', options: ['Grazie', 'Prego', 'Scusa', 'Ciao'], correct: 0 }] } }, { fx: true });
+    return wrap;
+  }
+  /** Anteprima grande al passaggio del mouse su un chip del selettore (riquadro fisso, uno solo). */
+  let themePrev = null;
+  function showThemePreview(anchor, themeId) {
+    if (!themePrev) { themePrev = el('div', { class: 'theme-preview' }); document.body.appendChild(themePrev); }
+    if (themePrev.getAttribute('data-tid') !== themeId) { themePrev.innerHTML = ''; themePrev.appendChild(themePreviewNode(themeId, 0.44)); themePrev.setAttribute('data-tid', themeId); }
+    themePrev.classList.add('show');
+    // centrata sotto il chip se c'è spazio, altrimenti sopra; sempre dentro la finestra
+    const r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, W = 396 + 10, H = 273 + 10;
+    const left = Math.max(8, Math.min(r.left + r.width / 2 - W / 2, vw - W - 8));
+    let top = (r.bottom + 10 + H <= vh - 8) ? r.bottom + 10 : r.top - H - 10;
+    if (top < 8) top = 8;
+    themePrev.style.left = left + 'px'; themePrev.style.top = top + 'px';
+  }
+  function hideThemePreview() { if (themePrev) themePrev.classList.remove('show'); }
+  /** Chips dei template visivi, con l'anteprima dei colori e l'anteprima grande al passaggio del mouse. */
   function themeChips(current, onPick) {
+    hideThemePreview();
     const box = el('div', { class: 'chips', style: 'gap:8px' });
     ACT.THEMES.forEach(function (t) {
-      const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), title: t.name },
+      const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), title: t.name + ' — passa il mouse per l\'anteprima' },
         el('span', { class: 'sw', style: 'background:' + t.sw }),
         t.emoji + ' ' + t.name);
-      c.addEventListener('click', function () { onPick(t.id); });
+      c.addEventListener('click', function () { hideThemePreview(); onPick(t.id); });
+      c.addEventListener('mouseenter', function () { showThemePreview(c, t.id); });
+      c.addEventListener('mouseleave', hideThemePreview);
+      c.addEventListener('focus', function () { showThemePreview(c, t.id); });
+      c.addEventListener('blur', hideThemePreview);
       box.appendChild(c);
     });
     return box;
@@ -1367,21 +1396,45 @@
     dlg.showModal();
   }
   $('#at-close').addEventListener('click', function () { $('#dlg-act-try').close(); $('#at-stage').innerHTML = ''; });
-  /** Dialog "Nuova attività": onPick(type) decide cosa farne (portfolio o sezione della lezione). */
+  /** Dialog "Nuova attività" in due passi: il tipo di gioco, poi il template scelto dalla griglia delle anteprime vive.
+   *  onPick(type, theme) decide cosa farne (portfolio o sezione della lezione). */
   function openActNew(onPick) {
-    const box = $('#an-types'); box.innerHTML = '';
+    const dlg = $('#dlg-act-new'), types = $('#an-types'), themes = $('#an-themes');
+    const step1 = function () {
+      $('#an-title').textContent = 'Nuova attività';
+      $('#an-hint').textContent = 'Un gioco pronto da condividere con un link o da inserire in una lezione. Scegli il tipo:';
+      types.hidden = false; themes.hidden = true; $('#an-back').hidden = true; themes.innerHTML = '';
+    };
+    const step2 = function (type) {
+      const t = ACT.TYPES[type];
+      $('#an-title').textContent = t.emoji + ' ' + t.label + ' — scegli il template';
+      $('#an-hint').textContent = 'Il template è l\'aspetto del gioco, indipendente dal contenuto: si cambia in ogni momento dall\'editor.';
+      types.hidden = true; themes.hidden = false; $('#an-back').hidden = false;
+      themes.innerHTML = '';
+      ACT.THEMES.forEach(function (th) {
+        const item = el('button', { type: 'button', class: 'an-theme', 'data-tid': th.id, title: th.name });
+        item.appendChild(themePreviewNode(th.id, 0.27));
+        item.appendChild(el('div', { class: 'lbl', text: th.emoji + ' ' + th.name }));
+        item.addEventListener('click', function () { dlg.close(); themes.innerHTML = ''; onPick(type, th.id); });
+        themes.appendChild(item);
+      });
+      themes.scrollTop = 0;
+    };
+    types.innerHTML = '';
     Object.keys(ACT.TYPES).forEach(function (type) {
       const t = ACT.TYPES[type];
       const b = el('button', { type: 'button' },
         el('span', { class: 'em', text: t.emoji }),
         el('b', { text: t.label }),
         el('span', { class: 'hint', text: t.hint }));
-      b.addEventListener('click', function () { $('#dlg-act-new').close(); onPick(type); });
-      box.appendChild(b);
+      b.addEventListener('click', function () { step2(type); });
+      types.appendChild(b);
     });
-    $('#dlg-act-new').showModal();
+    $('#an-back').onclick = step1;
+    step1();
+    dlg.showModal();
   }
-  $('#an-close').addEventListener('click', function () { $('#dlg-act-new').close(); });
+  $('#an-close').addEventListener('click', function () { $('#dlg-act-new').close(); $('#an-themes').innerHTML = ''; });
   /** Card di una sezione-attività nell'editor della lezione. */
   function renderActCard(ls, act) {
     const t = ACT.TYPES[act.type] || { emoji: '🎲', label: 'Attività', hint: '' };
@@ -1411,10 +1464,10 @@
   }
   $('#btn-flow-act').addEventListener('click', function () {
     const ls = current(); if (!ls) return;
-    openActNew(function (type) {
+    openActNew(function (type, theme) {
       lessonFlow(ls);
       const id = 'a' + (Math.max.apply(null, [0].concat(ls.acts.map(function (a) { return parseInt(String(a.id).replace(/\D/g, ''), 10) || 0; }))) + 1);
-      ls.acts.push({ id: id, type: type, theme: 'classic', data: {} });
+      ls.acts.push({ id: id, type: type, theme: theme || 'classic', data: {} });
       const vi = ls.flow.findIndex(function (s) { return s.kind === 'video'; });
       ls.flow.splice(vi + 1, 0, { kind: 'act', id: id });   // di default subito dopo il video: si sposta con ◀ ▶
       touch(ls); renderFlow(ls);
@@ -1424,9 +1477,8 @@
   });
 
   // ---------- attività standalone (portfolio) ----------
-  function newActivity(type) {
-    const t = ACT.TYPES[type];
-    const ls = { id: uid(), title: '', activity: { id: 'a1', type: type, theme: 'classic', data: {} }, updatedAt: new Date().toISOString() };
+  function newActivity(type, theme) {
+    const ls = { id: uid(), title: '', activity: { id: 'a1', type: type, theme: theme || 'classic', data: {} }, updatedAt: new Date().toISOString() };
     S.lessons[ls.id] = ls; saveLessons();
     openActEditor(ls.id);
   }

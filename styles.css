@@ -500,11 +500,13 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
   --act-back: linear-gradient(135deg, #2e7040, #1d5028); --act-back-ink: #bfe3a8;
   --act-display: 'Nunito', var(--font);
   background:
-    radial-gradient(ellipse 46% 34% at -6% -8%, rgba(60,140,70,.55), transparent 70%),
-    radial-gradient(ellipse 42% 30% at 106% -6%, rgba(45,120,60,.5), transparent 70%),
-    radial-gradient(ellipse 55% 30% at 108% 108%, rgba(40,110,55,.6), transparent 70%),
-    radial-gradient(ellipse 50% 26% at -8% 106%, rgba(55,130,65,.55), transparent 70%),
-    linear-gradient(165deg, #17472a, #123b22 60%, #0e3019); }
+    radial-gradient(ellipse 30% 22% at 4% 2%, rgba(120,200,110,.55), transparent 70%),
+    radial-gradient(ellipse 26% 18% at 96% 4%, rgba(100,190,95,.5), transparent 70%),
+    radial-gradient(ellipse 34% 20% at 102% 100%, rgba(110,195,100,.55), transparent 70%),
+    radial-gradient(ellipse 30% 18% at -2% 98%, rgba(120,200,110,.5), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 50% 120%, rgba(20,70,35,.9), transparent 70%),
+    linear-gradient(165deg, #1b5a32, #14472a 60%, #0f3a20); }
+.act[data-theme="jungle"] .quiz-opt, .act[data-theme="jungle"] .mem-front { box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 
 /* Primavera — pastelli, colline sul fondo, petali che cadono */
 .act[data-theme="spring"] { --act-ink: #37474a; --act-muted: #85978f; --act-card: #ffffff; --act-card-ink: #37474a;
@@ -687,6 +689,21 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .act-type-grid .em { font-size: 30px; }
 .act-type-grid b { font-size: 16px; }
 .act-type-grid .hint { margin: 0; }
+/* anteprime dei template: un Quiz vero reso in scala (tp-wrap ritaglia, tp-scale è 900×620 ridotto) */
+.tp-wrap { position: relative; overflow: hidden; border-radius: 10px; pointer-events: none; background: #eceff3; }
+.tp-scale { position: absolute; left: 0; top: 0; width: 900px; height: 620px; transform-origin: 0 0; }
+.tp-scale > .act { height: 620px; min-height: 620px; border-radius: 0; }
+.theme-preview { position: fixed; z-index: 70; display: none; padding: 5px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 38px rgba(0,0,0,.24); pointer-events: none; }
+.theme-preview.show { display: block; animation: tp-in .16s ease; }
+@keyframes tp-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+#dlg-act-new { width: min(94vw, 880px); max-width: 880px; }
+#an-types[hidden], #an-themes[hidden], #an-back[hidden] { display: none; }
+.an-theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 62vh; overflow: auto; padding: 2px 6px 6px 2px; margin-top: 10px; }
+@media (max-width: 720px) { .an-theme-grid { grid-template-columns: 1fr 1fr; } }
+.an-theme { border: 2px solid transparent; border-radius: 12px; padding: 4px 4px 6px; cursor: pointer; background: #fff; text-align: left; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.an-theme:hover, .an-theme:focus-visible { border-color: var(--accent); background: #fff; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+.an-theme .tp-wrap { margin: 0 auto; }
+.an-theme .lbl { font-weight: 600; font-size: 14px; padding: 0 4px; text-align: center; }
 .theme-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px 5px 6px; cursor: pointer; background: #fff; font-weight: 600; font-size: 14px; }
 .theme-chip .sw { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); flex: 0 0 auto; }
 .theme-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(31, 111, 235, .25); }
