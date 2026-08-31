@@ -324,25 +324,31 @@
    * ciascuna con 2-3 espressioni utili per rispondere. params: { chunks, lang, level, n, focus, apiKey, model, fetchImpl }
    * → { questions: [{ text, help }] }
    */
+  /** Domande "Parliamone". mode 'warmup' = PRIMA del video (3 domande per far emergere il tema, niente spoiler);
+   *  default = DOPO il video: prima domande di COMPRENSIONE specifiche di questo video ("kind":"check"), poi opinioni ancorate ai suoi punti ("kind":"talk"). */
   async function suggestDiscussion(params) {
     const lang = params.lang || 'it';
     const level = params.level || 'B1';
-    const n = params.n || 6;
     const warmup = params.mode === 'warmup';
+    const n = params.n || (warmup ? 3 : 6);
+    const nCheck = Math.ceil(n / 2);
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
-    const system = 'You help a language teacher prepare a speaking activity ' + (warmup ? 'BEFORE' : 'after') + ' a video. Output ONLY a JSON object, no prose, no markdown fences.';
+    const system = 'You help a language teacher prepare a speaking activity ' + (warmup ? 'BEFORE' : 'AFTER') + ' a video. Output ONLY a JSON object, no prose, no markdown fences.';
     const task = warmup
-      ? 'Write ' + n + ' warm-up questions in ' + lang + ' for BEFORE the video: they activate prior knowledge and spark curiosity about the TOPIC. The students have NOT seen the video yet: never mention what the video says, never quote its facts or numbers, no spoilers. Each question must be open (never answerable with yes/no or one word), personal and concrete ("Ti è mai capitato…?", "Cosa sai di…?", "Secondo te…?"). Order them from easy and personal to more general. Language and grammar suited to a ' + level + ' student; short, one sentence each.'
-      : 'Write ' + n + ' conversation questions in ' + lang + ' for AFTER the video. They are for SPEAKING practice: each question must be open (never answerable with yes/no or one word), personal or opinion-based ("E tu…?", "Secondo te…?", "Cosa faresti…?"), about the TOPIC of the video, not about its details or numbers. Order them from easy and concrete to more abstract. Language and grammar suited to a ' + level + ' student; short, one sentence each.';
+      ? 'Write exactly ' + n + ' warm-up questions in ' + lang + ' for BEFORE the video: they elicit the TOPIC — activate what students already know and spark curiosity. The students have NOT seen the video yet: never mention what the video says, never quote its facts, examples or numbers, no spoilers. Each question must be open (never answerable with yes/no or one word), personal and concrete ("Ti è mai capitato…?", "Cosa sai di…?", "Secondo te perché…?"). Order them from easy and personal to more general. Language and grammar suited to a ' + level + ' student; short, one sentence each. Set "kind":"warmup" on each.'
+      : 'Write ' + n + ' questions in ' + lang + ' for AFTER the video, all SPECIFIC to this video (never generic questions that could be asked without having watched it). First ' + nCheck + ' COMPREHENSION questions ("kind":"check"): they verify that students understood the main ideas and key points of THIS video — what it says, why, how, with which examples, according to the video; open questions answerable by retelling the video (never yes/no, no trivial numbers or dates). Then ' + (n - nCheck) + ' DISCUSSION questions ("kind":"talk") for SPEAKING practice: personal reactions and opinions ANCHORED to a specific point the video made (e.g. "Il video dice che…: sei d\'accordo?", "Nel tuo paese succede la stessa cosa?"). Language and grammar suited to a ' + level + ' student; short, one sentence each.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + level,
       task +
-      ' For each question give "help": 2 or 3 short chunks or expressions (in ' + lang + ', separated by " · ") the student can use to answer, e.g. "Secondo me… · Non sono d\'accordo perché… · Mi è capitato di…".' +
+      ' For each question give "help": 2 or 3 short chunks or expressions (in ' + lang + ', separated by " · ") the student can use to answer, e.g. "Secondo me… · Non sono d\'accordo perché… · Il video dice che…".' +
       (params.focus ? ' Teacher\'s note: ' + params.focus : ''),
-      'SCHEMA: {"questions":[{"text":"...","help":"... · ... · ..."}]}', '',
+      'SCHEMA: {"questions":[{"kind":"' + (warmup ? 'warmup' : 'check|talk') + '","text":"...","help":"... · ... · ..."}]}', '',
       'VIDEO TEXT' + (warmup ? ' (for your eyes only — the questions must not reveal it)' : '') + ':', text].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) { return { text: String((q && q.text) || '').trim(), help: String((q && q.help) || '').trim() }; }).filter(function (q) { return q.text; }).slice(0, 12);
+    const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) {
+      const kind = warmup ? 'warmup' : (String((q && q.kind) || '').toLowerCase() === 'check' ? 'check' : 'talk');
+      return { kind: kind, text: String((q && q.text) || '').trim(), help: String((q && q.help) || '').trim() };
+    }).filter(function (q) { return q.text; }).slice(0, 12);
     return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 

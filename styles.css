@@ -420,6 +420,7 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .act[data-theme="blackboard"] .act-title, .act[data-theme="blackboard"] .quiz-q { letter-spacing: .4px; font-size: clamp(26px, 3.8vw, 42px); }
 .act[data-theme="blackboard"] .mem-back, .act[data-theme="blackboard"] .mem-front, .act[data-theme="blackboard"] .quiz-opt, .act[data-theme="blackboard"] .ana-tile { border: 2px dashed rgba(255,255,255,.45); box-shadow: none; }
 .act[data-theme="blackboard"] .act-stat { background: transparent; color: var(--act-ink); border: 1.5px dashed rgba(255,255,255,.4); }
+.pop.vocab-act[data-theme="blackboard"] .mchip, .pop.vocab-act[data-theme="blackboard"] .flashcard .face { border-style: dashed; box-shadow: none; }
 
 /* Caffè — crema e legno, tazzine discrete: caldo, adulto, da conversazione */
 .act[data-theme="coffee"] { --act-ink: #3a2a1c; --act-muted: #93816e; --act-card: #fffaf1; --act-card-ink: #3a2a1c;
@@ -719,6 +720,44 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .af-quiz .orow { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-top: 6px; }
 .af-quiz .orow input[type=radio] { width: auto; }
 .lesson-card .thumb.act-thumb { display: flex; align-items: center; justify-content: center; font-size: 44px; background: var(--chip); }
+
+/* Schede delle Parole utili (abbinamento, flashcards) vestite con il template: il pannello dello studente diventa .act.vocab-act */
+.stage.docked .pop.vocab-act { display: block; min-height: 0; border-radius: 0; overflow: auto; font-family: var(--font); isolation: isolate; }
+.pop.vocab-act > .act-deco { z-index: -1; }   /* sotto il contenuto, sopra lo sfondo del pannello (isolation) */
+.vocab-wrap { min-height: 100%; display: flex; flex-direction: column; }   /* NON posizionato: l'intestazione assoluta resta relativa al pannello */
+.pop.vocab-act .ex-head h3.ex-title { color: var(--act-ink); font-family: var(--act-display); }
+.pop.vocab-act .ex-head h3.ex-title .sub, .pop.vocab-act .instr, .pop.vocab-act .hint, .pop.vocab-act .flashcard .tr { color: var(--act-muted); }
+.pop.vocab-act .badge { background: var(--act-card); color: var(--act-card-ink); border: 1px solid var(--act-line); }
+.pop.vocab-act .mchip { background: var(--act-card); color: var(--act-card-ink); border-color: var(--act-line); font-family: var(--act-display); box-shadow: 0 2px 0 rgba(0,0,0,.10); }
+.pop.vocab-act .mchip:hover { border-color: var(--act-accent); }
+.pop.vocab-act .mchip.sel { border-color: var(--act-accent); background: color-mix(in srgb, var(--act-accent) 16%, var(--act-card)); }
+.pop.vocab-act .mchip.good { border-color: var(--act-good); background: color-mix(in srgb, var(--act-good) 16%, var(--act-card)); color: var(--act-card-ink); }
+.pop.vocab-act .mchip.wrongpick { border-color: var(--act-bad); background: color-mix(in srgb, var(--act-bad) 16%, var(--act-card)); }
+.pop.vocab-act .mpair .link { background: var(--act-good); }
+.pop.vocab-act .flashcard .face { background: var(--act-card); color: var(--act-card-ink); border-color: var(--act-line); }
+.pop.vocab-act .flashcard .face.back { background: color-mix(in srgb, var(--act-accent) 10%, var(--act-card)); border-color: var(--act-accent); }
+.pop.vocab-act .flashcard .word { font-family: var(--act-display); }
+.pop.vocab-act button:not(.primary):not(.star):not(.link) { background: var(--act-card); color: var(--act-card-ink); border-color: var(--act-line); }
+.pop.vocab-act button.primary { background: var(--act-accent); color: var(--act-accent-ink); border-color: transparent; }
+.pop.vocab-act button.link { color: var(--act-muted); }
+.pop.vocab-act input[type=text] { background: var(--act-card); color: var(--act-card-ink); border-color: var(--act-line); }
+.pop.vocab-act .feedback { color: var(--act-good); }
+
+/* Parliamone: quando (prima/dopo) e tipo di domanda */
+.when-chip { padding: 4px 12px; font-size: 13px; }
+.talk-row .num { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.talk-row .kind { font-size: 10px; line-height: 1.1; text-align: right; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; white-space: nowrap; }
+.talk-row .kind.check { color: #7a4e00; border-color: #f0c766; background: #fff6dc; }
+.talk-row .kind.talk { color: #1f5e9e; border-color: #b9d3f2; background: #eaf3ff; }
+.talk-row .kind.warmup { color: #5a3d8f; border-color: #cbbcee; background: #f2ecff; }
+
+/* editor lungo: "↑ In alto" e la card raggiunta dalla struttura si illumina un istante */
+.to-top { position: fixed; right: 18px; bottom: 18px; z-index: 30; display: none; padding: 10px 14px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.18); background: #fff; font-weight: 600; }
+.to-top.show { display: block; }
+.flash-card { animation: card-flash 1.2s ease; }
+@keyframes card-flash { 0% { box-shadow: 0 0 0 0 rgba(31,111,235,.0); } 20% { box-shadow: 0 0 0 4px rgba(31,111,235,.45); } 100% { box-shadow: 0 0 0 0 rgba(31,111,235,0); } }
+#e-flow .flow-chip button.txt { border: none; background: none; padding: 0 2px; font: inherit; font-weight: 600; cursor: pointer; color: inherit; border-radius: 6px; }
+#e-flow .flow-chip button.txt:hover { text-decoration: underline; background: none; }
 
 /* Struttura della lezione: sezioni in ordine, spostabili con ◀ ▶ attorno al video */
 #e-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }

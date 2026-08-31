@@ -253,11 +253,11 @@
   window.addEventListener('online', function () { if (CLOUD.sync && CLOUD.user) runSync(); });
 
   function studentPayload(lesson) {
-    const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }).map(function (w) { return { id: w.id, word: w.word, translation: w.translation, image: w.image, selected: true, inExercise: w.inExercise }; }) } : undefined;
+    const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, theme: lesson.vocab.theme, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }).map(function (w) { return { id: w.id, word: w.word, translation: w.translation, image: w.image, selected: true, inExercise: w.inExercise }; }) } : undefined;
     return { v: 1, id: lesson.id, title: lesson.title, videoId: lesson.videoId, lang: lesson.lang, duration: lesson.duration,
       exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb,
       flow: lessonFlow(lesson),
-      talks: (lesson.talks || []).map(function (sec) { return { id: sec.id, questions: sec.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help }; }) }; }),
+      talks: (lesson.talks || []).map(function (sec) { return { id: sec.id, questions: sec.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help, kind: q.kind }; }) }; }),
       acts: (lesson.acts || []).filter(function (a) { return ACT.validate(a).length === 0; }).map(function (a) { return { id: a.id, type: a.type, theme: a.theme, title: a.title, data: a.data }; }),
       lines: lesson.videoId === 'demo' ? lesson.lines : undefined };
   }
@@ -1011,6 +1011,8 @@
     $('#v-support').value = vb.support || 'en';
     $('#btn-vocab-ai').style.display = S.settings.apiKey ? '' : 'none';
     $('#btn-vocab-translate').style.display = S.settings.apiKey ? '' : 'none';
+    // template visivo delle schede (abbinamento e flashcards): gli stessi 18 delle attività
+    const tb = $('#v-theme'); if (tb) { tb.innerHTML = ''; tb.appendChild(themeChips(vb.theme || 'classic', function (id) { vb.theme = id; touch(ls); renderVocabEditor(ls); })); }
     const box = $('#e-vocab'); box.innerHTML = '';
     if (!vb.words.length) { box.appendChild(el('p', { class: 'muted', text: 'Nessuna parola: "Proponi" le ricava dalle frasi degli esercizi e dal video, oppure aggiungile a mano.' })); return; }
     const table = el('div', { class: 'vocab-table' });
@@ -1099,13 +1101,24 @@
     f.splice(j, 0, f.splice(idx, 1)[0]);
     touch(ls); renderFlow(ls);
   }
+  /** La card dell'editor che corrisponde a una sezione della struttura. */
+  function flowCardNode(s) {
+    return s.kind === 'vocab' ? $('#e-vocab-card') : s.kind === 'video' ? $('#e-video-card')
+      : s.kind === 'act' ? document.querySelector('.act-card[data-aid="' + s.id + '"]')
+        : document.querySelector('.talk-card[data-tid="' + s.id + '"]');
+  }
   function renderFlow(ls) {
     lessonFlow(ls);
     const bar = $('#e-flow'); bar.innerHTML = '';
     ls.flow.forEach(function (s, i) {
       const chip = el('span', { class: 'flow-chip' + (s.kind === 'video' ? ' video' : '') });
       if (s.kind !== 'video') chip.appendChild(el('button', { class: 'small', text: '◀', title: 'Sposta prima', disabled: i === 0 ? 'disabled' : null, onclick: function () { moveFlow(ls, i, -1); } }));
-      chip.appendChild(el('span', { class: 'txt', text: flowLabel(ls, s, i) }));
+      // il nome della sezione porta alla sua card (scorrimento morbido); "↑ In alto" riporta qui
+      chip.appendChild(el('button', { class: 'txt', type: 'button', text: flowLabel(ls, s, i), title: 'Vai alla sezione', onclick: function () {
+        const node = flowCardNode(s); if (!node) return;
+        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        node.classList.remove('flash-card'); void node.offsetWidth; node.classList.add('flash-card');
+      } }));
       if (s.kind !== 'video') chip.appendChild(el('button', { class: 'small', text: '▶', title: 'Sposta dopo', disabled: i === ls.flow.length - 1 ? 'disabled' : null, onclick: function () { moveFlow(ls, i, 1); } }));
       bar.appendChild(chip);
       if (i < ls.flow.length - 1) bar.appendChild(el('span', { class: 'flow-sep', text: '→' }));
@@ -1117,25 +1130,42 @@
     ls.talks.forEach(function (sec) { right.appendChild(renderTalkCard(ls, sec)); });
     ls.acts.forEach(function (a) { right.appendChild(renderActCard(ls, a)); });
     // le card della colonna destra seguono l'ordine della struttura (la barra resta in cima)
-    ls.flow.forEach(function (s) {
-      const node = s.kind === 'vocab' ? $('#e-vocab-card') : s.kind === 'video' ? $('#e-video-card')
-        : s.kind === 'act' ? document.querySelector('.act-card[data-aid="' + s.id + '"]')
-          : document.querySelector('.talk-card[data-tid="' + s.id + '"]');
-      if (node) right.appendChild(node);
-    });
+    ls.flow.forEach(function (s) { const node = flowCardNode(s); if (node) right.appendChild(node); });
   }
+  // "↑ In alto": compare quando la pagina è scorsa (editor lungo), riporta alla struttura della lezione
+  (function () {
+    const b = $('#btn-top'); if (!b) return;
+    const upd = function () { b.classList.toggle('show', window.scrollY > 320); };
+    window.addEventListener('scroll', upd, { passive: true });
+    b.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    upd();
+  })();
+  /** Sposta una sezione "Parliamone" prima del video (subito prima) o dopo (in fondo alla lezione). */
+  function placeTalk(ls, id, when) {
+    ls.flow = ls.flow.filter(function (s) { return !(s.kind === 'talk' && s.id === id); });
+    const vi = ls.flow.findIndex(function (s) { return s.kind === 'video'; });
+    if (when === 'before') ls.flow.splice(vi, 0, { kind: 'talk', id: id });
+    else ls.flow.push({ kind: 'talk', id: id });
+  }
+  /** "+ Parliamone": si sceglie PRIMA se le domande sono per entrare nel tema (prima del video) o di comprensione/opinione (dopo). */
   $('#btn-flow-talk').addEventListener('click', function () {
     const ls = current(); if (!ls) return;
-    lessonFlow(ls);
-    const id = 't' + (Math.max.apply(null, [0].concat(ls.talks.map(function (t) { return parseInt(String(t.id).replace(/\D/g, ''), 10) || 0; }))) + 1);
-    ls.talks.push({ id: id, questions: [] });
-    // la nuova sezione entra prima del video se la prima è già dopo (una per momento), altrimenti in fondo
-    const vi = ls.flow.findIndex(function (s) { return s.kind === 'video'; });
-    const hasBefore = ls.flow.slice(0, vi).some(function (s) { return s.kind === 'talk'; });
-    if (!hasBefore && ls.flow.slice(vi + 1).some(function (s) { return s.kind === 'talk'; })) ls.flow.splice(vi, 0, { kind: 'talk', id: id });
-    else ls.flow.push({ kind: 'talk', id: id });
-    touch(ls); renderFlow(ls);
+    const dlg = $('#dlg-talk-new');
+    $$('#tn-choices button').forEach(function (b) {
+      b.onclick = function () {
+        dlg.close();
+        lessonFlow(ls);
+        const id = 't' + (Math.max.apply(null, [0].concat(ls.talks.map(function (t) { return parseInt(String(t.id).replace(/\D/g, ''), 10) || 0; }))) + 1);
+        ls.talks.push({ id: id, questions: [] });
+        placeTalk(ls, id, b.getAttribute('data-when'));
+        touch(ls); renderFlow(ls);
+        const node = document.querySelector('.talk-card[data-tid="' + id + '"]');
+        if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+    });
+    dlg.showModal();
   });
+  $('#tn-close').addEventListener('click', function () { $('#dlg-talk-new').close(); });
   function renderTalkCard(ls, sec) {
     const before = talkBefore(ls, sec.id);
     const card = el('div', { class: 'card talk-card', 'data-tid': sec.id });
@@ -1157,15 +1187,24 @@
       head.appendChild(rm);
     }
     card.appendChild(head);
+    // quando: prima del video (elicitazione del tema) o dopo (comprensione + opinioni); cambiarlo sposta la sezione nella struttura
+    const when = el('div', { class: 'row', style: 'margin:8px 0 2px;gap:6px' });
+    when.appendChild(el('span', { class: 'hint', text: 'Quando:' }));
+    [['before', '🎬 Prima del video'], ['after', '💬 Dopo il video']].forEach(function (opt) {
+      const on = (opt[0] === 'before') === before;
+      when.appendChild(el('button', { class: 'theme-chip when-chip' + (on ? ' sel' : ''), type: 'button', text: opt[1], onclick: function () { if (on) return; placeTalk(ls, sec.id, opt[0]); touch(ls); renderFlow(ls); } }));
+    });
+    card.appendChild(when);
     const box = el('div', { class: 'talk-box' });
     card.appendChild(box);
     const status = el('span', { class: 'hint' });
     card.appendChild(el('div', { class: 'row', style: 'margin-top:6px' }, status));
-    card.appendChild(el('p', { class: 'hint', text: before ? 'Domande per accendere la curiosità e tirare fuori quello che gli studenti già sanno del tema, PRIMA di guardare: brevi, personali, senza svelare il contenuto del video.' : 'Domande aperte e personali sul tema del video, per la conversazione: lo studente le vede una alla volta, con le espressioni utili per rispondere. Nessuna correzione automatica: si parla.' }));
+    card.appendChild(el('p', { class: 'hint', text: before ? 'Prima di guardare: 3 domande bastano. Servono a far emergere il tema e quello che gli studenti già sanno, senza svelare il contenuto del video.' : 'Dopo il video: domande SPECIFICHE su quello che il video ha detto — prima di comprensione (lo studente racconta quello che ha capito), poi di opinione ancorate ai punti del video. Lo studente le vede una alla volta con le espressioni utili; nessuna correzione automatica: si parla.' }));
     if (!sec.questions.length) box.appendChild(el('p', { class: 'muted', text: 'Nessuna domanda: proponile con l\'AI o scrivile a mano (una domanda aperta + le espressioni utili per rispondere).' }));
+    const KIND = { check: 'comprensione', talk: 'opinione', warmup: 'per entrare nel tema' };
     sec.questions.forEach(function (q, i) {
       const row = el('div', { class: 'talk-row' });
-      row.appendChild(el('span', { class: 'num', text: String(i + 1) }));
+      row.appendChild(el('span', { class: 'num' }, String(i + 1), q.kind && KIND[q.kind] ? el('span', { class: 'kind ' + q.kind, text: KIND[q.kind] }) : null));
       // caselle che crescono col testo: domanda ed espressioni si leggono per intero, una sopra l'altra
       const grow = function (t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
       const qi = el('textarea', { class: 'talk-in q', rows: '1', placeholder: 'Domanda (aperta, personale)' });
@@ -1188,11 +1227,11 @@
       if (!S.settings.apiKey) return toast('Serve la chiave API (Impostazioni AI)');
       status.textContent = 'Chiedo al modello…';
       const chunks = ls.chunks && ls.chunks.length ? ls.chunks : G.annotate(G.buildChunks(ls.lines || [], { duration: ls.duration, lang: ls.lang }), { lang: ls.lang, duration: ls.duration });
-      AI.suggestDiscussion({ chunks: chunks, lang: ls.lang, level: ls.level, n: before ? 4 : 6, mode: before ? 'warmup' : 'after', focus: ls.params && ls.params.focus, apiKey: S.settings.apiKey, model: S.settings.model })
+      AI.suggestDiscussion({ chunks: chunks, lang: ls.lang, level: ls.level, n: before ? 3 : 6, mode: before ? 'warmup' : 'after', focus: ls.params && ls.params.focus, apiKey: S.settings.apiKey, model: S.settings.model })
         .then(function (r) {
           const have = new Set(sec.questions.map(function (q) { return L.normalize(q.text); }));
           let added = 0;
-          r.questions.forEach(function (q) { if (have.has(L.normalize(q.text))) return; sec.questions.push({ id: uid(), text: q.text, help: q.help }); added++; });
+          r.questions.forEach(function (q) { if (have.has(L.normalize(q.text))) return; sec.questions.push({ id: uid(), text: q.text, help: q.help, kind: q.kind }); added++; });
           touch(ls); renderFlow(ls);
           toast(added + ' domande proposte' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''));
         })
@@ -2194,6 +2233,7 @@
     S.student = { lesson: ls, done: new Set(), results: {}, blocked: false, replay: null, activeId: null, started: false, ended: false, attempts: {}, hints: {}, lock: !!(ls.options && ls.options.lock), phase: 'start', stars: {} };   // stelle: da zero a ogni apertura
     show('student');
     $('#s-stage').classList.remove('cards');
+    panelTheme(null);
     $('#s-title').textContent = ls.title || '';
     $('#btn-edit').style.display = (!S.standalone && S.lessons[ls.id]) ? '' : 'none';
     $('#s-lock').checked = S.student.lock;
@@ -2254,6 +2294,7 @@
     // un esercizio già fatto resta verde/rosso: lo si può rifare (st.redo) senza perdere il risultato
     st.redo = ex.id;
     st.blocked = false; st.activeId = null; st.replay = null; st.started = true;
+    panelTheme(null);
     $('#s-panel').innerHTML = '';
     dock('#s-stage', false);
     renderStudentTimeline(); renderProgress();
@@ -2317,6 +2358,7 @@
     const ls = st.lesson;
     st.started = true; st.lastT = null; st.phase = 'video';
     $('#btn-start').style.display = 'none';
+    panelTheme(null);
     $('#s-panel').innerHTML = '';
     $('#s-stage').classList.remove('cards');
     dock('#s-stage', false);
@@ -2334,6 +2376,7 @@
   /** Prossima sezione della lezione. Coda vuota → riepilogo. Play diretto sul video (senza "Inizia"): la coda parte dalle sezioni dopo il video. */
   function advancePhase() {
     const st = S.student; if (!st || !S.player) return;
+    panelTheme(null);   // il template delle schede vale solo per le schede
     if (!st.queue) { const f = lessonFlow(st.lesson); st.queue = f.slice(f.findIndex(function (s) { return s.kind === 'video'; }) + 1); }
     const step = st.queue.shift();
     if (!step) return renderSummary();
@@ -2457,8 +2500,9 @@
     $('#s-stage').classList.add('cards');
     if (S.player) S.player.pause();
     const i = st.talkIdx || 0, q = qs[i];
-    cardHeader(p, before ? 'Prima di guardare: parliamone' : 'Parliamone', (i + 1) + ' di ' + qs.length, before ? 'prima del video' : 'dopo il video');
-    p.appendChild(el('div', { class: 'instr', text: before ? 'Qualche domanda per entrare nel tema, prima di guardare: rispondi a voce, con calma. Clicca una parola per la stella ★.' : 'Rispondi a voce, con calma: non c\'è una risposta giusta. Clicca una parola per la stella ★.' }));
+    const check = !before && q.kind === 'check';
+    cardHeader(p, before ? 'Prima di guardare: parliamone' : (check ? 'Hai capito? Parliamone' : 'Parliamone'), (i + 1) + ' di ' + qs.length, before ? 'prima del video' : (check ? 'comprensione' : 'dopo il video'));
+    p.appendChild(el('div', { class: 'instr', text: before ? 'Qualche domanda per entrare nel tema, prima di guardare: rispondi a voce, con calma. Clicca una parola per la stella ★.' : (check ? 'Domanda di comprensione: racconta a voce quello che hai capito dal video. Clicca una parola per la stella ★.' : 'Rispondi a voce, con calma: non c\'è una risposta giusta. Clicca una parola per la stella ★.') }));
     const qd = el('div', { class: 'talk-q' });
     qd.appendChild(starredSentence(ls, L.tokenize(q.text).map(function (t) { return t.raw; })));
     p.appendChild(qd);
@@ -3195,11 +3239,23 @@
     if (st.cardIdx >= st.cards.length) return advancePhase();
     renderVocabCard();
   }
+  /** Il pannello dello studente veste un template (schede delle Parole utili) o torna neutro (null). */
+  function panelTheme(th, ls) {
+    const p = $('#s-panel'); if (!p) return;
+    const old = p.querySelector(':scope > .act-deco'); if (old) old.remove();
+    if (!th) { p.classList.remove('act', 'vocab-act'); p.removeAttribute('data-theme'); return; }
+    p.classList.add('act', 'vocab-act'); p.setAttribute('data-theme', th);
+    ACT.decorate(p, { id: 'v' + (ls ? ls.id : ''), theme: th }, { fx: !ls || !ls.options || ls.options.fx !== false });
+  }
   function renderVocabCard() {
     const st = S.student; const ls = st.lesson;
     const p = $('#s-panel'); p.innerHTML = '';
     const kind = st.cards[st.cardIdx];
-    if (kind === 'matching') renderMatching(p, ls, st); else renderFlashcards(p, ls, st);
+    // le schede prendono il template scelto per le Parole utili; il contenuto sta in un wrapper così le decorazioni restano tra un round e l'altro
+    panelTheme((ls.vocab && ls.vocab.theme) || 'classic', ls);
+    const wrap = el('div', { class: 'vocab-wrap' });
+    p.appendChild(wrap);
+    if (kind === 'matching') renderMatching(wrap, ls, st); else renderFlashcards(wrap, ls, st);
   }
   /** FLIP: anima lo spostamento degli elementi con data-flip dentro root tra prima e dopo `mutate`. */
   function flipMove(root, mutate, animate) {

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260830-40">
+<link rel="stylesheet" href="styles.css?v=20260830-41">
 </head>
 <body>
 <header class="topbar">
@@ -195,6 +195,7 @@
             <label class="chip" style="margin:0"><input type="checkbox" id="v-write"> Flashcards: lo studente scrive la parola</label>
             <label class="chip" style="margin:0">Traduzione in <select id="v-support" style="width:auto;padding:2px 6px;margin-left:4px"><option value="en">inglese</option><option value="it">italiano</option><option value="es">spagnolo</option><option value="fr">francese</option><option value="de">tedesco</option></select></label>
           </div>
+          <div class="row" style="margin-top:8px;align-items:flex-start"><span class="hint" style="margin-top:8px">Template delle schede:</span><div id="v-theme"></div></div>
           <div id="e-vocab"></div>
           <div class="row" style="margin-top:6px"><button id="btn-vocab-translate" class="small">🌐 Traduci le parole senza traduzione (AI)</button><span id="e-vocab-status" class="hint"></span></div>
           <p class="hint">Seleziona le parole da usare nelle schede iniziali; ogni parola ha bisogno di una traduzione o di una foto ("🔍 Foto" cerca su Wikipedia e Wikimedia Commons; "↻ Altra" ne propone un'altra). Le parole che compaiono nelle frasi degli esercizi sono segnate.</p>
@@ -269,6 +270,16 @@
   <div id="an-types" class="act-type-grid"></div>
   <div id="an-themes" class="an-theme-grid" hidden></div>
   <div class="row" style="margin-top:12px"><button id="an-back" hidden>◀ Cambia tipo</button><button id="an-close">Annulla</button></div>
+</dialog>
+
+<dialog id="dlg-talk-new">
+  <h2>Parliamone: quando?</h2>
+  <p class="hint">Il momento cambia le domande: scegli prima, poi le scrivi o le chiedi all'AI.</p>
+  <div class="act-type-grid" id="tn-choices">
+    <button type="button" data-when="before"><span class="em">🎬</span><b>Prima del video</b><span class="hint">Per entrare nel tema: 3 domande che accendono la curiosità e fanno emergere quello che gli studenti già sanno. Niente contenuti del video.</span></button>
+    <button type="button" data-when="after"><span class="em">💬</span><b>Dopo il video</b><span class="hint">Comprensione e opinioni: domande specifiche su quello che il video ha detto, poi reazioni personali ancorate ai suoi punti.</span></button>
+  </div>
+  <div class="row" style="margin-top:12px"><button id="tn-close">Annulla</button></div>
 </dialog>
 
 <dialog id="dlg-act-try">
@@ -376,15 +387,16 @@
 
 <div id="overlay"><div><div class="loader-box"><img class="loader" src="https://cdn.dribbble.com/userupload/22076800/file/original-8e7ce77dec0edaf0105e8287038f6e60.gif" alt="" onerror="this.classList.add('off')"><div class="spinner"></div></div><div id="overlay-text">loading</div></div></div>
 <div id="toast"></div>
+<button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260830-40"></script>
-<script src="exercises.js?v=20260830-40"></script>
-<script src="generator.js?v=20260830-40"></script>
-<script src="activities.js?v=20260830-40"></script>
-<script src="ai.js?v=20260830-40"></script>
-<script src="demo-data.js?v=20260830-40"></script>
-<script src="bookmarklet.js?v=20260830-40"></script>
-<script src="sync.js?v=20260830-40"></script>
-<script src="app.js?v=20260830-40"></script>
+<script src="lang.js?v=20260830-41"></script>
+<script src="exercises.js?v=20260830-41"></script>
+<script src="generator.js?v=20260830-41"></script>
+<script src="activities.js?v=20260830-41"></script>
+<script src="ai.js?v=20260830-41"></script>
+<script src="demo-data.js?v=20260830-41"></script>
+<script src="bookmarklet.js?v=20260830-41"></script>
+<script src="sync.js?v=20260830-41"></script>
+<script src="app.js?v=20260830-41"></script>
 </body>
 </html>

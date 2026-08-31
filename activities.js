@@ -175,27 +175,31 @@
   function clearNode(n) { while (n.firstChild) n.removeChild(n.firstChild); }
   function themeOf(act) { return THEME_IDS.indexOf(act.theme) >= 0 ? act.theme : 'classic'; }
 
+  /** Decorazioni animate del tema (emoji che fluttuano/cadono/salgono/brillano) dentro rootEl; niente per i temi sobri o con fx=false. */
+  function decorate(rootEl, act, opts) {
+    const th = THEMES.find(function (t) { return t.id === themeOf(act); });
+    if (!th || !th.deco.length || (opts && opts.fx === false)) return null;
+    const motion = th.motion || 'float';
+    const dur = { float: [7, 8], fall: [9, 9], rise: [8, 8], twinkle: [1.8, 2.2] }[motion];
+    const deco = h('div', { class: 'act-deco m-' + motion, 'aria-hidden': 'true' });
+    const r = rng(act.id ? String(act.id).length * 97 + 13 : 41);
+    for (let i = 0; i < 14; i++) {
+      const e = h('span', { text: th.deco[i % th.deco.length] });
+      e.style.left = (r() * 96) + '%';
+      e.style.top = (r() * 92) + '%';
+      e.style.fontSize = (16 + r() * 26) + 'px';
+      e.style.animationDelay = '-' + (r() * 12).toFixed(2) + 's';   // negativo: il movimento è già in corso all'apertura
+      e.style.animationDuration = (dur[0] + r() * dur[1]).toFixed(2) + 's';
+      deco.appendChild(e);
+    }
+    rootEl.appendChild(deco);
+    return deco;
+  }
   /** Contenitore comune: tema + decorazioni di sfondo + area di gioco. Ritorna { rootEl, stage }. */
   function shell(container, act, opts) {
     clearNode(container);
     const rootEl = h('div', { class: 'act', 'data-theme': themeOf(act), 'data-type': act.type });
-    const th = THEMES.find(function (t) { return t.id === themeOf(act); });
-    if (th && th.deco.length && !(opts && opts.fx === false)) {
-      const motion = th.motion || 'float';
-      const dur = { float: [7, 8], fall: [9, 9], rise: [8, 8], twinkle: [1.8, 2.2] }[motion];
-      const deco = h('div', { class: 'act-deco m-' + motion, 'aria-hidden': 'true' });
-      const r = rng(act.id ? String(act.id).length * 97 + 13 : 41);
-      for (let i = 0; i < 14; i++) {
-        const e = h('span', { text: th.deco[i % th.deco.length] });
-        e.style.left = (r() * 96) + '%';
-        e.style.top = (r() * 92) + '%';
-        e.style.fontSize = (16 + r() * 26) + 'px';
-        e.style.animationDelay = '-' + (r() * 12).toFixed(2) + 's';   // negativo: il movimento è già in corso all'apertura
-        e.style.animationDuration = (dur[0] + r() * dur[1]).toFixed(2) + 's';
-        deco.appendChild(e);
-      }
-      rootEl.appendChild(deco);
-    }
+    decorate(rootEl, act, opts);
     const stage = h('div', { class: 'act-stage' });
     rootEl.appendChild(stage);
     container.appendChild(rootEl);
@@ -528,5 +532,5 @@
     if (act.type === 'wheel') return renderWheel(container, act, opts || {});
   }
 
-  return { THEMES: THEMES, TYPES: TYPES, render: render, validate: validate, convert: convert, convertTargets: convertTargets, pairsOf: pairsOf, memoryDeck: memoryDeck, memoryCols: memoryCols, quizOrder: quizOrder, quizPoints: quizPoints, anagramLetters: anagramLetters, wheelIndexAt: wheelIndexAt, rng: rng, shuffle: shuffle };
+  return { THEMES: THEMES, TYPES: TYPES, render: render, decorate: decorate, themeOf: themeOf, validate: validate, convert: convert, convertTargets: convertTargets, pairsOf: pairsOf, memoryDeck: memoryDeck, memoryCols: memoryCols, quizOrder: quizOrder, quizPoints: quizPoints, anagramLetters: anagramLetters, wheelIndexAt: wheelIndexAt, rng: rng, shuffle: shuffle };
 });
