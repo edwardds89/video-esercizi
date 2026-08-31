@@ -177,17 +177,37 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(built && built.data.tricky === 2 && EX.check(built, 0).correct && !EX.check(built, 2).correct);
   });
 
-  await test('Parliamone: suggestDiscussion con fetch finta (domande aperte + espressioni)', async function () {
+  await test('Parliamone DOPO il video: prima comprensione specifica ("check"), poi opinioni ancorate ("talk")', async function () {
     const fakeFetch = async function (url, opts) {
       const body = JSON.parse(opts.body);
-      assert.ok(body.messages[0].content.indexOf('SPEAKING practice') !== -1);
-      const text = '{"questions":[{"text":"Secondo te, perché dormiamo?","help":"Secondo me… · Penso che… · Non sono sicuro, ma…"},{"text":"","help":"x"},{"text":"Ti è mai capitato di dimenticare qualcosa di importante? Racconta.","help":"Una volta… · Mi è capitato di…"}]}';
+      const u = body.messages[0].content;
+      assert.ok(u.indexOf('AFTER the video') !== -1 && u.indexOf('COMPREHENSION') !== -1 && u.indexOf('SPECIFIC to this video') !== -1, 'il prompt chiede domande specifiche e di comprensione');
+      assert.ok(u.indexOf('First 3 COMPREHENSION') !== -1 && u.indexOf('Then 2 DISCUSSION') !== -1, 'metà comprensione (arrotondata per eccesso), il resto discussione');
+      const text = '{"questions":[{"kind":"check","text":"Secondo il video, perché il sonno serve alla memoria?","help":"Il video dice che… · Perché…"},{"kind":"talk","text":"","help":"x"},{"kind":"talk","text":"Il video dice che dormiamo poco: nel tuo paese è così?","help":"Da noi… · Secondo me…"},{"text":"Senza kind: è discussione","help":"Penso che…"}]}';
       return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 400, output_tokens: 120 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
     };
     const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 5, apiKey: 'k', fetchImpl: fakeFetch });
-    assert.strictEqual(r.questions.length, 2, 'la domanda vuota viene scartata');
-    assert.ok(/perché dormiamo/.test(r.questions[0].text) && r.questions[0].help.split('·').length === 3);
+    assert.strictEqual(r.questions.length, 3, 'la domanda vuota viene scartata');
+    assert.strictEqual(r.questions[0].kind, 'check');
+    assert.strictEqual(r.questions[1].kind, 'talk');
+    assert.strictEqual(r.questions[2].kind, 'talk', 'senza kind = discussione');
+    assert.ok(/perché il sonno/.test(r.questions[0].text) && r.questions[0].help.split('·').length === 2);
     assert.ok(r.ai.cost > 0);
+  });
+
+  await test('Parliamone PRIMA del video (warmup): 3 domande di default, niente spoiler, kind "warmup"', async function () {
+    const fakeFetch = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      const u = body.messages[0].content;
+      assert.ok(u.indexOf('exactly 3 warm-up questions') !== -1, 'tre domande di default');
+      assert.ok(u.indexOf('no spoilers') !== -1 && u.indexOf('for your eyes only') !== -1, 'il testo del video non va rivelato');
+      assert.ok(u.indexOf('COMPREHENSION') === -1, 'nessuna domanda di comprensione prima del video');
+      const text = '{"questions":[{"kind":"warmup","text":"Quante ore dormi di solito?","help":"Di solito… · Dipende…"},{"text":"Cosa sai del sonno?","help":"So che…"}]}';
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 400, output_tokens: 80 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', mode: 'warmup', apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(r.questions.length, 2);
+    assert.ok(r.questions.every(function (q) { return q.kind === 'warmup'; }), 'tutte warmup, anche senza kind nel JSON');
   });
 
   console.log('Chiamata (fetch finta)');
