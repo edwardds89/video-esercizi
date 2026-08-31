@@ -732,7 +732,20 @@ async function startVideo(page) {
   await page.click('#btn-new-act');
   await page.waitForSelector('#dlg-act-new[open]');
   await page.click('#an-types button:has-text("Quiz gioco")');
+  // secondo passo: la griglia dei template con le anteprime vive (un Quiz vero in scala per ognuno)
+  await page.waitForSelector('#an-themes:not([hidden]) .an-theme[data-tid="christmas"] .act[data-theme="christmas"] .quiz-q');
+  assert.strictEqual(await page.$$eval('#an-themes .an-theme', function (c) { return c.length; }), 18, '18 anteprime nella griglia');
+  await page.click('#an-back');
+  await page.waitForSelector('#an-types:not([hidden])');
+  await page.click('#an-types button:has-text("Quiz gioco")');
+  await page.click('#an-themes .an-theme[data-tid="classic"]');
   await page.waitForSelector('#view-act.active');
+  assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].activity.theme; }), 'classic', 'template scelto alla creazione');
+  // anteprima grande al passaggio del mouse sui chip del selettore
+  await page.hover('#a-themes .theme-chip:has-text("Spazio")');
+  await page.waitForSelector('.theme-preview.show .act[data-theme="space"]');
+  await page.mouse.move(5, 5);
+  await page.waitForFunction(function () { const p = document.querySelector('.theme-preview'); return !p || !p.classList.contains('show'); });
   await page.fill('#a-title', 'Quiz di prova'); await page.dispatchEvent('#a-title', 'change');
   await page.click('#a-fields button:has-text("+ Domanda")');
   await page.click('#a-fields button:has-text("+ Domanda")');
@@ -774,6 +787,8 @@ async function startVideo(page) {
   await page.click('#btn-flow-act');
   await page.waitForSelector('#dlg-act-new[open]');
   await page.click('#an-types button:has-text("Memory")');
+  await page.waitForSelector('#an-themes:not([hidden]) .an-theme[data-tid="classic"]');
+  await page.click('#an-themes .an-theme[data-tid="classic"]');
   await page.waitForSelector('.act-card[data-aid]');
   await page.click('.act-card button:has-text("Usa le Parole utili")');
   await page.waitForTimeout(300);
