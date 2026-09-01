@@ -981,6 +981,38 @@ async function noOverflow(page, where) {
   assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].vocab.theme; }), 'halloween', 'template delle schede salvato nella lezione');
   assert.ok(await page.$('#s-panel > .act-props'), 'zucca e compagnia sul pannello');
 
+  console.log('11. eliminare si può annullare: barra con "Annulla" + Cmd/Ctrl+Z');
+  page.on('dialog', function (d) { d.accept(); });   // da qui in poi le eliminazioni chiedono conferma
+  await page.click('#btn-edit');   // dall'anteprima studente si torna all'editor
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForTimeout(400);
+  // sezione attività tolta dalla lezione: la barra lo dice e Annulla la rimette
+  await page.click('#btn-flow-act');
+  await page.waitForSelector('#dlg-act-new[open]');
+  await page.click('#an-types button:has-text("Anagramma")');
+  await page.waitForSelector('#an-themes:not([hidden]) .an-theme[data-tid="classic"]');
+  await page.click('#an-themes .an-theme[data-tid="classic"]');
+  const aid = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.acts[ls.acts.length - 1].id; });
+  await page.waitForSelector('.act-card[data-aid="' + aid + '"]');
+  await page.waitForTimeout(800);
+  await page.click('.act-card[data-aid="' + aid + '"] button:has-text("✕ Sezione")');
+  await page.waitForSelector('#undo-bar.show');
+  assert.ok(/Sezione .* tolta dalla lezione/.test(await page.$eval('#undo-bar', function (b) { return b.textContent; })), 'la barra spiega come tornare indietro');
+  assert.strictEqual(await page.$$eval('.act-card[data-aid="' + aid + '"]', function (c) { return c.length; }), 0, 'sezione tolta');
+  await page.click('#undo-bar .undo');
+  await page.waitForSelector('.act-card[data-aid="' + aid + '"]');   // rimessa dal pulsante Annulla
+  // lezione intera eliminata dall'editor: torna con Ctrl+Z dal portfolio
+  const titleNow = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].title; });
+  const nPrima = await page.evaluate(function () { return Object.keys(window.VLApp.S.lessons).length; });
+  await page.click('#btn-delete');
+  await page.waitForSelector('#view-home.active');
+  await page.waitForSelector('#undo-bar.show');
+  assert.strictEqual(await page.evaluate(function () { return Object.keys(window.VLApp.S.lessons).length; }), nPrima - 1, 'lezione eliminata');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  assert.strictEqual(await page.evaluate(function () { return Object.keys(window.VLApp.S.lessons).length; }), nPrima, 'lezione ripristinata con Ctrl+Z');
+  assert.ok(await page.$('#lesson-list .lesson-card:has-text("' + titleNow.replace(/"/g, '\\"') + '")'), 'card di nuovo nel portfolio');
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
