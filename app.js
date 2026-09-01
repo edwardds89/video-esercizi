@@ -113,9 +113,87 @@
   function saveSettings() { try { localStorage.setItem('vle.settings', JSON.stringify(S.settings)); } catch (e) { /* ignore */ } }
   const saveDebounced = (function () { let t; return function () { clearTimeout(t); t = setTimeout(function () { saveLessons(); const s = $('#e-saved'); if (s) { s.textContent = 'Salvato'; setTimeout(function () { s.textContent = ''; }, 1500); } }, 400); }; })();
   function current() { return S.lessons[S.currentId]; }
-  function touch(lesson) { lesson.updatedAt = new Date().toISOString(); saveDebounced(); }
+  function touch(lesson) { lesson.updatedAt = new Date().toISOString(); undoNote(lesson); saveDebounced(); }
   // chiusura/ricarica della pagina: salva subito quello che il debounce non ha ancora scritto
   window.addEventListener('pagehide', function () { try { saveLessons(); } catch (e) { /* ignore */ } });
+
+  // ---------- ANNULLA / RIPETI (pulsante + Cmd/Ctrl+Z) ----------
+  // Storia della lezione aperta nell'editor: a ogni touch() si confronta lo stato con l'ultimo "fermo immagine" e, se è
+  // cambiato, si mette da parte quello precedente. Modifiche ravvicinate (digitazione) si fondono in una sola operazione.
+  const UNDO = { id: null, base: null, stack: [], redo: [], last: 0, busy: false, MAX: 60, BYTES: 40e6 };
+  function snapshot(ls) { return JSON.stringify(ls, function (k, v) { return (k.charAt(0) === '_' || k === 'updatedAt') ? undefined : v; }); }
+  function undoButtons() {
+    const can = UNDO.id != null && S.currentId === UNDO.id;
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform || '');
+    ['#btn-undo', '#a-undo'].forEach(function (s) { const b = $(s); if (!b) return; b.disabled = !(can && UNDO.stack.length); b.title = 'Annulla l\'ultima modifica (' + (mac ? '⌘Z' : 'Ctrl+Z') + ')'; });
+    ['#btn-redo', '#a-redo'].forEach(function (s) { const b = $(s); if (!b) return; b.disabled = !(can && UNDO.redo.length); b.title = 'Ripeti la modifica annullata (' + (mac ? '⇧⌘Z' : 'Ctrl+Y') + ')'; });
+  }
+  /** All'apertura di una lezione nell'editor: stessa lezione → si tiene la storia (ma il punto di partenza è lo stato attuale); altra → si riparte. */
+  function undoOpen(ls) {
+    if (UNDO.busy) return;
+    if (!ls) { UNDO.id = null; UNDO.base = null; UNDO.stack = []; UNDO.redo = []; undoButtons(); return; }
+    if (UNDO.id !== ls.id) { UNDO.id = ls.id; UNDO.stack = []; UNDO.redo = []; UNDO.last = 0; }
+    UNDO.base = snapshot(ls);
+    undoButtons();
+  }
+  function undoNote(ls) {
+    if (UNDO.busy || !ls || !ls.id) return;
+    if (UNDO.id !== ls.id) { undoOpen(ls); return; }   // lezione diversa: da qui in poi
+    const now = snapshot(ls);
+    if (now === UNDO.base) return;
+    const t = Date.now();
+    if (t - UNDO.last > 700 || !UNDO.stack.length) {
+      UNDO.stack.push(UNDO.base);
+      let bytes = 0; UNDO.stack.forEach(function (s) { bytes += s.length; });
+      while (UNDO.stack.length > UNDO.MAX || (bytes > UNDO.BYTES && UNDO.stack.length > 1)) bytes -= UNDO.stack.shift().length;
+    }
+    UNDO.last = t; UNDO.base = now; UNDO.redo = [];
+    undoButtons();
+  }
+  function undoApply(json) {
+    const ls = JSON.parse(json);
+    const cur = S.lessons[ls.id];
+    if (cur) Object.keys(cur).forEach(function (k) { if (k.charAt(0) === '_') ls[k] = cur[k]; });   // cache di sessione: si conservano
+    ls.updatedAt = new Date().toISOString();
+    migrateLesson(ls);
+    S.lessons[ls.id] = ls;
+    UNDO.busy = true;
+    try {
+      saveLessons();
+      UNDO.base = snapshot(ls);
+      UNDO.last = 0;
+      if (S.view === 'act' && ls.activity) openActEditor(ls.id);
+      else if (S.view === 'editor') { editorHeader(ls); renderEditorBody(); }
+    } finally { UNDO.busy = false; }
+    undoButtons();
+  }
+  function undo() {
+    if (UNDO.id == null || S.currentId !== UNDO.id || !UNDO.stack.length) return false;
+    const prev = UNDO.stack.pop(); UNDO.redo.push(UNDO.base);
+    undoApply(prev); toast('Annullato' + (UNDO.stack.length ? ' (' + UNDO.stack.length + ' ancora da annullare)' : ''));
+    return true;
+  }
+  function redo() {
+    if (UNDO.id == null || S.currentId !== UNDO.id || !UNDO.redo.length) return false;
+    const next = UNDO.redo.pop(); UNDO.stack.push(UNDO.base);
+    undoApply(next); toast('Ripetuto');
+    return true;
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+    const k = (e.key || '').toLowerCase();
+    if (k !== 'z' && k !== 'y') return;
+    if (S.view !== 'editor' && S.view !== 'act') return;
+    const t = e.target, tag = t && t.tagName;
+    // dentro un campo di testo il browser annulla la digitazione da solo (e il modello segue gli eventi input)
+    if (tag === 'INPUT' && !/^(checkbox|radio|range|button|file|color)$/i.test(t.type || '')) return;
+    if (tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+    const wantRedo = k === 'y' || e.shiftKey;
+    if (wantRedo ? redo() : undo()) e.preventDefault();
+    else if (k === 'z') { e.preventDefault(); toast(wantRedo ? 'Niente da ripetere' : 'Niente da annullare'); }
+  });
+  ['#btn-undo', '#a-undo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!undo()) toast('Niente da annullare'); }); });
+  ['#btn-redo', '#a-redo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!redo()) toast('Niente da ripetere'); }); });
 
   // ---------- cloud (Supabase, opzionale) ----------
   // Le lezioni restano in localStorage (cache); con l'accesso vengono anche caricate nel cloud e unite tra i computer (vince l'ultima modifica).
@@ -834,15 +912,20 @@
     if (!ls) return renderHome();
     show('editor');
     closePreview();
+    editorHeader(ls);
+    undoOpen(ls);
+    createPlayer($('#e-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 5000); } })
+      .then(function () { startLoop(); renderCover($('#e-player'), ls); })
+      .catch(function (e) { toast('Player non disponibile: ' + e.message, 6000); });
+    renderEditorBody();
+  }
+  /** Campi della barra e opzioni della lezione (titolo, interruttori): all'apertura e dopo Annulla/Ripeti. */
+  function editorHeader(ls) {
     $('#e-title').value = ls.title || '';
     $('#e-strict').checked = !!ls.options.strict;
     $('#e-fx').checked = ls.options.fx !== false;
     $('#e-lock').checked = !!ls.options.lock;
     $('#e-cover').checked = !!coverState(ls).on;
-    createPlayer($('#e-player'), ls.videoId, { lesson: ls, onError: function (code) { toast(ytErrorText(code), 5000); } })
-      .then(function () { startLoop(); renderCover($('#e-player'), ls); })
-      .catch(function (e) { toast('Player non disponibile: ' + e.message, 6000); });
-    renderEditorBody();
   }
   $('#e-title').addEventListener('change', function () { const ls = current(); if (ls) { ls.title = $('#e-title').value.trim(); touch(ls); } });
   $('#e-fx').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.fx = $('#e-fx').checked; touch(ls); } });
@@ -1202,12 +1285,38 @@
     card.appendChild(el('p', { class: 'hint', text: before ? 'Prima di guardare: 3 domande bastano. Servono a far emergere il tema e quello che gli studenti già sanno, senza svelare il contenuto del video.' : 'Dopo il video: domande SPECIFICHE su quello che il video ha detto — prima di comprensione (lo studente racconta quello che ha capito), poi di opinione ancorate ai punti del video. Lo studente le vede una alla volta con le espressioni utili; nessuna correzione automatica: si parla.' }));
     if (!sec.questions.length) box.appendChild(el('p', { class: 'muted', text: 'Nessuna domanda: proponile con l\'AI o scrivile a mano (una domanda aperta + le espressioni utili per rispondere).' }));
     const KIND = { check: 'comprensione', talk: 'opinione', warmup: 'per entrare nel tema' };
+    /** Rigenera UNA domanda con l'AI, del tipo indicato, evitando di ripetere le altre della sezione. */
+    const regen = function (q, status) {
+      if (!S.settings.apiKey) return toast('Serve la chiave API (Impostazioni AI)');
+      status.textContent = '… chiedo al modello';
+      const chunks = ls.chunks && ls.chunks.length ? ls.chunks : G.annotate(G.buildChunks(ls.lines || [], { duration: ls.duration, lang: ls.lang }), { lang: ls.lang, duration: ls.duration });
+      const avoid = sec.questions.filter(function (x) { return x !== q && x.text; }).map(function (x) { return x.text; });
+      AI.suggestDiscussion({ chunks: chunks, lang: ls.lang, level: ls.level, n: 1, mode: before ? 'warmup' : 'after', kind: before ? 'warmup' : (q.kind === 'check' ? 'check' : 'talk'), avoid: avoid, focus: ls.params && ls.params.focus, apiKey: S.settings.apiKey, model: S.settings.model })
+        .then(function (r) {
+          const nq = r.questions[0];
+          if (!nq) { status.textContent = ''; return toast('Il modello non ha proposto nulla: riprova'); }
+          q.text = nq.text; q.help = nq.help; q.kind = nq.kind;
+          touch(ls); renderFlow(ls);
+          toast('Domanda rigenerata' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''));
+        })
+        .catch(function (e) { status.textContent = ''; toast('AI: ' + e.message, 6000); });
+    };
     sec.questions.forEach(function (q, i) {
       const row = el('div', { class: 'talk-row' });
-      row.appendChild(el('span', { class: 'num' }, String(i + 1), q.kind && KIND[q.kind] ? el('span', { class: 'kind ' + q.kind, text: KIND[q.kind] }) : null));
+      row.appendChild(el('span', { class: 'num', text: String(i + 1) }));
+      // riga di intestazione della domanda: il TIPO (cliccabile: comprensione ↔ opinione) e "Rigenera" solo per questa domanda
+      const meta = el('div', { class: 'talk-meta' });
+      const kindLabel = before ? KIND.warmup : (KIND[q.kind] || 'tipo?');
+      const kindBtn = el('button', { type: 'button', class: 'kind ' + (before ? 'warmup' : (q.kind || 'none')), text: kindLabel,
+        title: before ? 'Prima del video: domanda per entrare nel tema' : 'Clicca per cambiare: comprensione ↔ opinione' });
+      if (!before) kindBtn.addEventListener('click', function () { q.kind = q.kind === 'check' ? 'talk' : 'check'; touch(ls); renderFlow(ls); });
+      meta.appendChild(kindBtn);
+      const status = el('span', { class: 'hint' });
+      if (S.settings.apiKey) meta.appendChild(el('button', { class: 'small regen', text: '✨ Rigenera', title: 'Sostituisci solo questa domanda con una nuova dell\'AI, dello stesso tipo', onclick: function () { regen(q, status); } }));
+      meta.appendChild(status);
       // caselle che crescono col testo: domanda ed espressioni si leggono per intero, una sopra l'altra
       const grow = function (t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
-      const qi = el('textarea', { class: 'talk-in q', rows: '1', placeholder: 'Domanda (aperta, personale)' });
+      const qi = el('textarea', { class: 'talk-in q', rows: '1', placeholder: before ? 'Domanda per entrare nel tema' : (q.kind === 'check' ? 'Domanda di comprensione sul video' : 'Domanda aperta, di opinione') });
       qi.value = q.text || '';
       qi.addEventListener('input', function () { grow(qi); });
       qi.addEventListener('change', function () { q.text = qi.value.trim(); touch(ls); });
@@ -1215,7 +1324,7 @@
       hi.value = q.help || '';
       hi.addEventListener('input', function () { grow(hi); });
       hi.addEventListener('change', function () { q.help = hi.value.trim(); touch(ls); });
-      row.appendChild(el('div', { class: 'talk-fields' }, qi, hi));
+      row.appendChild(el('div', { class: 'talk-fields' }, meta, qi, hi));
       row.appendChild(el('div', { class: 'row talk-btns', style: 'gap:4px' },
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { sec.questions.splice(i - 1, 0, sec.questions.splice(i, 1)[0]); touch(ls); renderFlow(ls); } }),
         el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === sec.questions.length - 1 ? 'disabled' : null, onclick: function () { sec.questions.splice(i + 1, 0, sec.questions.splice(i, 1)[0]); touch(ls); renderFlow(ls); } }),
@@ -1290,6 +1399,38 @@
     });
     return box;
   }
+  /** Pulsante 🎨 dentro una scena già resa: cambia il template AL VOLO, il gioco continua da dove è (niente reset).
+   *  act = oggetto con .theme (viene aggiornato); opts: { fx, onPick(themeId) } — onPick decide se salvare (lezione propria). */
+  function themeSwitcher(rootEl, act, opts) {
+    if (!rootEl) return null;
+    const o = opts || {};
+    const btn = el('button', { type: 'button', class: 'act-theme-btn', title: 'Cambia template: il gioco continua da dove sei', 'aria-label': 'Cambia template' }, '🎨');
+    const pop = el('div', { class: 'act-theme-pop' }); pop.hidden = true;
+    const close = function () { pop.hidden = true; btn.classList.remove('open'); };
+    const build = function () {
+      pop.innerHTML = '';
+      pop.appendChild(el('div', { class: 'hint', text: 'Template — cambia al volo, senza perdere quello che hai già fatto' }));
+      const chips = el('div', { class: 'chips' });
+      ACT.THEMES.forEach(function (t) {
+        const c = el('button', { type: 'button', class: 'theme-chip' + (ACT.themeOf(act) === t.id ? ' sel' : ''), title: t.name },
+          el('span', { class: 'sw', style: 'background:' + t.sw }), t.emoji + ' ' + t.name);
+        c.addEventListener('click', function () {
+          if (!ACT.retheme(rootEl, act, t.id, { fx: o.fx !== false })) return;
+          if (o.onPick) o.onPick(t.id);
+          close();
+        });
+        chips.appendChild(c);
+      });
+      pop.appendChild(chips);
+    };
+    btn.addEventListener('click', function (e) { e.stopPropagation(); if (pop.hidden) { build(); pop.hidden = false; btn.classList.add('open'); } else close(); });
+    pop.addEventListener('click', function (e) { e.stopPropagation(); });
+    rootEl.addEventListener('click', function () { if (!pop.hidden) close(); });   // clic altrove nella scena → si chiude
+    rootEl.appendChild(btn); rootEl.appendChild(pop);
+    return btn;
+  }
+  /** true se la lezione aperta è del proprietario (nel suo portfolio): le scelte fatte giocando si salvano lì. */
+  function ownLesson(ls) { return !!(ls && !S.standalone && S.lessons[ls.id] === ls); }
   /** "Trasforma in…": stesso contenuto, altro tipo di attività (un click). onDone(newType) dopo la conversione. */
   function convertRow(act, onDone) {
     const targets = ACT.convertTargets(act);
@@ -1342,23 +1483,61 @@
     }
     if (act.type === 'quiz') {
       if (!Array.isArray(d.questions)) d.questions = [];
-      box.appendChild(el('p', { class: 'hint', style: 'margin-top:0', text: 'Domande a scelta multipla: segna la risposta giusta con il pallino. Le risposte compaiono mescolate.' }));
+      const hasKey = !!S.settings.apiKey;
+      box.appendChild(el('p', { class: 'hint', style: 'margin-top:0', text: 'Domande a scelta multipla: segna la risposta giusta con il pallino. Le risposte compaiono mescolate.' + (hasKey ? ' ✨ rifà con l\'AI una singola domanda o una singola risposta; oppure scrivi tu.' : '') }));
+      // contesto per l'AI: il testo del video (nella lezione) o il titolo come argomento (standalone)
+      const aiCtx = function () {
+        if (ctx.lesson) return { chunks: ctx.lesson.chunks && ctx.lesson.chunks.length ? ctx.lesson.chunks : G.annotate(G.buildChunks(ctx.lesson.lines || [], { duration: ctx.lesson.duration, lang: ctx.lesson.lang }), { lang: ctx.lesson.lang, duration: ctx.lesson.duration }), lang: ctx.lesson.lang, level: ctx.lesson.level, topic: '' };
+        const topic = (act.title || '').trim();
+        if (!topic) { toast('Scrivi prima il titolo: è l\'argomento su cui l\'AI inventa le domande (es. "Il cibo italiano")', 5000); return null; }
+        return { chunks: null, lang: act.lang || 'it', level: 'B1', topic: topic };
+      };
       d.questions.forEach(function (q, i) {
         if (!Array.isArray(q.options)) q.options = ['', '', '', ''];
         const card = el('div', { class: 'af-quiz' });
         const qrow = el('div', { class: 'qrow' });
         const qi = el('input', { type: 'text', placeholder: 'Domanda ' + (i + 1), value: q.q || '', style: 'font-weight:600' });
         qi.addEventListener('change', function () { q.q = qi.value.trim(); changed(); });
-        qrow.appendChild(qi); qrow.appendChild(rowBtns(d.questions, i));
+        const qb = el('div', { class: 'row', style: 'gap:4px' });
+        if (hasKey) {
+          const rg = el('button', { class: 'small regen', text: '✨ Rigenera', title: 'Un\'altra domanda (con le sue risposte) al posto di questa, diversa dalle altre del quiz' });
+          rg.addEventListener('click', function () {
+            const c = aiCtx(); if (!c) return;
+            rg.disabled = true; rg.textContent = '…';
+            AI.generateQuizSet({ topic: c.topic, chunks: c.chunks, lang: c.lang, level: c.level, n: 1, avoid: d.questions.filter(function (x) { return x !== q && x.q; }).map(function (x) { return x.q; }), apiKey: S.settings.apiKey, model: S.settings.model })
+              .then(function (r2) {
+                if (!r2.questions.length) throw new Error('nessuna domanda proposta');
+                const nq = r2.questions[0];
+                q.q = nq.q; q.options = nq.options.concat(['', '', '', '']).slice(0, 4); q.correct = nq.correct;
+                changed(); redraw(); toast('Domanda ' + (i + 1) + ' sostituita');
+              })
+              .catch(function (e) { rg.disabled = false; rg.textContent = '✨ Rigenera'; toast('AI: ' + e.message, 6000); });
+          });
+          qb.appendChild(rg);
+        }
+        qb.appendChild(el('button', { class: 'small danger', text: '✕', title: 'Togli la domanda', onclick: function () { d.questions.splice(i, 1); changed(); redraw(); } }));
+        qrow.appendChild(qi); qrow.appendChild(qb);
         card.appendChild(qrow);
         q.options.forEach(function (op, k) {
-          const orow = el('div', { class: 'orow' });
+          const orow = el('div', { class: 'orow' + (hasKey ? ' ai' : '') });
           const radio = el('input', { type: 'radio', name: 'aq-' + act.id + '-' + i, title: 'Risposta giusta' });
           radio.checked = q.correct === k;
           radio.addEventListener('change', function () { q.correct = k; changed(); });
           const oi = el('input', { type: 'text', placeholder: 'Risposta ' + (k + 1) + (k > 1 ? ' (facoltativa)' : ''), value: op || '' });
           oi.addEventListener('change', function () { q.options[k] = oi.value.trim(); changed(); });
           orow.appendChild(radio); orow.appendChild(oi);
+          if (hasKey) {
+            const ob = el('button', { class: 'small regen', text: '✨', title: q.correct === k ? 'Riformula la risposta giusta con l\'AI' : 'Un altro distrattore con l\'AI (risposta sbagliata ma plausibile)' });
+            ob.addEventListener('click', function () {
+              if (!(q.q || '').trim()) return toast('Scrivi prima la domanda');
+              const c = aiCtx(); if (!c) return;
+              ob.disabled = true; ob.textContent = '…';
+              AI.generateQuizOption({ q: q.q, options: q.options, correct: q.correct, index: k, topic: c.topic, chunks: c.chunks, lang: c.lang, level: c.level, apiKey: S.settings.apiKey, model: S.settings.model })
+                .then(function (r2) { q.options[k] = r2.text; oi.value = r2.text; changed(); ob.disabled = false; ob.textContent = '✨'; oi.classList.add('flash-in'); setTimeout(function () { oi.classList.remove('flash-in'); }, 1200); })
+                .catch(function (e) { ob.disabled = false; ob.textContent = '✨'; toast('AI: ' + e.message, 6000); });
+            });
+            orow.appendChild(ob);
+          }
           card.appendChild(orow);
         });
         box.appendChild(card);
@@ -1429,9 +1608,10 @@
     }
   }
   /** Prova un'attività nel dialog (editor della lezione o standalone). */
-  function tryActivity(act) {
+  function tryActivity(act, onTheme) {
     const dlg = $('#dlg-act-try');
-    ACT.render($('#at-stage'), act, actOpts({ onDone: function () { dlg.close(); }, doneLabel: 'Chiudi' }));
+    const root = ACT.render($('#at-stage'), act, actOpts({ onDone: function () { dlg.close(); }, doneLabel: 'Chiudi' }));
+    themeSwitcher(root, act, { onPick: function (tid) { if (onTheme) onTheme(tid); } });
     dlg.showModal();
   }
   $('#at-close').addEventListener('click', function () { $('#dlg-act-try').close(); $('#at-stage').innerHTML = ''; });
@@ -1481,7 +1661,7 @@
     const head = el('div', { class: 'row' });
     head.appendChild(el('h2', { style: 'margin:0', text: t.emoji + ' ' + t.label }));
     head.appendChild(el('span', { class: 'hint', text: t.hint }));
-    head.appendChild(el('button', { class: 'small right', text: '▶ Prova', onclick: function () { tryActivity(act); } }));
+    head.appendChild(el('button', { class: 'small right', text: '▶ Prova', onclick: function () { tryActivity(act, function () { touch(ls); renderFlow(ls); }); } }));
     const rm = el('button', { class: 'small danger', text: '✕ Sezione', title: 'Togli questa attività dalla lezione' });
     rm.addEventListener('click', function () {
       const full = ACT.validate(act).length === 0;
@@ -1525,6 +1705,7 @@
     const ls = S.lessons[id]; if (!ls || !ls.activity) return renderHome();
     S.currentId = id;
     show('act');
+    undoOpen(ls);
     const act = ls.activity;
     const t = ACT.TYPES[act.type] || { emoji: '🎲', label: 'Attività', hint: '' };
     $('#a-emoji').textContent = t.emoji;
@@ -1553,7 +1734,7 @@
     const errs = ACT.validate(ls.activity);
     if (errs.length) return toast(errs.join(' '), 5000);
     ls.activity.title = ls.title;
-    tryActivity(ls.activity);
+    tryActivity(ls.activity, function () { touch(ls); openActEditor(ls.id); });
   });
   $('#a-share').addEventListener('click', function () {
     const ls = current(); if (!ls || !ls.activity) return;
@@ -1582,7 +1763,9 @@
     $('#ap-title').textContent = ls.title || (ACT.TYPES[act.type] ? ACT.TYPES[act.type].label : 'Attività');
     $('#ap-edit').style.display = (!S.standalone && S.lessons[ls.id]) ? '' : 'none';
     $('#ap-edit').onclick = function () { openActEditor(ls.id); };
-    ACT.render($('#ap-stage'), act, actOpts({}));
+    const root = ACT.render($('#ap-stage'), act, actOpts({}));
+    // template al volo: chi possiede l'attività la salva così, lo studente cambia solo per sé
+    themeSwitcher(root, act, { onPick: function () { if (ownLesson(ls)) touch(ls); } });
   }
 
   function readyText(ls) {
@@ -2405,7 +2588,8 @@
       const holder = el('div', { class: 'act-holder' });
       p.appendChild(holder);
       const nxt = st.queue[0] || null;
-      ACT.render(holder, act, actOpts({ onDone: function () { advancePhase(); }, doneLabel: nxt ? (nxt.kind === 'video' ? 'Guarda il video ▶' : 'Continua ▶') : 'Vai al riepilogo ▶' }));
+      const root = ACT.render(holder, act, actOpts({ onDone: function () { advancePhase(); }, doneLabel: nxt ? (nxt.kind === 'video' ? 'Guarda il video ▶' : 'Continua ▶') : 'Vai al riepilogo ▶' }));
+      themeSwitcher(root, act, { fx: !st.lesson.options || st.lesson.options.fx !== false, onPick: function () { if (ownLesson(st.lesson)) touch(st.lesson); } });
       p.appendChild(el('div', { class: 'actions' }, el('button', { class: 'link', text: 'Salta questa attività', onclick: advancePhase })));
       return;
     }
@@ -3242,7 +3426,7 @@
   /** Il pannello dello studente veste un template (schede delle Parole utili) o torna neutro (null). */
   function panelTheme(th, ls) {
     const p = $('#s-panel'); if (!p) return;
-    const old = p.querySelector(':scope > .act-deco'); if (old) old.remove();
+    $$(':scope > .act-deco, :scope > .act-props, :scope > .act-theme-btn, :scope > .act-theme-pop', p).forEach(function (n) { n.remove(); });
     if (!th) { p.classList.remove('act', 'vocab-act'); p.removeAttribute('data-theme'); return; }
     p.classList.add('act', 'vocab-act'); p.setAttribute('data-theme', th);
     ACT.decorate(p, { id: 'v' + (ls ? ls.id : ''), theme: th }, { fx: !ls || !ls.options || ls.options.fx !== false });
@@ -3252,10 +3436,13 @@
     const p = $('#s-panel'); p.innerHTML = '';
     const kind = st.cards[st.cardIdx];
     // le schede prendono il template scelto per le Parole utili; il contenuto sta in un wrapper così le decorazioni restano tra un round e l'altro
-    panelTheme((ls.vocab && ls.vocab.theme) || 'classic', ls);
+    const vb = vocabState(ls);
+    panelTheme(vb.theme || 'classic', ls);
     const wrap = el('div', { class: 'vocab-wrap' });
     p.appendChild(wrap);
     if (kind === 'matching') renderMatching(wrap, ls, st); else renderFlashcards(wrap, ls, st);
+    // 🎨 template al volo: le coppie già abbinate e le carte girate restano dove sono
+    themeSwitcher(p, vb, { fx: !ls.options || ls.options.fx !== false, onPick: function () { if (ownLesson(ls)) touch(ls); } });
   }
   /** FLIP: anima lo spostamento degli elementi con data-flip dentro root tra prima e dopo `mutate`. */
   function flipMove(root, mutate, animate) {

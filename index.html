@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260830-41">
+<link rel="stylesheet" href="styles.css?v=20260901-42">
 </head>
 <body>
 <header class="topbar">
@@ -139,6 +139,7 @@
   <section id="view-editor" class="view">
     <div class="row editor-bar">
       <input id="e-title" type="text" class="grow" style="font-size:18px;font-weight:600">
+      <span class="undo-pair"><button id="btn-undo" disabled>↶ Annulla</button><button id="btn-redo" disabled aria-label="Ripeti">↷</button></span>
       <button id="btn-save" class="primary" title="Salva tutto e torna al portfolio">💾 Salva e torna al portfolio</button>
       <button id="btn-student">▶ Anteprima studente</button>
       <button id="btn-share">Link studente</button>
@@ -239,6 +240,7 @@
     <div class="row editor-bar">
       <span id="a-emoji" style="font-size:28px"></span>
       <input id="a-title" type="text" class="grow" style="font-size:18px;font-weight:600" placeholder="Titolo dell'attività">
+      <span class="undo-pair"><button id="a-undo" disabled>↶ Annulla</button><button id="a-redo" disabled aria-label="Ripeti">↷</button></span>
       <button id="a-save" class="primary" title="Salva e torna al portfolio">💾 Salva e torna al portfolio</button>
       <button id="a-try">▶ Prova</button>
       <button id="a-share">Link studente</button>
@@ -389,14 +391,14 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260830-41"></script>
-<script src="exercises.js?v=20260830-41"></script>
-<script src="generator.js?v=20260830-41"></script>
-<script src="activities.js?v=20260830-41"></script>
-<script src="ai.js?v=20260830-41"></script>
-<script src="demo-data.js?v=20260830-41"></script>
-<script src="bookmarklet.js?v=20260830-41"></script>
-<script src="sync.js?v=20260830-41"></script>
-<script src="app.js?v=20260830-41"></script>
+<script src="lang.js?v=20260901-42"></script>
+<script src="exercises.js?v=20260901-42"></script>
+<script src="generator.js?v=20260901-42"></script>
+<script src="activities.js?v=20260901-42"></script>
+<script src="ai.js?v=20260901-42"></script>
+<script src="demo-data.js?v=20260901-42"></script>
+<script src="bookmarklet.js?v=20260901-42"></script>
+<script src="sync.js?v=20260901-42"></script>
+<script src="app.js?v=20260901-42"></script>
 </body>
 </html>

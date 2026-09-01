@@ -81,6 +81,12 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 
 /* editor */
 .editor-bar { margin-bottom: 10px; }
+/* Annulla / Ripeti: coppia compatta accanto al titolo */
+.undo-pair { display: inline-flex; }
+.undo-pair button { border-radius: 0; }
+.undo-pair button:first-child { border-radius: 8px 0 0 8px; }
+.undo-pair button:last-child { border-radius: 0 8px 8px 0; border-left: 0; padding-left: 8px; padding-right: 8px; }
+.undo-pair button:disabled { opacity: .45; cursor: default; }
 .editor-layout { display: grid; grid-template-columns: minmax(320px, 5fr) minmax(360px, 6fr); gap: 16px; align-items: start; }
 .editor-left { position: sticky; top: 64px; max-height: calc(100vh - 76px); overflow-y: auto; padding-right: 2px; }
 .editor-left .card { padding: 12px 14px; }
@@ -373,17 +379,43 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 /* ============ ATTIVITÀ (Memory, Quiz, Anagramma, Ruota) con temi ============ */
 .act { position: relative; overflow: hidden; border-radius: 14px; min-height: 380px; display: flex;
   background: var(--act-bg); color: var(--act-ink); font-family: var(--act-font, var(--font)); }
-.act-stage { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; padding: 18px clamp(12px, 3vw, 30px) 22px; max-width: 980px; margin: 0 auto; width: 100%; }
+/* margini laterali dell'8%: è la "cornice" dove vivono gli elementi iconici del tema, il contenuto resta al centro */
+.act-stage { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; padding: 18px clamp(14px, 8%, 84px) 22px; max-width: 980px; margin: 0 auto; width: 100%; }
+/* Elementi iconici FISSI del tema (zucca, teschio, trofeo…): dietro il contenuto, ai bordi della scena */
+.act-props { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.act-props span { position: absolute; line-height: 1; opacity: .92; filter: drop-shadow(0 4px 6px rgba(0,0,0,.22)); }
+@media (max-width: 720px) { .act-props span { opacity: .38; } }
+/* Decorazioni animate "una ogni tanto": ogni elemento è visibile solo per un quarto di un ciclo lungo, il resto del tempo
+   è trasparente → in media un solo elemento in movimento, mai un loop continuo che distrae. */
 .act-deco { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.act-deco span { position: absolute; opacity: .16; animation: act-float ease-in-out infinite; }
-.act-deco.m-fall span { animation-name: act-fall; animation-timing-function: linear; opacity: .5; }
-.act-deco.m-rise span { animation-name: act-rise; animation-timing-function: linear; opacity: .35; }
-.act-deco.m-twinkle span { animation-name: act-twinkle; animation-direction: alternate; animation-timing-function: ease-in-out; opacity: .4; }
-@keyframes act-float { 0% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-18px) rotate(6deg); } 100% { transform: translateY(0) rotate(-6deg); } }
-@keyframes act-fall { 0% { transform: translateY(-110vh) rotate(0); } 100% { transform: translateY(110vh) rotate(200deg); } }
-@keyframes act-rise { 0% { transform: translateY(110vh); } 100% { transform: translateY(-110vh); } }
-@keyframes act-twinkle { 0% { opacity: .08; transform: scale(.75); } 100% { opacity: .55; transform: scale(1.12); } }
-@media (prefers-reduced-motion: reduce) { .act-deco span { animation: none !important; } }
+.act-deco span { position: absolute; opacity: 0; animation: act-float linear infinite; will-change: transform, opacity; }
+.act-deco.m-fall span { animation-name: act-fall; }
+.act-deco.m-rise span { animation-name: act-rise; }
+.act-deco.m-twinkle span { animation-name: act-twinkle; animation-timing-function: ease-in-out; }
+@keyframes act-float {
+  0% { opacity: 0; transform: translate(-6vw, 6px) rotate(-4deg); }
+  4% { opacity: .38; }
+  22% { opacity: .38; transform: translate(5vw, -12px) rotate(5deg); }
+  27% { opacity: 0; transform: translate(8vw, -18px) rotate(6deg); }
+  100% { opacity: 0; transform: translate(8vw, -18px) rotate(6deg); } }
+@keyframes act-fall {
+  0% { opacity: 0; transform: translate(0, -12vh) rotate(0); }
+  2% { opacity: .55; }
+  23% { opacity: .55; }
+  26% { opacity: 0; transform: translate(4vw, 104vh) rotate(170deg); }
+  100% { opacity: 0; transform: translate(4vw, 104vh) rotate(170deg); } }
+@keyframes act-rise {
+  0% { opacity: 0; transform: translate(0, 104vh); }
+  2% { opacity: .42; }
+  23% { opacity: .42; }
+  26% { opacity: 0; transform: translate(3vw, -12vh); }
+  100% { opacity: 0; transform: translate(3vw, -12vh); } }
+@keyframes act-twinkle {
+  0% { opacity: 0; transform: scale(.6); }
+  10% { opacity: .55; transform: scale(1.1); }
+  22% { opacity: 0; transform: scale(.7); }
+  100% { opacity: 0; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .act-deco { display: none; } }
 
 /* ---- I 10 TEMI (dal più sobrio al più festoso). Ogni tema: sfondo disegnato, palette, dorso delle carte, font, movimento. ---- */
 /* default: Classico — carta avorio, serif elegante, per adulti */
@@ -440,18 +472,20 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
   --act-display: 'Space Grotesk', var(--font); }
 .act[data-theme="night"] .act-btn.primary { box-shadow: 0 0 14px rgba(56,224,125,.35); }
 
-/* Gioco a premi — studio TV: faretti, oro, pavimento lucido. Fatto per il Quiz */
-.act[data-theme="tvshow"] { --act-ink: #f5f0dd; --act-muted: #9aa0c9; --act-card: #141d4d; --act-card-ink: #f5f0dd;
-  --act-line: #3a4487; --act-accent: #e8b93d; --act-accent-ink: #2a1e05; --act-good: #45d68a; --act-bad: #ff5a6a;
-  --act-back: linear-gradient(135deg, #1a2560, #101740); --act-back-ink: #e8b93d;
-  --act-display: 'Space Grotesk', var(--font);
+/* Gioco a premi — teatro TV: sipario bordeaux a pieghe, faretti dorati, pavimento lucido, serif da titolo. Fatto per il Quiz */
+.act[data-theme="tvshow"] { --act-bg: #3a0d1c; --act-ink: #fff4dc; --act-muted: #d2a9b6; --act-card: #4f1226; --act-card-ink: #fff4dc;
+  --act-line: #8a2f4d; --act-accent: #f3c545; --act-accent-ink: #2a1e05; --act-good: #62d68f; --act-bad: #ff7d6e;
+  --act-back: linear-gradient(135deg, #6a1730, #3a0d1c); --act-back-ink: #f3c545;
+  --act-display: 'Fraunces', Georgia, serif;
   background:
-    conic-gradient(from 200deg at 8% -6%, transparent 0deg, rgba(232,185,61,.14) 12deg, transparent 26deg),
-    conic-gradient(from 130deg at 92% -6%, transparent 0deg, rgba(120,150,255,.14) 12deg, transparent 26deg),
-    radial-gradient(ellipse 120% 22% at 50% 106%, rgba(140,160,255,.16), transparent 60%),
-    linear-gradient(175deg, #0a0f30, #101a4d 65%, #131f56); }
-.act[data-theme="tvshow"] .quiz-opt, .act[data-theme="tvshow"] .mem-front { box-shadow: 0 0 0 1px rgba(232,185,61,.30), 0 3px 10px rgba(0,0,0,.4); }
-.act[data-theme="tvshow"] .act-stat.score { border-color: #e8b93d; color: #e8b93d; }
+    conic-gradient(from 200deg at 8% -6%, transparent 0deg, rgba(243,197,69,.20) 12deg, transparent 26deg),
+    conic-gradient(from 130deg at 92% -6%, transparent 0deg, rgba(243,197,69,.16) 12deg, transparent 26deg),
+    radial-gradient(ellipse 120% 22% at 50% 106%, rgba(243,197,69,.26), transparent 60%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 6px, transparent 6px 34px, rgba(255,255,255,.035) 34px 40px),
+    linear-gradient(175deg, #2a0813, #4a1023 62%, #5a1229); }
+.act[data-theme="tvshow"] .quiz-opt, .act[data-theme="tvshow"] .mem-front, .act[data-theme="tvshow"] .ana-tile { box-shadow: 0 0 0 1.5px rgba(243,197,69,.45), 0 3px 10px rgba(0,0,0,.45); }
+.act[data-theme="tvshow"] .act-stat.score { border-color: #f3c545; color: #f3c545; }
+.act[data-theme="tvshow"] .act-title, .act[data-theme="tvshow"] .quiz-q { color: #f3c545; text-shadow: 0 2px 8px rgba(0,0,0,.45); }
 
 /* Spazio — notte stellata (stelle fisse a tre profondità), viola cosmico, stelle che brillano */
 .act[data-theme="space"] { --act-ink: #eceafc; --act-muted: #9a93c9; --act-card: #191a3f; --act-card-ink: #eceafc;
@@ -708,6 +742,17 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .theme-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px 5px 6px; cursor: pointer; background: #fff; font-weight: 600; font-size: 14px; }
 .theme-chip .sw { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); flex: 0 0 auto; }
 .theme-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(31, 111, 235, .25); }
+/* 🎨 cambio template al volo, dentro la scena: pulsante discreto nell'angolo + pannellino con i chip */
+.act-theme-btn { position: absolute; top: 10px; right: 10px; z-index: 5; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); background: rgba(255,255,255,.88); color: #222; font-size: 17px; line-height: 1; box-shadow: 0 2px 8px rgba(0,0,0,.18); opacity: .55; transition: opacity .15s, transform .15s; font-family: var(--font); }
+.act-theme-btn:hover, .act-theme-btn.open, .act-theme-btn:focus-visible { opacity: 1; transform: scale(1.06); }
+.act-theme-pop { position: absolute; top: 50px; right: 10px; z-index: 6; width: min(430px, calc(100% - 20px)); max-height: calc(100% - 60px); overflow: auto; background: #fff; color: #222; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.25); font-family: var(--font); text-align: left; }
+.act-theme-pop[hidden] { display: none; }
+.act-theme-pop .hint { margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+.act-theme-pop .chips { gap: 6px; }
+.act-theme-pop .theme-chip { font-size: 13px; padding: 4px 9px 4px 5px; color: #222; }
+.act-theme-pop .theme-chip .sw { width: 15px; height: 15px; }
+.pop.vocab-act > .act-theme-btn { top: auto; bottom: 12px; }
+.pop.vocab-act > .act-theme-pop { top: auto; bottom: 54px; }
 .ap-stage .act { min-height: min(76vh, 720px); }
 .at-stage { width: min(92vw, 900px); }
 .at-stage .act { min-height: min(72vh, 620px); }
@@ -719,12 +764,18 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .af-quiz .qrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .af-quiz .orow { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-top: 6px; }
 .af-quiz .orow input[type=radio] { width: auto; }
+.af-quiz .orow.ai { grid-template-columns: auto 1fr auto; }
+.af-quiz .regen { padding: 3px 8px; font-size: 13px; white-space: nowrap; }
+.af-quiz .regen:disabled { opacity: .6; }
+.af-quiz input.flash-in { animation: field-flash 1.2s ease-out; }
+@keyframes field-flash { 0% { background: #fff3cf; } 100% { background: #fff; } }
 .lesson-card .thumb.act-thumb { display: flex; align-items: center; justify-content: center; font-size: 44px; background: var(--chip); }
 
 /* Schede delle Parole utili (abbinamento, flashcards) vestite con il template: il pannello dello studente diventa .act.vocab-act */
 .stage.docked .pop.vocab-act { display: block; min-height: 0; border-radius: 0; overflow: auto; font-family: var(--font); isolation: isolate; }
-.pop.vocab-act > .act-deco { z-index: -1; }   /* sotto il contenuto, sopra lo sfondo del pannello (isolation) */
-.vocab-wrap { min-height: 100%; display: flex; flex-direction: column; }   /* NON posizionato: l'intestazione assoluta resta relativa al pannello */
+.pop.vocab-act > .act-deco, .pop.vocab-act > .act-props { z-index: -1; }   /* sotto il contenuto, sopra lo sfondo del pannello (isolation) */
+.vocab-wrap { min-height: 100%; display: flex; flex-direction: column; padding: 0 clamp(0px, 6%, 72px); }   /* NON posizionato: l'intestazione assoluta resta relativa al pannello; margini = cornice per gli elementi del tema */
+.pop.vocab-act > .act-props { top: 40px; }   /* sotto la riga del titolo */
 .pop.vocab-act .ex-head h3.ex-title { color: var(--act-ink); font-family: var(--act-display); }
 .pop.vocab-act .ex-head h3.ex-title .sub, .pop.vocab-act .instr, .pop.vocab-act .hint, .pop.vocab-act .flashcard .tr { color: var(--act-muted); }
 .pop.vocab-act .badge { background: var(--act-card); color: var(--act-card-ink); border: 1px solid var(--act-line); }
@@ -745,11 +796,14 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 
 /* Parliamone: quando (prima/dopo) e tipo di domanda */
 .when-chip { padding: 4px 12px; font-size: 13px; }
-.talk-row .num { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.talk-row .kind { font-size: 10px; line-height: 1.1; text-align: right; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; white-space: nowrap; }
-.talk-row .kind.check { color: #7a4e00; border-color: #f0c766; background: #fff6dc; }
-.talk-row .kind.talk { color: #1f5e9e; border-color: #b9d3f2; background: #eaf3ff; }
-.talk-row .kind.warmup { color: #5a3d8f; border-color: #cbbcee; background: #f2ecff; }
+.talk-meta { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.talk-meta .regen { padding: 2px 9px; font-size: 13px; }
+.talk-row .kind { font-size: 12px; font-weight: 700; line-height: 1.2; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; white-space: nowrap; background: #fff; cursor: pointer; }
+.talk-row .kind.none { border-style: dashed; }
+.talk-row .kind.check { color: #7a4e00; border-color: #f0c766; background: #fff3cf; }
+.talk-row .kind.talk { color: #1f5e9e; border-color: #b9d3f2; background: #e6f0ff; }
+.talk-row .kind.warmup { color: #5a3d8f; border-color: #cbbcee; background: #f2ecff; cursor: default; }
+.talk-row .kind:not(.warmup):hover { filter: brightness(.96); }
 
 /* editor lungo: "↑ In alto" e la card raggiunta dalla struttura si illumina un istante */
 .to-top { position: fixed; right: 18px; bottom: 18px; z-index: 30; display: none; padding: 10px 14px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.18); background: #fff; font-weight: 600; }

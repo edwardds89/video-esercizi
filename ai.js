@@ -334,9 +334,16 @@
     const nCheck = Math.ceil(n / 2);
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
     const system = 'You help a language teacher prepare a speaking activity ' + (warmup ? 'BEFORE' : 'AFTER') + ' a video. Output ONLY a JSON object, no prose, no markdown fences.';
-    const task = warmup
+    const kindOnly = !warmup && (params.kind === 'check' || params.kind === 'talk');   // rigenerazione di UNA domanda di un tipo preciso
+    const CHECK = 'COMPREHENSION questions ("kind":"check"): they verify that students understood the main ideas and key points of THIS video — what it says, why, how, with which examples, according to the video; open questions answerable by retelling the video (never yes/no, no trivial numbers or dates).';
+    const TALK = 'DISCUSSION questions ("kind":"talk") for SPEAKING practice: personal reactions and opinions ANCHORED to a specific point the video made (e.g. "Il video dice che…: sei d\'accordo?", "Nel tuo paese succede la stessa cosa?").';
+    let task = warmup
       ? 'Write exactly ' + n + ' warm-up questions in ' + lang + ' for BEFORE the video: they elicit the TOPIC — activate what students already know and spark curiosity. The students have NOT seen the video yet: never mention what the video says, never quote its facts, examples or numbers, no spoilers. Each question must be open (never answerable with yes/no or one word), personal and concrete ("Ti è mai capitato…?", "Cosa sai di…?", "Secondo te perché…?"). Order them from easy and personal to more general. Language and grammar suited to a ' + level + ' student; short, one sentence each. Set "kind":"warmup" on each.'
-      : 'Write ' + n + ' questions in ' + lang + ' for AFTER the video, all SPECIFIC to this video (never generic questions that could be asked without having watched it). First ' + nCheck + ' COMPREHENSION questions ("kind":"check"): they verify that students understood the main ideas and key points of THIS video — what it says, why, how, with which examples, according to the video; open questions answerable by retelling the video (never yes/no, no trivial numbers or dates). Then ' + (n - nCheck) + ' DISCUSSION questions ("kind":"talk") for SPEAKING practice: personal reactions and opinions ANCHORED to a specific point the video made (e.g. "Il video dice che…: sei d\'accordo?", "Nel tuo paese succede la stessa cosa?"). Language and grammar suited to a ' + level + ' student; short, one sentence each.';
+      : kindOnly
+        ? 'Write exactly ' + n + ' question' + (n === 1 ? '' : 's') + ' in ' + lang + ' for AFTER the video, SPECIFIC to this video (never a generic question that could be asked without having watched it): ' + (params.kind === 'check' ? CHECK : TALK) + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.'
+        : 'Write ' + n + ' questions in ' + lang + ' for AFTER the video, all SPECIFIC to this video (never generic questions that could be asked without having watched it). First ' + nCheck + ' ' + CHECK + ' Then ' + (n - nCheck) + ' ' + TALK + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.';
+    const avoid = (params.avoid || []).map(function (a) { return String(a || '').trim(); }).filter(Boolean);
+    if (avoid.length) task += ' Do NOT repeat or paraphrase these questions, already in use: ' + avoid.map(function (a) { return '"' + a + '"'; }).join('; ') + '. Ask about something else in the video.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + level,
       task +
       ' For each question give "help": 2 or 3 short chunks or expressions (in ' + lang + ', separated by " · ") the student can use to answer, e.g. "Secondo me… · Non sono d\'accordo perché… · Il video dice che…".' +
@@ -346,7 +353,7 @@
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
     const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) {
-      const kind = warmup ? 'warmup' : (String((q && q.kind) || '').toLowerCase() === 'check' ? 'check' : 'talk');
+      const kind = warmup ? 'warmup' : kindOnly ? params.kind : (String((q && q.kind) || '').toLowerCase() === 'check' ? 'check' : 'talk');
       return { kind: kind, text: String((q && q.text) || '').trim(), help: String((q && q.help) || '').trim() };
     }).filter(function (q) { return q.text; }).slice(0, 12);
     return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
@@ -361,8 +368,12 @@
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
     const system = 'You write engaging quiz questions for language students. Output ONLY a JSON object, no prose, no markdown fences.';
     const src = text ? 'about the VIDEO TEXT below (comprehension of its ideas and vocabulary, not tiny details or exact numbers)' : 'about this topic: "' + String(params.topic || '') + '"';
+    let task = 'Write ' + n + ' multiple-choice question' + (n === 1 ? '' : 's') + ' in ' + lang + ' ' + src + '. Four short options each, exactly one correct ("correct" = its index). Wrong options plausible and of the same kind as the right one. Questions and options suited to a ' + level + ' student, short and clear. Vary what is asked (meaning, vocabulary, usage, true facts).';
+    // rigenerazione di UNA domanda: non ripetere quelle già nel quiz
+    const avoid = (params.avoid || []).map(function (a) { return String(a || '').trim(); }).filter(Boolean);
+    if (avoid.length) task += ' Do NOT repeat or paraphrase these questions, already in the quiz: ' + avoid.map(function (a) { return '"' + a + '"'; }).join('; ') + '. Ask about something else.';
     const user = ['LANGUAGE: ' + lang + '   STUDENT LEVEL: ' + level,
-      'Write ' + n + ' multiple-choice questions in ' + lang + ' ' + src + '. Four short options each, exactly one correct ("correct" = its index). Wrong options plausible and of the same kind as the right one. Questions and options suited to a ' + level + ' student, short and clear. Vary what is asked (meaning, vocabulary, usage, true facts).',
+      task,
       'SCHEMA: {"questions":[{"q":"...","options":["a","b","c","d"],"correct":0}]}',
       text ? '\nVIDEO TEXT:\n' + text : ''].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 2000, fetchImpl: params.fetchImpl });
@@ -373,6 +384,31 @@
       return { q: String((q && q.q) || '').trim(), options: options, correct: correct };
     }).filter(function (q) { return q.q && q.options.length >= 2; }).slice(0, 15);
     return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  /** UNA risposta nuova per una domanda del Quiz: quella giusta riformulata, oppure un distrattore nuovo (plausibile, dello stesso tipo).
+   *  params: { q, options, index, lang, level, topic?, chunks?, apiKey, model, fetchImpl } → { text, ai } */
+  async function generateQuizOption(params) {
+    const lang = params.lang || 'it';
+    const level = params.level || 'B1';
+    const options = (params.options || []).map(function (x) { return String(x || '').trim(); });
+    const k = params.index | 0;
+    const isCorrect = params.correct === k;
+    const others = options.filter(function (o, i) { return i !== k && o; });
+    const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 8000);
+    const system = 'You write multiple-choice quiz items for language students. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['LANGUAGE: ' + lang + '   STUDENT LEVEL: ' + level,
+      'QUESTION: ' + String(params.q || ''),
+      (isCorrect ? 'The option to replace is the CORRECT answer' : 'The option to replace is a WRONG option') + (options[k] ? ' (currently: "' + options[k] + '")' : '') + '.',
+      'OTHER OPTIONS (keep them, do not repeat them): ' + (others.length ? others.map(function (o) { return '"' + o + '"'; }).join(', ') : '(none)') + (isCorrect ? '' : '. The correct answer is "' + (options[params.correct | 0] || '') + '".'),
+      'Write ONE replacement option in ' + lang + ': ' + (isCorrect ? 'a correct answer to the question, formulated differently from the current one' : 'a new plausible wrong option of the same kind and length as the correct answer, clearly wrong for someone who understood') + '. Short, suited to a ' + level + ' student.' + (params.topic ? ' Topic of the quiz: "' + params.topic + '".' : ''),
+      'SCHEMA: {"option":"..."}',
+      text ? '\nVIDEO TEXT (the quiz is about it):\n' + text : ''].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    const out = String((j && j.option) || '').trim();
+    if (!out) throw new Error('Il modello non ha restituito una risposta');
+    return { text: out, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /** Mescola le opzioni di una scelta multipla (il modello mette quasi sempre quella giusta per prima) e rimappa gli indici. */
@@ -475,5 +511,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, generateQuizSet: generateQuizSet };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption };
 });

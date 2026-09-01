@@ -8,25 +8,27 @@
   /** Temi visivi condivisi da tutte le attività (dal più sobrio al più festoso): palette + decorazioni + movimento.
    *  Il CSS li disegna con .act[data-theme=…]; motion: float (fluttuano), fall (cadono: neve, petali), rise (salgono: bolle), twinkle (brillano: stelle).
    *  sw = anteprima per il chip del selettore. */
+  // props = elementi ICONICI fissi e ben visibili (x,y in %, s = dimensione px, r = rotazione): sono loro a "dire" il tema.
+  // deco = pochi elementi animati "una volta ogni tanto" (mai un loop fitto: non devono distrarre gli studenti).
   const THEMES = [
-    { id: 'classic', name: 'Classico', emoji: '📖', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#f6f1e6,#dcd0b6)' },
-    { id: 'notebook', name: 'Quaderno', emoji: '📝', deco: [], motion: 'float', sw: 'linear-gradient(180deg,#fdfdf6 60%,#bcd6ee)' },
-    { id: 'blackboard', name: 'Lavagna', emoji: '✏️', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#33473d,#2b3d34)' },
-    { id: 'coffee', name: 'Caffè', emoji: '☕', deco: ['☕', '🥐', '🫘'], motion: 'float', sw: 'linear-gradient(135deg,#efe4d2,#8a5a33)' },
-    { id: 'night', name: 'Nero puro', emoji: '✦', deco: [], motion: 'float', sw: 'linear-gradient(135deg,#000,#17171d)' },
-    { id: 'tvshow', name: 'Gioco a premi', emoji: '🏆', deco: ['✨', '★', '✨', '✦'], motion: 'twinkle', sw: 'linear-gradient(135deg,#0d1440,#e8b93d)' },
-    { id: 'space', name: 'Spazio', emoji: '🪐', deco: ['✦', '✧', '⭐', '🪐', '✦', '✧', '💫'], motion: 'twinkle', sw: 'linear-gradient(135deg,#0b1030,#3a1a6e)' },
-    { id: 'synth', name: 'Neon retrò', emoji: '👾', deco: [], motion: 'float', sw: 'linear-gradient(180deg,#1a0b33,#ff3ec8)' },
-    { id: 'ocean', name: 'Oceano', emoji: '🐚', deco: ['🫧', '🐠', '🫧', '🐟', '🫧', '🐙', '🫧'], motion: 'rise', sw: 'linear-gradient(180deg,#0c86c8,#0a3d62)' },
-    { id: 'jungle', name: 'Giungla', emoji: '🦜', deco: ['🍃', '🌿', '🦜', '🌺', '🐒', '🍃'], motion: 'float', sw: 'linear-gradient(135deg,#1d5a30,#123b22)' },
-    { id: 'spring', name: 'Primavera', emoji: '🌸', deco: ['🌸', '🌷', '🦋', '🌼', '🌸', '🍃'], motion: 'fall', sw: 'linear-gradient(135deg,#eafbe7,#ffe3ef)' },
-    { id: 'summer', name: 'Estate', emoji: '🌞', deco: ['🌞', '🌊', '🍉', '🐚', '🌴'], motion: 'float', sw: 'linear-gradient(180deg,#bfe9fb,#f3e3b8)' },
-    { id: 'autumn', name: 'Autunno', emoji: '🍁', deco: ['🍁', '🍂', '🍂', '🌰', '🍁'], motion: 'fall', sw: 'linear-gradient(135deg,#f5e5c2,#c65d2e)' },
-    { id: 'winter', name: 'Inverno', emoji: '⛄', deco: ['❄', '❅', '❄', '❆', '❄'], motion: 'fall', sw: 'linear-gradient(180deg,#f0f8ff,#bcdcf0)' },
-    { id: 'rainbow', name: 'Arcobaleno', emoji: '🌈', deco: ['🌈', '✨', '🎈', '⭐'], motion: 'float', sw: 'linear-gradient(90deg,#ff8a8a,#ffc86b,#7fd98a,#6db3ff,#b98aff)' },
-    { id: 'candy', name: 'Caramelle', emoji: '🍭', deco: ['🍬', '🍭', '🧁', '🍬', '🍩'], motion: 'float', sw: 'linear-gradient(135deg,#ffd9ec,#ff4f9a)' },
-    { id: 'halloween', name: 'Halloween', emoji: '🎃', deco: ['🦇', '👻', '🎃', '🕸', '🦇', '✨'], motion: 'float', sw: 'linear-gradient(135deg,#140a1e,#ff8c1a)' },
-    { id: 'christmas', name: 'Natale', emoji: '🎄', deco: ['❄', '❅', '❄', '⭐', '❄', '🎁'], motion: 'fall', sw: 'linear-gradient(135deg,#14301f,#b23a33)' }
+    { id: 'classic', name: 'Classico', emoji: '📖', deco: [], motion: 'float', props: [], sw: 'linear-gradient(135deg,#f6f1e6,#dcd0b6)' },
+    { id: 'notebook', name: 'Quaderno', emoji: '📝', deco: [], motion: 'float', props: [{ e: '✏️', x: 1, y: 80, s: 52, r: -35 }], sw: 'linear-gradient(180deg,#fdfdf6 60%,#bcd6ee)' },
+    { id: 'blackboard', name: 'Lavagna', emoji: '✏️', deco: [], motion: 'float', props: [{ e: '🍎', x: 91, y: 82, s: 44 }], sw: 'linear-gradient(135deg,#33473d,#2b3d34)' },
+    { id: 'coffee', name: 'Caffè', emoji: '☕', deco: ['🫘'], motion: 'fall', props: [{ e: '☕', x: 90, y: 44, s: 60 }, { e: '🥐', x: 1.5, y: 80, s: 52, r: -15 }], sw: 'linear-gradient(135deg,#efe4d2,#8a5a33)' },
+    { id: 'night', name: 'Nero puro', emoji: '✦', deco: [], motion: 'float', props: [], sw: 'linear-gradient(135deg,#000,#17171d)' },
+    { id: 'tvshow', name: 'Gioco a premi', emoji: '🏆', deco: ['✨', '✨'], motion: 'twinkle', props: [{ e: '🏆', x: 89.5, y: 42, s: 66 }, { e: '🎤', x: 1.5, y: 78, s: 56, r: -20 }], sw: 'linear-gradient(135deg,#3a0d1c,#f3c545)' },
+    { id: 'space', name: 'Spazio', emoji: '🪐', deco: ['✦', '✧', '💫'], motion: 'twinkle', props: [{ e: '🪐', x: 88, y: 36, s: 70 }, { e: '🚀', x: 2, y: 76, s: 60, r: -25 }, { e: '👩‍🚀', x: 90, y: 80, s: 50 }], sw: 'linear-gradient(135deg,#0b1030,#3a1a6e)' },
+    { id: 'synth', name: 'Neon retrò', emoji: '👾', deco: [], motion: 'float', props: [{ e: '👾', x: 90, y: 40, s: 54 }, { e: '🕹️', x: 2, y: 80, s: 50, r: -15 }], sw: 'linear-gradient(180deg,#1a0b33,#ff3ec8)' },
+    { id: 'ocean', name: 'Oceano', emoji: '🐚', deco: ['🫧', '🫧', '🐟'], motion: 'rise', props: [{ e: '🐠', x: 2, y: 44, s: 58 }, { e: '🌿', x: 89, y: 64, s: 60 }, { e: '🐚', x: 91, y: 88, s: 40 }], sw: 'linear-gradient(180deg,#0c86c8,#0a3d62)' },
+    { id: 'jungle', name: 'Giungla', emoji: '🦜', deco: ['🍃', '🦋'], motion: 'fall', props: [{ e: '🌴', x: 1, y: 64, s: 84 }, { e: '🦜', x: 89, y: 36, s: 64 }, { e: '🐒', x: 91, y: 82, s: 50 }], sw: 'linear-gradient(135deg,#1d5a30,#123b22)' },
+    { id: 'spring', name: 'Primavera', emoji: '🌸', deco: ['🌸', '🌸', '🦋'], motion: 'fall', props: [{ e: '🌷', x: 2, y: 76, s: 60 }, { e: '🌸', x: 90, y: 82, s: 52 }, { e: '🐝', x: 89, y: 40, s: 40 }], sw: 'linear-gradient(135deg,#eafbe7,#ffe3ef)' },
+    { id: 'summer', name: 'Estate', emoji: '🌞', deco: ['🌊'], motion: 'float', props: [{ e: '🏖️', x: 1.5, y: 76, s: 70 }, { e: '🍉', x: 90, y: 84, s: 50 }, { e: '🕶️', x: 89, y: 42, s: 40 }], sw: 'linear-gradient(180deg,#bfe9fb,#f3e3b8)' },
+    { id: 'autumn', name: 'Autunno', emoji: '🍁', deco: ['🍁', '🍂', '🍂'], motion: 'fall', props: [{ e: '🍁', x: 2, y: 76, s: 66, r: -15 }, { e: '🌰', x: 91, y: 86, s: 46 }, { e: '🍄', x: 89, y: 42, s: 46 }], sw: 'linear-gradient(135deg,#f5e5c2,#c65d2e)' },
+    { id: 'winter', name: 'Inverno', emoji: '⛄', deco: ['❄', '❅', '❄'], motion: 'fall', props: [{ e: '⛄', x: 2, y: 74, s: 70 }, { e: '🌲', x: 90, y: 76, s: 62 }, { e: '🧣', x: 89, y: 40, s: 40 }], sw: 'linear-gradient(180deg,#f0f8ff,#bcdcf0)' },
+    { id: 'rainbow', name: 'Arcobaleno', emoji: '🌈', deco: ['🎈'], motion: 'rise', props: [{ e: '🌈', x: 88, y: 36, s: 80 }, { e: '☁️', x: 2, y: 78, s: 56 }], sw: 'linear-gradient(90deg,#ff8a8a,#ffc86b,#7fd98a,#6db3ff,#b98aff)' },
+    { id: 'candy', name: 'Caramelle', emoji: '🍭', deco: ['🍬'], motion: 'fall', props: [{ e: '🍭', x: 2, y: 76, s: 66, r: -20 }, { e: '🧁', x: 90, y: 82, s: 52 }, { e: '🍩', x: 89, y: 40, s: 46 }], sw: 'linear-gradient(135deg,#ffd9ec,#ff4f9a)' },
+    { id: 'halloween', name: 'Halloween', emoji: '🎃', deco: ['🦇', '🦇', '👻'], motion: 'float', props: [{ e: '🎃', x: 1.5, y: 76, s: 76 }, { e: '💀', x: 90, y: 44, s: 52 }, { e: '🕸️', x: 0.5, y: 1, s: 64 }], sw: 'linear-gradient(135deg,#140a1e,#ff8c1a)' },
+    { id: 'christmas', name: 'Natale', emoji: '🎄', deco: ['❄', '❅', '❄'], motion: 'fall', props: [{ e: '🎄', x: 1, y: 66, s: 84 }, { e: '🎁', x: 90, y: 84, s: 50 }, { e: '⭐', x: 89, y: 40, s: 44 }], sw: 'linear-gradient(135deg,#14301f,#b23a33)' }
   ];
   const THEME_IDS = THEMES.map(function (t) { return t.id; });
 
@@ -175,25 +177,50 @@
   function clearNode(n) { while (n.firstChild) n.removeChild(n.firstChild); }
   function themeOf(act) { return THEME_IDS.indexOf(act.theme) >= 0 ? act.theme : 'classic'; }
 
-  /** Decorazioni animate del tema (emoji che fluttuano/cadono/salgono/brillano) dentro rootEl; niente per i temi sobri o con fx=false. */
+  /** Scena del tema dentro rootEl: gli elementi ICONICI fissi (`.act-props`, sempre) e poche decorazioni animate
+   *  "una ogni tanto" (`.act-deco`, niente con fx=false): ognuna si muove per una frazione di un ciclo lungo, poi sparisce. */
   function decorate(rootEl, act, opts) {
     const th = THEMES.find(function (t) { return t.id === themeOf(act); });
-    if (!th || !th.deco.length || (opts && opts.fx === false)) return null;
+    if (!th) return null;
+    if (th.props && th.props.length) {
+      const props = h('div', { class: 'act-props', 'aria-hidden': 'true' });
+      th.props.forEach(function (p) {
+        const e = h('span', { text: p.e });
+        e.style.left = p.x + '%'; e.style.top = p.y + '%'; e.style.fontSize = p.s + 'px';
+        if (p.r) e.style.transform = 'rotate(' + p.r + 'deg)';
+        props.appendChild(e);
+      });
+      rootEl.appendChild(props);
+    }
+    if (!th.deco.length || (opts && opts.fx === false)) return null;
     const motion = th.motion || 'float';
-    const dur = { float: [7, 8], fall: [9, 9], rise: [8, 8], twinkle: [1.8, 2.2] }[motion];
+    // cicli lunghi: cade/sale/brilla per circa un quarto del ciclo, il resto è invisibile → "ne cade una ogni tanto"
+    const dur = { float: [18, 10], fall: [28, 14], rise: [26, 12], twinkle: [8, 6] }[motion];
+    const count = motion === 'twinkle' ? 4 : 3;
     const deco = h('div', { class: 'act-deco m-' + motion, 'aria-hidden': 'true' });
     const r = rng(act.id ? String(act.id).length * 97 + 13 : 41);
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < count; i++) {
       const e = h('span', { text: th.deco[i % th.deco.length] });
-      e.style.left = (r() * 96) + '%';
-      e.style.top = (r() * 92) + '%';
-      e.style.fontSize = (16 + r() * 26) + 'px';
-      e.style.animationDelay = '-' + (r() * 12).toFixed(2) + 's';   // negativo: il movimento è già in corso all'apertura
-      e.style.animationDuration = (dur[0] + r() * dur[1]).toFixed(2) + 's';
+      e.style.left = (4 + r() * 90) + '%';
+      e.style.top = (motion === 'fall' || motion === 'rise') ? '0' : (8 + r() * 80) + '%';
+      e.style.fontSize = (18 + r() * 18) + 'px';
+      const d = dur[0] + r() * dur[1];
+      e.style.animationDuration = d.toFixed(2) + 's';
+      e.style.animationDelay = '-' + (r() * d).toFixed(2) + 's';   // sfasate lungo il ciclo: non partono tutte insieme
       deco.appendChild(e);
     }
     rootEl.appendChild(deco);
     return deco;
+  }
+  /** Cambia il template di una scena GIÀ resa senza toccare il gioco in corso (carte girate, punti, risposte date):
+   *  aggiorna data-theme (il CSS fa il resto) e ridisegna solo elementi iconici e decorazioni. Ritorna false se il tema non esiste. */
+  function retheme(rootEl, act, themeId, opts) {
+    if (!rootEl || THEME_IDS.indexOf(themeId) < 0) return false;
+    act.theme = themeId;
+    rootEl.setAttribute('data-theme', themeId);
+    Array.prototype.slice.call(rootEl.children).forEach(function (c) { if (c.classList.contains('act-props') || c.classList.contains('act-deco')) rootEl.removeChild(c); });
+    decorate(rootEl, act, opts);
+    return true;
   }
   /** Contenitore comune: tema + decorazioni di sfondo + area di gioco. Ritorna { rootEl, stage }. */
   function shell(container, act, opts) {
@@ -518,19 +545,23 @@
     play();
   }
 
-  /** Renderer principale: disegna l'attività dentro container. opts: { onDone(result), doneLabel, celebrate(el), sound(), fx }. */
+  /** Renderer principale: disegna l'attività dentro container. opts: { onDone(result), doneLabel, celebrate(el), sound(), fx }.
+   *  Ritorna l'elemento radice della scena (.act) o null se l'attività non è completa. */
   function render(container, act, opts) {
     const errs = validate(act);
     if (errs.length) {
       clearNode(container);
       container.appendChild(h('div', { class: 'act-invalid', text: 'Questa attività non è completa: ' + errs.join(' ') }));
-      return;
+      return null;
     }
-    if (act.type === 'memory') return renderMemory(container, act, opts || {});
-    if (act.type === 'quiz') return renderQuiz(container, act, opts || {});
-    if (act.type === 'anagram') return renderAnagram(container, act, opts || {});
-    if (act.type === 'wheel') return renderWheel(container, act, opts || {});
+    const o = opts || {};
+    if (act.type === 'memory') renderMemory(container, act, o);
+    else if (act.type === 'quiz') renderQuiz(container, act, o);
+    else if (act.type === 'anagram') renderAnagram(container, act, o);
+    else if (act.type === 'wheel') renderWheel(container, act, o);
+    else return null;
+    return container.querySelector('.act');
   }
 
-  return { THEMES: THEMES, TYPES: TYPES, render: render, decorate: decorate, themeOf: themeOf, validate: validate, convert: convert, convertTargets: convertTargets, pairsOf: pairsOf, memoryDeck: memoryDeck, memoryCols: memoryCols, quizOrder: quizOrder, quizPoints: quizPoints, anagramLetters: anagramLetters, wheelIndexAt: wheelIndexAt, rng: rng, shuffle: shuffle };
+  return { THEMES: THEMES, TYPES: TYPES, render: render, decorate: decorate, retheme: retheme, themeOf: themeOf, validate: validate, convert: convert, convertTargets: convertTargets, pairsOf: pairsOf, memoryDeck: memoryDeck, memoryCols: memoryCols, quizOrder: quizOrder, quizPoints: quizPoints, anagramLetters: anagramLetters, wheelIndexAt: wheelIndexAt, rng: rng, shuffle: shuffle };
 });
