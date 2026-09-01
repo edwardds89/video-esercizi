@@ -241,6 +241,9 @@
     toast((ls.activity ? 'Attività' : 'Lezione') + ' ripristinata: ' + (ls.title || 'senza titolo'));
     return true;
   }
+  /** Ogni "✕/Elimina" dentro l'editor dice come tornare indietro: l'annullamento c'è già (la modifica passa da touch),
+   *  ma se nessuno lo dice l'utente crede che sia definitivo e rifà il lavoro a mano. */
+  function undoBarFor(what) { toastUndo('Eliminato: ' + what, function () { if (!undo()) toast('Niente da annullare'); }); }
   /** Unico punto di eliminazione di una lezione/attività: mette da parte una copia e lo dice con la via d'uscita. */
   function deleteLesson(ls) {
     if (!ls) return;
@@ -1193,7 +1196,7 @@
       renderImg();
       row.appendChild(cb); row.appendChild(wi); row.appendChild(ti); row.appendChild(img);
       row.appendChild(el('span', { class: 'badge', text: w.inExercise ? 'negli esercizi' : (w.source === 'ai' ? 'AI' : ''), style: w.inExercise || w.source === 'ai' ? '' : 'visibility:hidden' }));
-      row.appendChild(el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { vb.words = vb.words.filter(function (x) { return x !== w; }); touch(ls); renderVocabEditor(ls); } }));
+      row.appendChild(el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { vb.words = vb.words.filter(function (x) { return x !== w; }); touch(ls); renderVocabEditor(ls); undoBarFor('parola "' + (w.word || '') + '"'); } }));
       table.appendChild(row);
     });
     box.appendChild(table);
@@ -1419,7 +1422,7 @@
       row.appendChild(el('div', { class: 'row talk-btns', style: 'gap:4px' },
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { sec.questions.splice(i - 1, 0, sec.questions.splice(i, 1)[0]); touch(ls); renderFlow(ls); } }),
         el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === sec.questions.length - 1 ? 'disabled' : null, onclick: function () { sec.questions.splice(i + 1, 0, sec.questions.splice(i, 1)[0]); touch(ls); renderFlow(ls); } }),
-        el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { sec.questions.splice(i, 1); touch(ls); renderFlow(ls); } })));
+        el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { sec.questions.splice(i, 1); touch(ls); renderFlow(ls); undoBarFor('domanda ' + (i + 1) + ' di Parliamone'); } })));
       box.appendChild(row);
       requestAnimationFrame(function () { grow(qi); grow(hi); });   // dopo l'inserimento nel DOM: l'altezza si misura solo da attaccati
     });
@@ -1594,9 +1597,9 @@
     box.innerHTML = '';
     const d = act.data;
     const changed = ctx.changed, redraw = ctx.redraw;
-    const rowBtns = function (arr, i) {
+    const rowBtns = function (arr, i, what) {
       return el('div', { class: 'row', style: 'gap:4px' },
-        el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { arr.splice(i, 1); changed(); redraw(); } }));
+        el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { arr.splice(i, 1); changed(); redraw(); undoBarFor((what || 'elemento') + ' ' + (i + 1)); } }));
     };
     if (act.type === 'memory') {
       if (!Array.isArray(d.pairs)) d.pairs = [];
@@ -1605,7 +1608,7 @@
         const row = el('div', { class: 'af-row' });
         const a = el('input', { type: 'text', placeholder: 'Parola', value: p.a || '' }); a.addEventListener('change', function () { p.a = a.value.trim(); changed(); });
         const b = el('input', { type: 'text', placeholder: 'Traduzione (o vuoto se c\'è la foto)', value: p.b || '' }); b.addEventListener('change', function () { p.b = b.value.trim(); changed(); });
-        row.appendChild(a); row.appendChild(b); row.appendChild(rowBtns(d.pairs, i));
+        row.appendChild(a); row.appendChild(b); row.appendChild(rowBtns(d.pairs, i, 'coppia'));
         const img = el('input', { type: 'text', placeholder: 'URL foto (facoltativo)', value: p.image || '', style: 'grid-column:1 / -2;font-size:13px;color:var(--muted)' });
         img.addEventListener('change', function () { p.image = img.value.trim(); changed(); });
         row.appendChild(img);
@@ -1655,7 +1658,7 @@
           });
           qb.appendChild(rg);
         }
-        qb.appendChild(el('button', { class: 'small danger', text: '✕', title: 'Togli la domanda', onclick: function () { d.questions.splice(i, 1); changed(); redraw(); } }));
+        qb.appendChild(el('button', { class: 'small danger', text: '✕', title: 'Togli la domanda', onclick: function () { d.questions.splice(i, 1); changed(); redraw(); undoBarFor('domanda ' + (i + 1) + ' del quiz'); } }));
         qrow.appendChild(qi); qrow.appendChild(qb);
         card.appendChild(qrow);
         q.options.forEach(function (op, k) {
@@ -1714,7 +1717,7 @@
         const row = el('div', { class: 'af-row' });
         const a = el('input', { type: 'text', placeholder: 'Parola', value: w.word || '' }); a.addEventListener('change', function () { w.word = a.value.trim(); changed(); });
         const b = el('input', { type: 'text', placeholder: 'Indizio (traduzione o definizione)', value: w.hint || '' }); b.addEventListener('change', function () { w.hint = b.value.trim(); changed(); });
-        row.appendChild(a); row.appendChild(b); row.appendChild(rowBtns(d.words, i));
+        row.appendChild(a); row.appendChild(b); row.appendChild(rowBtns(d.words, i, 'parola'));
         box.appendChild(row);
       });
       const r = el('div', { class: 'row', style: 'margin-top:10px' });
@@ -1733,7 +1736,7 @@
       d.items.forEach(function (it, i) {
         const row = el('div', { class: 'af-row one' });
         const a = el('input', { type: 'text', placeholder: 'Voce ' + (i + 1), value: it.text || '' }); a.addEventListener('change', function () { it.text = a.value.trim(); changed(); });
-        row.appendChild(a); row.appendChild(rowBtns(d.items, i));
+        row.appendChild(a); row.appendChild(rowBtns(d.items, i, 'voce'));
         box.appendChild(row);
       });
       const r = el('div', { class: 'row', style: 'margin-top:10px' });
@@ -2173,7 +2176,7 @@
       el('span', { class: 'badge ' + (ex.source === 'ai' ? 'ai' : ''), text: ex.source === 'ai' ? 'AI' : 'regole' }),
       typeCountBadge(ls, ex),
       el('button', { class: 'small right', text: '💾 Salva', title: 'Salva subito le modifiche di questo esercizio', onclick: function (e) { saveLessons(); e.target.textContent = '✓ Salvato'; setTimeout(function () { e.target.textContent = '💾 Salva'; }, 1500); } }),
-      el('button', { class: 'small danger', text: 'Elimina', onclick: function () { ls.exercises = ls.exercises.filter(function (x) { return x !== ex; }); touch(ls); renderEditorBody(); } })
+      el('button', { class: 'small danger', text: 'Elimina', onclick: function () { ls.exercises = ls.exercises.filter(function (x) { return x !== ex; }); touch(ls); renderEditorBody(); undoBarFor('esercizio ' + (i + 1) + ' (' + (EX.LABELS[ex.type] || ex.type) + ')'); } })
     );
     card.appendChild(head);
     card.appendChild(el('div', { class: 'row', style: 'margin-top:6px' }, el('span', { class: 'hint', text: 'Helper:' }), helperSel));
@@ -2479,7 +2482,7 @@
           if (Math.abs(sn.start - c.start) < 0.05 && Math.abs(sn.end - c.end) < 0.05) return toast('Già allineato alle frasi');
           c.start = sn.start; c.end = sn.end; touch(ls); renderEditorBody(); toast('Taglio allineato: da ' + fmt(c.start) + ' a ' + fmt(c.end));
         } }),
-        el('button', { class: 'small danger', text: 'Rimuovi', onclick: function () { ls.cuts.splice(i, 1); touch(ls); renderEditorBody(); } }))
+        el('button', { class: 'small danger', text: 'Rimuovi', onclick: function () { ls.cuts.splice(i, 1); touch(ls); renderEditorBody(); undoBarFor('taglio ' + fmt(c.start) + '–' + fmt(c.end)); } }))
     );
   }
 
