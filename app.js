@@ -1186,6 +1186,7 @@
     $('#v-matching').checked = vb.cards.matching !== false;
     $('#v-flash').checked = vb.cards.flashcards !== false;
     $('#v-write').checked = !!vb.cards.write;
+    syncVocabCards();
     $('#v-support').value = vb.support || 'en';
     $('#btn-vocab-ai').style.display = S.settings.apiKey ? '' : 'none';
     $('#btn-vocab-translate').style.display = S.settings.apiKey ? '' : 'none';
@@ -2058,8 +2059,27 @@
   $('#btn-vocab-translate').addEventListener('click', function () { const ls = current(); if (ls) translateMissing(ls); });
   $('#btn-vocab-add').addEventListener('click', function () { const ls = current(); if (!ls) return; vocabState(ls).words.push({ id: uid(), word: '', translation: '', image: '', selected: true, inExercise: false, source: 'manual' }); touch(ls); renderVocabEditor(ls); const rows = $$('#e-vocab .vocab-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('.v-word').focus(); });
   $('#v-matching').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.matching = $('#v-matching').checked; touch(ls); } });
-  $('#v-flash').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.flashcards = $('#v-flash').checked; touch(ls); } });
-  $('#v-write').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.write = $('#v-write').checked; touch(ls); } });
+  $('#v-flash').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.flashcards = $('#v-flash').checked; touch(ls); syncVocabCards(); } });
+  // "scrive la parola" vive DENTRO le flashcards: se le flashcards sono spente non succede niente (ed è successo).
+  // Chi accende la scrittura vuole quella scheda: la si accende da soli e lo si dice.
+  $('#v-write').addEventListener('change', function () {
+    const ls = current(); if (!ls) return;
+    const vb = vocabState(ls);
+    vb.cards.write = $('#v-write').checked;
+    if (vb.cards.write && vb.cards.flashcards === false) {
+      vb.cards.flashcards = true; $('#v-flash').checked = true;
+      toast('Ho acceso anche "Scheda 2: flashcards": è lì che lo studente scrive la parola', 4000);
+    }
+    touch(ls); syncVocabCards();
+  });
+  /** L'opzione "scrive la parola" si spegne visivamente quando le flashcards non ci sono: niente interruttori che non fanno nulla. */
+  function syncVocabCards() {
+    const w = $('#v-write'), lbl = $('#v-write-lbl'), on = $('#v-flash').checked;
+    if (!w || !lbl) return;
+    w.disabled = !on;
+    lbl.classList.toggle('off', !on);
+    lbl.title = on ? 'Nella Scheda 2 lo studente scrive la parola invece di girare e basta' : 'Accendi "Scheda 2: flashcards": senza quella scheda non c\'è niente da scrivere';
+  }
   $('#v-support').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).support = $('#v-support').value; touch(ls); } });
 
   function timeInput(value, onChange, key) {
@@ -3649,7 +3669,10 @@
   }
   function renderMatching(p, ls, st) {
     const all = EX.shuffle(cardVocab(ls), L.rng(Date.now() % 9973));
-    const per = 8, rounds = Math.ceil(all.length / per);
+    // quante coppie per round: quante ce ne stanno DAVVERO nello spazio disponibile (riga minima 44 px + spazio per
+    // intestazione, consegna, "Tutte abbinate!" e i pulsanti). Su uno schermo basso si fanno più round, ma i pulsanti si vedono sempre.
+    const per = Math.max(3, Math.min(8, Math.floor((($('#s-panel').clientHeight || 560) - 260) / 52)));
+    const rounds = Math.ceil(all.length / per);
     const fx = !ls.options || ls.options.fx !== false;
     let round = 0;
     const playRound = function () {
@@ -3681,6 +3704,7 @@
           if (fx) celebrate(p, fb);
           const nextBtn = el('button', { class: 'primary', text: round + 1 < rounds ? 'Avanti ▶' : 'Continua ▶', onclick: function () { if (round + 1 < rounds) { round++; playRound(); } else nextCard(); } });
           foot.insertBefore(nextBtn, foot.firstChild);
+          requestAnimationFrame(function () { sizeRows(); requestAnimationFrame(sizeRows); });   // rete di sicurezza: il pulsante deve restare dentro lo schermo
         }
       };
       const pick = function (side, w, c) {
@@ -3707,11 +3731,20 @@
       p.appendChild(done); p.appendChild(grid); p.appendChild(fb);
       const foot = cardFooter(p, st);
       // le righe usano tutta l'altezza disponibile (foto più grandi), mai sotto 44 px né sopra 150 px
+      // alla fine compaiono "✓ Tutte abbinate!" e il pulsante Continua: lo spazio si tiene da parte DA SUBITO,
+      // altrimenti a schermo intero le righe si prendono tutto e i pulsanti finiscono sotto il bordo (si dovrebbe scorrere)
+      const RESERVE = 96;
+      const host = p.closest('#s-panel') || p;   // p è il wrapper: lo spazio vero (e il padding) è quello del pannello
       const sizeRows = function () {
         if (!p.isConnected) return;
-        const avail = p.clientHeight - (grid.getBoundingClientRect().top - p.getBoundingClientRect().top) - fb.offsetHeight - foot.offsetHeight - 28;
-        const rowh = Math.max(44, Math.min(150, Math.floor(avail / words.length) - 6));
-        p.style.setProperty('--rowh', rowh + 'px');
+        const avail = host.clientHeight - (grid.getBoundingClientRect().top - host.getBoundingClientRect().top) - fb.offsetHeight - foot.offsetHeight - 20 - Math.max(0, RESERVE - fb.offsetHeight);
+        const rowh = Math.max(40, Math.min(150, Math.floor(avail / words.length) - 6));
+        host.style.setProperty('--rowh', rowh + 'px');
+        requestAnimationFrame(function () {
+          if (!host.isConnected) return;
+          const over = host.scrollHeight - host.clientHeight;
+          if (over > 1) host.style.setProperty('--rowh', Math.max(34, rowh - Math.ceil(over / words.length) - 1) + 'px');
+        });
       };
       sizeRows();
       setTimeout(sizeRows, 50);
@@ -3736,6 +3769,7 @@
       card.addEventListener('click', function () { flipped = !flipped; card.classList.toggle('flipped', flipped); });
       p.appendChild(card);
       const fb = el('div', { class: 'feedback' });
+      let wrow = null;
       if (write) {
         const inp = el('input', { type: 'text', placeholder: 'Scrivi la parola', autocomplete: 'off', autocapitalize: 'off', style: 'max-width:18em;margin-top:8px' });
         const chk = el('button', { class: 'primary', text: 'Controlla', onclick: function () {
@@ -3746,7 +3780,8 @@
           card.classList.add('flipped'); flipped = true;
         } });
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') chk.click(); });
-        p.appendChild(el('div', { class: 'row', style: 'margin-top:6px' }, [inp, chk]));
+        wrow = el('div', { class: 'row', style: 'margin-top:6px' }, [inp, chk]);
+        p.appendChild(wrow);
         setTimeout(function () { inp.focus(); }, 50);
       }
       p.appendChild(fb);
@@ -3757,11 +3792,20 @@
       p.appendChild(nav);
       const foot = cardFooter(p, st);
       // la carta usa l'altezza disponibile (mai sotto 250 px, mai sopra 560 px)
+      const host = p.closest('#s-panel') || p;
       const sizeCard = function () {
         if (!p.isConnected) return;
-        const used = (card.getBoundingClientRect().top - p.getBoundingClientRect().top) + nav.offsetHeight + fb.offsetHeight + foot.offsetHeight + (write ? 60 : 0) + 40;
-        const h = Math.max(250, Math.min(560, p.clientHeight - used));
-        p.style.setProperty('--cardh', h + 'px');
+        // spazio VERO occupato da tutto il resto (compresa la riga per scrivere la parola): la carta prende quello che avanza,
+        // così su uno schermo basso i pulsanti restano dentro invece di finire sotto il bordo
+        const used = (card.getBoundingClientRect().top - host.getBoundingClientRect().top) + nav.offsetHeight + fb.offsetHeight + foot.offsetHeight + (wrow ? wrow.offsetHeight + 6 : 0) + 24;
+        const h = Math.max(90, Math.min(560, host.clientHeight - used));
+        host.style.setProperty('--cardh', h + 'px');
+        // correzione finale: se per i margini avanza comunque qualcosa fuori, si toglie dalla carta (i pulsanti vincono sempre)
+        requestAnimationFrame(function () {
+          if (!host.isConnected) return;
+          const over = host.scrollHeight - host.clientHeight;
+          if (over > 1) host.style.setProperty('--cardh', Math.max(80, h - over - 2) + 'px');
+        });
       };
       sizeCard();
       setTimeout(sizeCard, 50);
