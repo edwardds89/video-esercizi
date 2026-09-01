@@ -822,6 +822,18 @@ async function startVideo(page) {
   const pairsN = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.acts[0].data.pairs.length; });
   assert.ok(pairsN >= 3, 'coppie importate dalle Parole utili: ' + pairsN);
   assert.deepStrictEqual(await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.flow.map(function (s) { return s.kind + (s.id ? ':' + s.id : ''); }); }), ['vocab', 'talk:t2', 'video', 'act:a1', 'talk:t1'], 'attività subito dopo il video');
+  // l'anteprima del template mostra QUESTA attività: un memory con le coppie vere, non un quiz d'esempio
+  await page.hover('.act-card .theme-chip:has-text("Giungla")');
+  await page.waitForSelector('.theme-preview.show .act[data-theme="jungle"][data-type="memory"]');
+  assert.strictEqual(await page.$$eval('.theme-preview.show .mem-card', function (c) { return c.length; }), pairsN * 2, 'anteprima memory con le coppie vere');
+  await page.mouse.move(5, 5);
+  await page.waitForFunction(function () { const p = document.querySelector('.theme-preview'); return !p || !p.classList.contains('show'); });
+  // …e per le Parole utili mostra le schede di abbinamento vestite del template
+  await page.hover('#v-theme .theme-chip:has-text("Caffè")');
+  await page.waitForSelector('.theme-preview.show .pop.vocab-act[data-theme="coffee"] .match .mchip');
+  assert.ok(!(await page.$('.theme-preview.show .quiz-q')), 'schede, non quiz, nell\'anteprima delle Parole utili');
+  await page.mouse.move(5, 5);
+  await page.waitForFunction(function () { const p = document.querySelector('.theme-preview'); return !p || !p.classList.contains('show'); });
   await page.click('.act-card .theme-chip:has-text("Estate")');
   await page.waitForSelector('.act-card .theme-chip.sel:has-text("Estate")');
   await page.click('.act-card button:has-text("▶ Prova")');
