@@ -71,7 +71,7 @@
       ls.talks = [{ id: 't1', questions: old }];
     }
     delete ls.talk;
-    ls.talks.forEach(function (sec, i) { if (!sec.id) sec.id = 't' + (i + 1); if (!Array.isArray(sec.questions)) sec.questions = []; });
+    ls.talks.forEach(function (sec, i) { if (!sec.id) sec.id = 't' + (i + 1); if (!Array.isArray(sec.questions)) sec.questions = []; sec.questions.forEach(function (q) { if (q && !q.id) q.id = uid(); }); });
     if (!Array.isArray(ls.acts)) ls.acts = [];   // attività-gioco dentro la lezione (Memory, Quiz, …)
     ls.acts.forEach(function (a, i) { if (!a.id) a.id = 'a' + (i + 1); if (!a.data) a.data = {}; });
     if (!Array.isArray(ls.flow)) ls.flow = [{ kind: 'vocab' }, { kind: 'video' }, { kind: 'talk', id: ls.talks[0].id }];
@@ -1190,8 +1190,30 @@
       : s.kind === 'act' ? document.querySelector('.act-card[data-aid="' + s.id + '"]')
         : document.querySelector('.talk-card[data-tid="' + s.id + '"]');
   }
-  function renderFlow(ls) {
+  /** Altezze delle caselle di Parliamone prima di un re-render (per id domanda): le nuove nascono già alte → niente salto della pagina. */
+  let TALK_H = {};
+  /** Re-render che lascia la pagina ESATTAMENTE dov'è: àncora = la card su cui si sta lavorando (quella con il fuoco),
+   *  altrimenti lo scrollY; si riapplica anche nei due frame successivi (le caselle si misurano solo da attaccate). */
+  function keepScroll(fn) {
+    const y = window.scrollY;
+    const ae = document.activeElement;
+    const card = ae && ae.closest ? ae.closest('.talk-card[data-tid], .act-card[data-aid], #e-vocab-card, #e-video-card') : null;
+    const sel = card ? (card.id ? '#' + card.id : card.hasAttribute('data-tid') ? '.talk-card[data-tid="' + card.getAttribute('data-tid') + '"]' : '.act-card[data-aid="' + card.getAttribute('data-aid') + '"]') : null;
+    const top = card ? card.getBoundingClientRect().top : null;
+    fn();
+    const fix = function () {
+      const n = sel ? document.querySelector(sel) : null;
+      if (n && top != null) window.scrollTo(0, Math.max(0, window.scrollY + n.getBoundingClientRect().top - top));
+      else window.scrollTo(0, y);
+    };
+    fix();
+    requestAnimationFrame(function () { fix(); requestAnimationFrame(fix); });
+  }
+  function renderFlow(ls, opts) {
+    if (!opts || opts.keep !== false) return keepScroll(function () { renderFlow(ls, { keep: false }); });
     lessonFlow(ls);
+    TALK_H = {};
+    $$('.talk-in[data-qid]').forEach(function (t) { if (t.style.height) TALK_H[t.getAttribute('data-qid')] = t.style.height; });
     const bar = $('#e-flow'); bar.innerHTML = '';
     ls.flow.forEach(function (s, i) {
       const chip = el('span', { class: 'flow-chip' + (s.kind === 'video' ? ' video' : '') });
@@ -1241,7 +1263,7 @@
         const id = 't' + (Math.max.apply(null, [0].concat(ls.talks.map(function (t) { return parseInt(String(t.id).replace(/\D/g, ''), 10) || 0; }))) + 1);
         ls.talks.push({ id: id, questions: [] });
         placeTalk(ls, id, b.getAttribute('data-when'));
-        touch(ls); renderFlow(ls);
+        touch(ls); renderFlow(ls, { keep: false });   // qui si VUOLE scorrere: fino alla nuova sezione
         const node = document.querySelector('.talk-card[data-tid="' + id + '"]');
         if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
       };
@@ -1258,7 +1280,7 @@
     const aiBtn = el('button', { class: 'small right', text: '✨ Proponi con l\'AI' });
     if (!S.settings.apiKey) aiBtn.style.display = 'none';
     head.appendChild(aiBtn);
-    head.appendChild(el('button', { class: 'small', text: '+ Domanda', onclick: function () { sec.questions.push({ id: uid(), text: '', help: '' }); touch(ls); renderFlow(ls); const rows = $$('.talk-card[data-tid="' + sec.id + '"] .talk-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('textarea, input').focus(); } }));
+    head.appendChild(el('button', { class: 'small', text: '+ Domanda', onclick: function () { sec.questions.push({ id: uid(), text: '', help: '' }); touch(ls); renderFlow(ls, { keep: false }); const rows = $$('.talk-card[data-tid="' + sec.id + '"] .talk-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('textarea, input').focus(); } }));
     if (ls.talks.length > 1) {
       const rm = el('button', { class: 'small danger', text: '✕ Sezione', title: 'Togli questa sezione con le sue domande' });
       rm.addEventListener('click', function () {
@@ -1309,21 +1331,30 @@
       const kindLabel = before ? KIND.warmup : (KIND[q.kind] || 'tipo?');
       const kindBtn = el('button', { type: 'button', class: 'kind ' + (before ? 'warmup' : (q.kind || 'none')), text: kindLabel,
         title: before ? 'Prima del video: domanda per entrare nel tema' : 'Clicca per cambiare: comprensione ↔ opinione' });
-      if (!before) kindBtn.addEventListener('click', function () { q.kind = q.kind === 'check' ? 'talk' : 'check'; touch(ls); renderFlow(ls); });
       meta.appendChild(kindBtn);
       const status = el('span', { class: 'hint' });
       if (S.settings.apiKey) meta.appendChild(el('button', { class: 'small regen', text: '✨ Rigenera', title: 'Sostituisci solo questa domanda con una nuova dell\'AI, dello stesso tipo', onclick: function () { regen(q, status); } }));
       meta.appendChild(status);
       // caselle che crescono col testo: domanda ed espressioni si leggono per intero, una sopra l'altra
       const grow = function (t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
-      const qi = el('textarea', { class: 'talk-in q', rows: '1', placeholder: before ? 'Domanda per entrare nel tema' : (q.kind === 'check' ? 'Domanda di comprensione sul video' : 'Domanda aperta, di opinione') });
+      const qPlaceholder = function () { return before ? 'Domanda per entrare nel tema' : (q.kind === 'check' ? 'Domanda di comprensione sul video' : 'Domanda aperta, di opinione'); };
+      const qi = el('textarea', { class: 'talk-in q', rows: '1', 'data-qid': q.id + ':q', placeholder: qPlaceholder() });
       qi.value = q.text || '';
+      if (TALK_H[q.id + ':q']) qi.style.height = TALK_H[q.id + ':q'];   // parte già alta come prima: niente salto
       qi.addEventListener('input', function () { grow(qi); });
       qi.addEventListener('change', function () { q.text = qi.value.trim(); touch(ls); });
-      const hi = el('textarea', { class: 'talk-in h', rows: '1', placeholder: 'Espressioni utili, separate da · (facoltative)' });
+      const hi = el('textarea', { class: 'talk-in h', rows: '1', 'data-qid': q.id + ':h', placeholder: 'Espressioni utili, separate da · (facoltative)' });
       hi.value = q.help || '';
+      if (TALK_H[q.id + ':h']) hi.style.height = TALK_H[q.id + ':h'];
       hi.addEventListener('input', function () { grow(hi); });
       hi.addEventListener('change', function () { q.help = hi.value.trim(); touch(ls); });
+      // il tipo si cambia SUL POSTO (niente re-render: la pagina resta esattamente dov'è)
+      if (!before) kindBtn.addEventListener('click', function () {
+        q.kind = q.kind === 'check' ? 'talk' : 'check';
+        kindBtn.className = 'kind ' + q.kind; kindBtn.textContent = KIND[q.kind];
+        qi.placeholder = qPlaceholder();
+        touch(ls);
+      });
       row.appendChild(el('div', { class: 'talk-fields' }, meta, qi, hi));
       row.appendChild(el('div', { class: 'row talk-btns', style: 'gap:4px' },
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { sec.questions.splice(i - 1, 0, sec.questions.splice(i, 1)[0]); touch(ls); renderFlow(ls); } }),
@@ -1689,7 +1720,7 @@
       ls.acts.push({ id: id, type: type, theme: theme || 'classic', data: {} });
       const vi = ls.flow.findIndex(function (s) { return s.kind === 'video'; });
       ls.flow.splice(vi + 1, 0, { kind: 'act', id: id });   // di default subito dopo il video: si sposta con ◀ ▶
-      touch(ls); renderFlow(ls);
+      touch(ls); renderFlow(ls, { keep: false });
       const node = document.querySelector('.act-card[data-aid="' + id + '"]');
       if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
