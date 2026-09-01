@@ -26,6 +26,21 @@
     const t = $('#toast'); t.textContent = msg; t.classList.add('show');
     clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, ms || 2600);
   }
+  function undoKeyLabel() { return /Mac|iPhone|iPad/.test(navigator.platform || '') ? '\u2318Z' : 'Ctrl+Z'; }
+  /** Barra "si può tornare indietro": messaggio + "↶ Annulla" cliccabile + la scorciatoia. Ha un elemento SUO
+   *  (un avviso qualsiasi non deve cancellare la via d'uscita) e vive più a lungo di un avviso normale. */
+  let undoBarEl = null;
+  function hideUndoBar() { if (undoBarEl) { undoBarEl.classList.remove('show'); document.body.classList.remove('undo-open'); } }
+  function toastUndo(msg, onUndo, ms) {
+    if (!undoBarEl) { undoBarEl = el('div', { id: 'undo-bar', class: 'undo-bar', role: 'status' }); document.body.appendChild(undoBarEl); }
+    undoBarEl.innerHTML = '';
+    undoBarEl.appendChild(el('span', { text: msg }));
+    undoBarEl.appendChild(el('button', { class: 'undo', text: '\u21b6 Annulla', onclick: function () { hideUndoBar(); onUndo(); } }));
+    undoBarEl.appendChild(el('kbd', { text: undoKeyLabel() }));
+    undoBarEl.classList.add('show');
+    document.body.classList.add('undo-open');   // l'avviso normale si sposta più in alto: non si coprono
+    clearTimeout(toastUndo._t); toastUndo._t = setTimeout(hideUndoBar, ms || 9000);
+  }
   function overlay(show, text) { $('#overlay').classList.toggle('show', !!show); if (text) $('#overlay-text').textContent = text; }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function slugify(s) { return L.normalize(s || 'lezione').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'lezione'; }
@@ -183,7 +198,11 @@
     if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
     const k = (e.key || '').toLowerCase();
     if (k !== 'z' && k !== 'y') return;
-    if (S.view !== 'editor' && S.view !== 'act') return;
+    const inEditor = S.view === 'editor' || S.view === 'act';
+    if (!inEditor) {   // portfolio (o studente): Cmd/Ctrl+Z riporta indietro l'ultima lezione/attività eliminata
+      if (k === 'z' && !e.shiftKey && trashFresh()) { e.preventDefault(); hideUndoBar(); restoreDeleted(); }
+      return;
+    }
     const t = e.target, tag = t && t.tagName;
     // dentro un campo di testo il browser annulla la digitazione da solo (e il modello segue gli eventi input)
     if (tag === 'INPUT' && !/^(checkbox|radio|range|button|file|color)$/i.test(t.type || '')) return;
@@ -192,6 +211,32 @@
     if (wantRedo ? redo() : undo()) e.preventDefault();
     else if (k === 'z') { e.preventDefault(); toast(wantRedo ? 'Niente da ripetere' : 'Niente da annullare'); }
   });
+  // ---------- CESTINO: l'ultima lezione/attività eliminata si può riportare indietro (pulsante nell'avviso o Cmd/Ctrl+Z) ----------
+  const TRASH = { lesson: null, at: 0, WINDOW: 5 * 60000 };
+  function trashFresh() { return !!TRASH.lesson && Date.now() - TRASH.at < TRASH.WINDOW; }
+  function restoreDeleted() {
+    const ls = TRASH.lesson; if (!ls) return false;
+    TRASH.lesson = null;
+    ls.updatedAt = new Date().toISOString();
+    migrateLesson(ls);
+    S.lessons[ls.id] = ls;
+    // era un ripensamento: la lezione non deve essere cancellata anche nel cloud
+    if (CLOUD.sync && CLOUD.sync.state && CLOUD.sync.state.deleted) delete CLOUD.sync.state.deleted[ls.id];
+    saveLessons();
+    if (S.view === 'home') renderHome();
+    toast((ls.activity ? 'Attività' : 'Lezione') + ' ripristinata: ' + (ls.title || 'senza titolo'));
+    return true;
+  }
+  /** Unico punto di eliminazione di una lezione/attività: mette da parte una copia e lo dice con la via d'uscita. */
+  function deleteLesson(ls) {
+    if (!ls) return;
+    const what = ls.activity ? 'Attività' : 'Lezione';
+    try { TRASH.lesson = JSON.parse(JSON.stringify(ls, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })); TRASH.at = Date.now(); } catch (e) { TRASH.lesson = null; }
+    delete S.lessons[ls.id];
+    saveLessons();
+    renderHome();
+    toastUndo(what + ' eliminata: ' + (ls.title || 'senza titolo'), restoreDeleted);
+  }
   ['#btn-undo', '#a-undo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!undo()) toast('Niente da annullare'); }); });
   ['#btn-redo', '#a-redo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!redo()) toast('Niente da ripetere'); }); });
 
@@ -598,7 +643,7 @@
               el('button', { class: 'small primary', text: '▶ Gioca', onclick: openA }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openActEditor(ls.id); } }),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'attivita') + '.json', JSON.stringify(actPayload(ls), null, 1)); } }),
-              el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'attività senza titolo') + '"?')) { delete S.lessons[ls.id]; saveLessons(); renderHome(); } } }))));
+              el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'attività senza titolo') + '"?')) deleteLesson(ls); } }))));
         list.appendChild(cardA);
         return;
       }
@@ -614,7 +659,7 @@
             el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
             el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
-            el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + ls.title + '"?')) { delete S.lessons[ls.id]; saveLessons(); renderHome(); } } }))));
+            el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + ls.title + '"?')) deleteLesson(ls); } }))));
       list.appendChild(card);
     });
   }
@@ -938,7 +983,7 @@
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
   $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
-  $('#btn-delete').addEventListener('click', function () { const ls = current(); if (confirm('Eliminare "' + ls.title + '"?')) { delete S.lessons[ls.id]; saveLessons(); renderHome(); } });
+  $('#btn-delete').addEventListener('click', function () { const ls = current(); if (ls && confirm('Eliminare "' + ls.title + '"?')) deleteLesson(ls); });
   $('#btn-add-ex').addEventListener('click', function () {
     const ls = current(); const t = S.player ? S.player.time() : 0;
     showAddPopover(ls, t, null);
@@ -1288,6 +1333,7 @@
         ls.talks = ls.talks.filter(function (t) { return t.id !== sec.id; });
         ls.flow = ls.flow.filter(function (s) { return !(s.kind === 'talk' && s.id === sec.id); });
         touch(ls); renderFlow(ls);
+        toastUndo('Sezione "Parliamone" tolta dalla lezione', function () { undo(); });
       });
       head.appendChild(rm);
     }
@@ -1749,6 +1795,7 @@
       ls.acts = ls.acts.filter(function (a) { return a.id !== act.id; });
       ls.flow = ls.flow.filter(function (s) { return !(s.kind === 'act' && s.id === act.id); });
       touch(ls); renderFlow(ls);
+      toastUndo('Sezione "' + t.label + '" tolta dalla lezione', function () { undo(); });
     });
     head.appendChild(rm);
     card.appendChild(head);
@@ -1830,7 +1877,7 @@
   $('#a-delete').addEventListener('click', function () {
     const ls = current(); if (!ls) return;
     if (!confirm('Eliminare "' + (ls.title || 'attività senza titolo') + '"?')) return;
-    delete S.lessons[ls.id]; saveLessons(); renderHome();
+    deleteLesson(ls);
   });
   /** Gioco a tutta pagina (Apri dal portfolio o link studente). */
   function openActPlay(id, obj) {
@@ -2533,7 +2580,7 @@
     $('#btn-fullscreen').textContent = document.fullscreenElement ? '✕ Esci da schermo intero' : '⛶ Schermo intero';
     // avvisi (toast) e zoom foto devono stare dentro l'elemento a tutto schermo, altrimenti non si vedono
     const host = document.fullscreenElement || document.body;
-    ['#toast', '.img-preview'].forEach(function (sel) { const n = document.querySelector(sel); if (n && n.parentElement !== host) host.appendChild(n); });
+    ['#toast', '#undo-bar', '.img-preview'].forEach(function (sel) { const n = document.querySelector(sel); if (n && n.parentElement !== host) host.appendChild(n); });
   });
 
   /** Linea del tempo dello studente: clic sulla barra = vai lì; clic su un numero = ascolta la frase e apri quell'esercizio. */
