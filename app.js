@@ -30,16 +30,30 @@
   /** Barra "si può tornare indietro": messaggio + "↶ Annulla" cliccabile + la scorciatoia. Ha un elemento SUO
    *  (un avviso qualsiasi non deve cancellare la via d'uscita) e vive più a lungo di un avviso normale. */
   let undoBarEl = null;
-  function hideUndoBar() { if (undoBarEl) { undoBarEl.classList.remove('show'); document.body.classList.remove('undo-open'); } }
+  function dismissUndoBar(e) { if (undoBarEl && undoBarEl.contains(e.target)) return; hideUndoBar(); }
+  function hideUndoBar() {
+    clearTimeout(toastUndo._t);
+    document.removeEventListener('pointerdown', dismissUndoBar, true);
+    if (undoBarEl) { undoBarEl.classList.remove('show'); document.body.classList.remove('undo-open'); }
+  }
   function toastUndo(msg, onUndo, ms) {
+    const life = ms || 6000;
     if (!undoBarEl) { undoBarEl = el('div', { id: 'undo-bar', class: 'undo-bar', role: 'status' }); document.body.appendChild(undoBarEl); }
     undoBarEl.innerHTML = '';
     undoBarEl.appendChild(el('span', { text: msg }));
     undoBarEl.appendChild(el('button', { class: 'undo', text: '\u21b6 Annulla', onclick: function () { hideUndoBar(); onUndo(); } }));
-    undoBarEl.appendChild(el('kbd', { text: undoKeyLabel() }));
+    undoBarEl.appendChild(el('kbd', { text: undoKeyLabel(), title: 'Funziona anche dopo che questo avviso è sparito' }));
+    // riga che si consuma: si vede quanto tempo resta (e col mouse sopra il conto si ferma)
+    const life$ = el('div', { class: 'life' }); life$.style.animationDuration = life + 'ms';
+    undoBarEl.appendChild(life$);
     undoBarEl.classList.add('show');
     document.body.classList.add('undo-open');   // l'avviso normale si sposta più in alto: non si coprono
-    clearTimeout(toastUndo._t); toastUndo._t = setTimeout(hideUndoBar, ms || 9000);
+    clearTimeout(toastUndo._t); toastUndo._t = setTimeout(hideUndoBar, life);
+    undoBarEl.onmouseenter = function () { clearTimeout(toastUndo._t); life$.style.animationPlayState = 'paused'; };
+    undoBarEl.onmouseleave = function () { life$.style.animationPlayState = 'running'; clearTimeout(toastUndo._t); toastUndo._t = setTimeout(hideUndoBar, 2500); };
+    // appena si torna a lavorare (un clic altrove) la barra si toglie di mezzo da sola
+    document.removeEventListener('pointerdown', dismissUndoBar, true);
+    setTimeout(function () { if (undoBarEl.classList.contains('show')) document.addEventListener('pointerdown', dismissUndoBar, true); }, 500);
   }
   function overlay(show, text) { $('#overlay').classList.toggle('show', !!show); if (text) $('#overlay-text').textContent = text; }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }

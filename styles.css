@@ -206,13 +206,16 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1c2330; color: #fff; padding: 10px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
 #toast.show { opacity: 1; }
 /* barra "si può tornare indietro": elemento suo, così un avviso qualsiasi non porta via il pulsante Annulla */
-.undo-bar { position: fixed; bottom: 18px; left: 50%; transform: translate(-50%, 12px); z-index: 55; display: none;
+.undo-bar { position: fixed; overflow: hidden; bottom: 18px; left: 50%; transform: translate(-50%, 12px); z-index: 55; display: none;
   align-items: center; gap: 12px; max-width: min(92vw, 640px); padding: 9px 10px 9px 16px; border-radius: 10px;
   background: #1c2330; color: #fff; box-shadow: 0 10px 28px rgba(0,0,0,.28); opacity: 0; transition: opacity .18s, transform .18s; }
 .undo-bar.show { display: flex; opacity: 1; transform: translate(-50%, 0); }
 .undo-bar .undo { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.5); border-radius: 8px; padding: 5px 12px; font-weight: 600; white-space: nowrap; }
 .undo-bar .undo:hover { background: rgba(255,255,255,.16); border-color: #fff; }
 .undo-bar kbd { background: rgba(255,255,255,.12); color: #ccd4e2; border-radius: 5px; padding: 2px 7px; font-size: 12px; }
+.undo-bar .life { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; border-radius: 0 0 10px 10px; background: rgba(255,255,255,.5); transform-origin: left; animation: undo-life linear forwards; }
+@keyframes undo-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .undo-bar .life { display: none; } }
 body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barra */
 #overlay { position: fixed; inset: 0; background: #fff; display: none; align-items: center; justify-content: center; z-index: 40; font-size: 18px; text-align: center; padding: 20px; }
 #overlay.show { display: flex; }
