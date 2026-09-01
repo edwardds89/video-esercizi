@@ -900,6 +900,24 @@ async function startVideo(page) {
   await page.keyboard.press('Meta+z');
   await page.waitForTimeout(150);
   assert.strictEqual(await page.$eval('#btn-undo', function (b) { return b.disabled; }), undoStateBefore, 'nessun undo dell\'app dentro un campo');
+  // la pagina resta ESATTAMENTE dov'è: cambio del tipo (sul posto) e riordino di una domanda (re-render con àncora)
+  await page.evaluate(function () { document.querySelector('.talk-card[data-tid="t1"]').scrollIntoView({ block: 'center' }); });
+  await page.waitForTimeout(100);
+  const y0 = await page.evaluate(function () { return window.scrollY; });
+  assert.ok(y0 > 300, 'la card è in basso nella pagina: ' + y0);
+  const kindBefore = await page.$eval('.talk-card[data-tid="t1"] .talk-row .kind', function (b) { return b.className; });
+  await page.click('.talk-card[data-tid="t1"] .talk-row .kind');
+  await page.waitForTimeout(150);
+  const kindAfter = await page.$eval('.talk-card[data-tid="t1"] .talk-row .kind', function (b) { return b.className; });
+  assert.notStrictEqual(kindAfter, kindBefore, 'tipo cambiato: ' + kindBefore + ' → ' + kindAfter);
+  assert.strictEqual(await page.evaluate(function () { return window.scrollY; }), y0, 'cambio tipo: nessuno scorrimento');
+  assert.ok(/(check|talk)/.test(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].talks.find(function (t) { return t.id === 't1'; }).questions[0].kind; })), 'tipo salvato nel modello');
+  const top0 = await page.$eval('.talk-card[data-tid="t1"]', function (c) { return c.getBoundingClientRect().top; });
+  await page.click('.talk-card[data-tid="t1"] .talk-row button:has-text("↓")');
+  await page.waitForTimeout(150);
+  const top1 = await page.$eval('.talk-card[data-tid="t1"]', function (c) { return c.getBoundingClientRect().top; });
+  assert.ok(Math.abs(top1 - top0) < 2, 'riordino: la card resta dov\'era (' + top0 + ' → ' + top1 + ')');
+  await page.waitForTimeout(800);
   // quiz nell'editor: con la chiave AI compaiono ✨ per singola domanda e singola risposta
   await page.evaluate(function () { window.VLApp.S.settings.apiKey = 'sk-test'; });
   await page.click('#btn-flow-act');
