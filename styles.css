@@ -217,6 +217,12 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 @keyframes undo-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .undo-bar .life { display: none; } }
 body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barra */
+/* "questa scheda è rimasta indietro": in alto, non sparisce da sola (è un problema, non una notifica) */
+.app-bar { position: fixed; top: 62px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px;
+  max-width: min(94vw, 760px); padding: 9px 10px 9px 16px; border-radius: 10px; background: #7a4b00; color: #fff;
+  box-shadow: 0 10px 28px rgba(0,0,0,.28); font-size: 15px; }
+.app-bar .go { background: #fff; color: #7a4b00; border: none; border-radius: 8px; padding: 6px 14px; font-weight: 700; white-space: nowrap; }
+.app-bar .later { background: transparent; color: rgba(255,255,255,.85); border: 1px solid rgba(255,255,255,.4); border-radius: 8px; padding: 5px 10px; font-size: 13px; white-space: nowrap; }
 #overlay { position: fixed; inset: 0; background: #fff; display: none; align-items: center; justify-content: center; z-index: 40; font-size: 18px; text-align: center; padding: 20px; }
 #overlay.show { display: flex; }
 .loader-box { position: relative; width: 120px; height: 120px; overflow: hidden; margin: 0 auto 6px; }
@@ -777,6 +783,11 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
 .af-quiz .qrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .af-quiz .orow { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-top: 6px; }
 .af-quiz .orow input[type=radio] { width: auto; }
+/* domande e risposte: caselle che crescono col testo, niente frasi tagliate a metà */
+textarea.af-in { min-height: 0; resize: none; overflow: hidden; line-height: 1.45; padding: 7px 10px; }
+textarea.af-in.q { font-weight: 600; min-height: 60px; }   /* parte già da due righe: le domande lunghe non nascono tagliate */
+.af-quiz .qrow, .af-quiz .orow, .af-row { align-items: start; }
+.af-quiz .orow input[type=radio] { margin-top: 12px; }
 .af-quiz .orow.ai { grid-template-columns: auto 1fr auto; }
 .af-quiz .regen { padding: 3px 8px; font-size: 13px; white-space: nowrap; }
 .af-quiz .regen:disabled { opacity: .6; }

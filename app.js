@@ -225,6 +225,38 @@
     if (wantRedo ? redo() : undo()) e.preventDefault();
     else if (k === 'z') { e.preventDefault(); toast(wantRedo ? 'Niente da ripetere' : 'Niente da annullare'); }
   });
+  // ---------- SCHEDA RIMASTA INDIETRO: l'app è una pagina sola, una scheda aperta da giorni continua a girare col codice vecchio
+  //  (niente Annulla, niente pulsanti nuovi… e salvando può sovrascrivere il lavoro fatto in una scheda aggiornata) ----------
+  const APP_VER = (function () { const t = document.querySelector('script[src*="app.js"]'); const m = t && /[?&]v=([^&"']+)/.exec(t.getAttribute('src') || ''); return m ? m[1] : ''; })();
+  let appBarEl = null;
+  function appBar(msg) {
+    if (appBarEl) return;   // una sola volta: non deve diventare un tormento
+    appBarEl = el('div', { class: 'app-bar', role: 'alert' },
+      el('span', { text: msg }),
+      el('button', { class: 'go', text: '↻ Ricarica', onclick: function () { location.href = location.pathname + (location.search ? location.search + '&' : '?') + 'u=' + Date.now() + location.hash; } }),
+      el('button', { class: 'later', text: 'Più tardi', title: 'Nascondi (te lo richiedo alla prossima apertura)', onclick: function () { appBarEl.remove(); } }));
+    document.body.appendChild(appBarEl);
+  }
+  let lastCheck = 0;
+  async function checkAppVersion() {
+    if (appBarEl || !APP_VER || S.standalone || S.view === 'student') return;
+    lastCheck = Date.now();
+    try {
+      const r = await fetch('index.html?u=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      const m = /app\.js\?v=([^"']+)/.exec(await r.text());
+      if (m && m[1] !== APP_VER) appBar('C\'è una versione più nuova dell\'app: questa scheda è aperta da un po\' e sta usando quella vecchia.');
+    } catch (e) { /* offline: pazienza */ }
+  }
+  // un'altra scheda ha salvato: questa ha in memoria una fotografia vecchia e salvando la sovrascriverebbe
+  window.addEventListener('storage', function (e) {
+    if (e.key !== 'vle.lessons' || S.view === 'student' || S.standalone) return;
+    appBar('Le lezioni sono state salvate in un\'altra scheda: questa è rimasta indietro e salvando potrebbe sovrascriverle.');
+  });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - lastCheck > 300000) checkAppVersion(); });
+  setTimeout(checkAppVersion, 8000);
+  setInterval(checkAppVersion, 900000);
+
   // ---------- CESTINO: l'ultima lezione/attività eliminata si può riportare indietro (pulsante nell'avviso o Cmd/Ctrl+Z) ----------
   const TRASH = { lesson: null, at: 0, WINDOW: 5 * 60000 };
   function trashFresh() { return !!TRASH.lesson && Date.now() - TRASH.at < TRASH.WINDOW; }
@@ -356,6 +388,7 @@
     b.title = u ? cloudStatusText() : 'Salva le lezioni nel cloud per ritrovarle su ogni computer';
     const hint = $('#home-storage-hint');
     if (hint) hint.textContent = u ? 'Le lezioni sono salvate nel cloud (' + (u.email || 'account') + ') e in questo browser: le ritrovi su ogni computer dove entri con la stessa email. ' + cloudStatusText() : 'Le lezioni sono salvate solo in questo browser. Con "Accedi" (in alto) le salvi anche nel cloud e le ritrovi su ogni computer.';
+    if (hint && APP_VER) hint.textContent += '  ·  versione ' + APP_VER;   // così "che versione stai vedendo?" si risponde in un secondo
     if ($('#dlg-account').open) fillAccountDialog();
   }
   function fillAccountDialog() {
@@ -1597,6 +1630,16 @@
     box.innerHTML = '';
     const d = act.data;
     const changed = ctx.changed, redraw = ctx.redraw;
+    // caselle che crescono col testo: domande e risposte lunghe si devono LEGGERE per intero (mai troncate in una riga)
+    const grow = function (t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
+    const area = function (attrs, value, onSave) {
+      const t = el('textarea', attrs);
+      t.value = value || '';
+      t.addEventListener('input', function () { grow(t); });
+      t.addEventListener('change', function () { onSave(t.value.trim()); });
+      requestAnimationFrame(function () { grow(t); });   // l'altezza si misura solo da attaccati al DOM
+      return t;
+    };
     const rowBtns = function (arr, i, what) {
       return el('div', { class: 'row', style: 'gap:4px' },
         el('button', { class: 'small danger', text: '✕', title: 'Togli', onclick: function () { arr.splice(i, 1); changed(); redraw(); undoBarFor((what || 'elemento') + ' ' + (i + 1)); } }));
@@ -1639,8 +1682,7 @@
         if (!Array.isArray(q.options)) q.options = ['', '', '', ''];
         const card = el('div', { class: 'af-quiz' });
         const qrow = el('div', { class: 'qrow' });
-        const qi = el('input', { type: 'text', placeholder: 'Domanda ' + (i + 1), value: q.q || '', style: 'font-weight:600' });
-        qi.addEventListener('change', function () { q.q = qi.value.trim(); changed(); });
+        const qi = area({ class: 'af-in q', rows: '2', placeholder: 'Domanda ' + (i + 1) }, q.q, function (v) { q.q = v; changed(); });
         const qb = el('div', { class: 'row', style: 'gap:4px' });
         if (hasKey) {
           const rg = el('button', { class: 'small regen', text: '✨ Rigenera', title: 'Un\'altra domanda (con le sue risposte) al posto di questa, diversa dalle altre del quiz' });
@@ -1666,8 +1708,7 @@
           const radio = el('input', { type: 'radio', name: 'aq-' + act.id + '-' + i, title: 'Risposta giusta' });
           radio.checked = q.correct === k;
           radio.addEventListener('change', function () { q.correct = k; changed(); });
-          const oi = el('input', { type: 'text', placeholder: 'Risposta ' + (k + 1) + (k > 1 ? ' (facoltativa)' : ''), value: op || '' });
-          oi.addEventListener('change', function () { q.options[k] = oi.value.trim(); changed(); });
+          const oi = area({ class: 'af-in', rows: '1', placeholder: 'Risposta ' + (k + 1) + (k > 1 ? ' (facoltativa)' : '') }, op, function (v) { q.options[k] = v; changed(); });
           orow.appendChild(radio); orow.appendChild(oi);
           if (hasKey) {
             const ob = el('button', { class: 'small regen', text: '✨', title: q.correct === k ? 'Riformula la risposta giusta con l\'AI' : 'Un altro distrattore con l\'AI (risposta sbagliata ma plausibile)' });
@@ -1676,7 +1717,7 @@
               const c = aiCtx(); if (!c) return;
               ob.disabled = true; ob.textContent = '…';
               AI.generateQuizOption({ q: q.q, options: q.options, correct: q.correct, index: k, topic: c.topic, chunks: c.chunks, lang: c.lang, level: c.level, apiKey: S.settings.apiKey, model: S.settings.model })
-                .then(function (r2) { q.options[k] = r2.text; oi.value = r2.text; changed(); ob.disabled = false; ob.textContent = '✨'; oi.classList.add('flash-in'); setTimeout(function () { oi.classList.remove('flash-in'); }, 1200); })
+                .then(function (r2) { q.options[k] = r2.text; oi.value = r2.text; grow(oi); changed(); ob.disabled = false; ob.textContent = '✨'; oi.classList.add('flash-in'); setTimeout(function () { oi.classList.remove('flash-in'); }, 1200); })
                 .catch(function (e) { ob.disabled = false; ob.textContent = '✨'; toast('AI: ' + e.message, 6000); });
             });
             orow.appendChild(ob);
@@ -1735,7 +1776,7 @@
       box.appendChild(el('p', { class: 'hint', style: 'margin-top:0', text: 'Le voci sulla ruota: domande per parlare, parole, compiti ("Descrivi la tua giornata"). Almeno 2.' }));
       d.items.forEach(function (it, i) {
         const row = el('div', { class: 'af-row one' });
-        const a = el('input', { type: 'text', placeholder: 'Voce ' + (i + 1), value: it.text || '' }); a.addEventListener('change', function () { it.text = a.value.trim(); changed(); });
+        const a = area({ class: 'af-in', rows: '1', placeholder: 'Voce ' + (i + 1) }, it.text, function (v) { it.text = v; changed(); });
         row.appendChild(a); row.appendChild(rowBtns(d.items, i, 'voce'));
         box.appendChild(row);
       });
