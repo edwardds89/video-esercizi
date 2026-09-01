@@ -795,8 +795,8 @@ async function noOverflow(page, where) {
   const qcards = await page.$$('#a-fields .af-quiz');
   assert.strictEqual(qcards.length, 2, 'due domande nel form');
   const fillQ = async function (card, q, o1, o2) {
-    const qi = await card.$('.qrow input'); await qi.fill(q); await qi.dispatchEvent('change');
-    const os = await card.$$('.orow input[type=text]');
+    const qi = await card.$('.qrow textarea'); await qi.fill(q); await qi.dispatchEvent('change');
+    const os = await card.$$('.orow textarea');
     await os[0].fill(o1); await os[0].dispatchEvent('change');
     await os[1].fill(o2); await os[1].dispatchEvent('change');
   };
@@ -869,6 +869,14 @@ async function noOverflow(page, where) {
   await page.waitForSelector('#btn-start:visible');
   await page.click('#btn-start');
   await page.waitForSelector('#s-panel .match', { timeout: 5000 });
+  // le schede devono stare TUTTE nello schermo: nessun pulsante fuori dal pannello, niente scorrimento
+  const fit = await page.evaluate(function () {
+    const panel = document.querySelector('#s-panel'), pb = panel.getBoundingClientRect();
+    const fuori = Array.from(panel.querySelectorAll('button')).filter(function (b) { const r = b.getBoundingClientRect(); return r.height && (r.bottom > pb.bottom + 1 || r.top < pb.top - 1); }).map(function (b) { return b.textContent.trim(); });
+    return { scroll: panel.scrollHeight - panel.clientHeight, fuori: fuori };
+  });
+  assert.strictEqual(fit.fuori.length, 0, 'pulsanti fuori dallo schermo nelle schede: ' + fit.fuori.join(', '));
+  assert.ok(fit.scroll <= 2, 'le schede non devono farsi scorrere: ' + fit.scroll);
   await page.click('#s-panel button:has-text("Salta le schede")');
   await page.waitForSelector('#s-panel .talk-q', { timeout: 5000 });
   await page.click('#s-panel button:has-text("Salta le domande")');
@@ -959,6 +967,14 @@ async function noOverflow(page, where) {
   await page.waitForSelector('.act-card[data-aid="a2"] .af-quiz');
   assert.strictEqual(await page.$$eval('.act-card[data-aid="a2"] .af-quiz .qrow .regen', function (b) { return b.length; }), 1, '✨ Rigenera sulla domanda');
   assert.strictEqual(await page.$$eval('.act-card[data-aid="a2"] .af-quiz .orow .regen', function (b) { return b.length; }), 4, '✨ su ognuna delle 4 risposte');
+  // domanda lunga: la casella cresce, niente frase tagliata (feedback: "non riesco a vedere la domanda intera")
+  const qLunga = 'Qual è la conclusione principale del video riguardo al Mediterraneo e a quello che succede alle specie che ci vivono?';
+  const qBox = await page.$('.act-card[data-aid="a2"] .af-quiz .qrow textarea');
+  await qBox.fill(qLunga); await qBox.dispatchEvent('change');
+  await page.waitForTimeout(200);
+  const dim = await page.$eval('.act-card[data-aid="a2"] .af-quiz .qrow textarea', function (t) { return [t.clientHeight, t.scrollHeight]; });
+  assert.ok(dim[0] >= dim[1] - 2, 'la domanda si legge per intero: ' + dim.join('/'));
+  assert.ok(dim[0] >= 58, 'la casella della domanda parte da due righe: ' + dim[0]);
   await page.evaluate(function () { window.VLApp.S.settings.apiKey = ''; });
   // schede delle Parole utili: 🎨 al volo dopo una coppia abbinata → la coppia resta e il tema cambia
   await page.click('#btn-student');
