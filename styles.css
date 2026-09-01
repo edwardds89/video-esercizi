@@ -16,8 +16,8 @@ button.danger { color: var(--bad); }
 button.small { padding: 4px 10px; font-size: 14px; }
 button.link { border: none; background: none; color: var(--accent); padding: 2px 6px; text-decoration: underline; }
 input[type=text], input[type=password], input[type=number], input[type=url], select, textarea {
-  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; width: 100%;
-}
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; width: 100%; min-width: 0;
+}   /* min-width:0 = un <select> con opzioni lunghe non allarga la colonna che lo contiene */
 input.short { width: 7.5em; }
 textarea { min-height: 90px; resize: vertical; }
 label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
@@ -41,7 +41,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 18px; }
 .view.active { display: block; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-.row > * { flex: 0 0 auto; }
+.row > * { flex: 0 0 auto; min-width: 0; max-width: 100%; }   /* nessun figlio può sfondare la riga (i chip dentro vanno a capo) */
 .grow { flex: 1 1 auto !important; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
 @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
@@ -88,6 +88,7 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .undo-pair button:last-child { border-radius: 0 8px 8px 0; border-left: 0; padding-left: 8px; padding-right: 8px; }
 .undo-pair button:disabled { opacity: .45; cursor: default; }
 .editor-layout { display: grid; grid-template-columns: minmax(320px, 5fr) minmax(360px, 6fr); gap: 16px; align-items: start; }
+.editor-left, .editor-right { min-width: 0; }   /* le colonne possono restringersi: niente sfondamento orizzontale */
 .editor-left { position: sticky; top: 64px; max-height: calc(100vh - 76px); overflow-y: auto; padding-right: 2px; }
 .editor-left .card { padding: 12px 14px; }
 .editor-left .kv { flex: 1 1 100%; gap: 12px; }
