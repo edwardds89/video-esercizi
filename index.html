@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260901-51">
+<link rel="stylesheet" href="styles.css?v=20260901-52">
 </head>
 <body>
 <header class="topbar">
@@ -30,6 +30,7 @@
       <div class="row" style="margin-top:12px">
         <button data-view="new" class="primary">+ Nuova lezione</button>
         <button id="btn-new-act">🎲 Nuova attività</button>
+        <button id="btn-new-conv">💬 Nuova conversazione</button>
         <label for="import-file" class="chip" style="margin:0">Importa JSON…</label>
         <input id="import-file" type="file" accept="application/json,.json" class="sr">
         <button id="btn-demo">Crea lezione demo (player finto)</button>
@@ -256,6 +257,45 @@
     </div>
   </section>
 
+  <!-- CONVERSAZIONE: editor dell'unità (senza video) -->
+  <section id="view-conv" class="view">
+    <div class="row editor-bar">
+      <span style="font-size:28px">💬</span>
+      <input id="c-title" type="text" class="grow" style="font-size:18px;font-weight:600" placeholder="Titolo dell'unità">
+      <span class="undo-pair"><button id="c-undo" disabled>↶ Annulla</button><button id="c-redo" disabled aria-label="Ripeti">↷</button></span>
+      <button id="c-save" class="primary" title="Salva e torna al portfolio">💾 Salva e torna al portfolio</button>
+      <button id="c-print">🖨 Foglio A4</button>
+      <button id="c-delete" class="danger">Elimina</button>
+    </div>
+    <div class="card">
+      <div class="row">
+        <label class="grow" style="min-width:220px">Argomento<input id="c-topic" type="text" placeholder="es. Cibo: cucinare, ordinare, sprecare"></label>
+        <label>Livello<select id="c-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
+        <label>Lingua di studio<select id="c-lang"></select></label>
+        <label>Consegne e glosse<select id="c-uilang"></select></label>
+      </div>
+      <div class="row">
+        <label class="grow" style="min-width:220px">Focus grammaticale o funzione (facoltativo)<input id="c-focus" type="text" placeholder="es. congiuntivo, esprimere disaccordo"></label>
+        <label>Domande<input id="c-n" type="number" min="3" max="14" value="10" style="width:80px"></label>
+        <button id="c-regen">✨ Rigenera tutta l'unità</button>
+      </div>
+      <p class="hint">Rigenerare l'unità intera sostituisce tutto quello che c'è sotto: per cambiare un pezzo solo usa il ✨ accanto a quel pezzo.</p>
+    </div>
+    <div id="c-fields"></div>
+  </section>
+
+  <!-- CONVERSAZIONE: foglio A4 da stampare -->
+  <section id="view-convprint" class="view">
+    <div class="row noprint" style="margin-bottom:10px">
+      <button id="cp-back">◀ Torna all'editor</button>
+      <button id="cp-print" class="primary">🖨 Stampa / salva in PDF</button>
+      <label class="chip" style="margin:0"><input id="cp-photos" type="checkbox" checked> con le foto</label>
+      <span class="hint grow">Nella finestra di stampa scegli A4, margini «nessuno» e «grafica di sfondo» accesa.</span>
+      <span id="cp-warn" class="notice bad" style="display:none"></span>
+    </div>
+    <div id="cp-sheet" class="cp-sheet"></div>
+  </section>
+
   <!-- ATTIVITÀ: gioco (studente) -->
   <section id="view-actplay" class="view">
     <div class="row" style="margin-bottom:8px">
@@ -282,6 +322,36 @@
     <button type="button" data-when="after"><span class="em">💬</span><b>Dopo il video</b><span class="hint">Comprensione e opinioni: domande specifiche su quello che il video ha detto, poi reazioni personali ancorate ai suoi punti.</span></button>
   </div>
   <div class="row" style="margin-top:12px"><button id="tn-close">Annulla</button></div>
+</dialog>
+
+<dialog id="dlg-conv-new">
+  <h2>Nuova conversazione</h2>
+  <p class="hint">Un'unità da parlare, senza video: lessico utile, domande numerate, due sondaggi, due testi da leggere e una telefonata di ruolo. Poi la stampi in A4.</p>
+  <label for="cn-topic">Di che cosa si parla?</label>
+  <input id="cn-topic" type="text" placeholder="es. Cibo: cucinare, ordinare, sprecare">
+  <div class="row">
+    <label class="grow">Livello CEFR<select id="cn-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
+    <label class="grow">Quante domande?<select id="cn-n"><option>6</option><option>8</option><option selected>10</option><option>12</option><option>14</option></select></label>
+  </div>
+  <div class="row">
+    <label class="grow">Lingua di studio<select id="cn-lang"></select></label>
+    <label class="grow">Consegne e glosse<select id="cn-uilang"></select></label>
+  </div>
+  <label for="cn-focus">Focus grammaticale o funzione <span class="hint">(facoltativo)</span></label>
+  <input id="cn-focus" type="text" placeholder="es. congiuntivo · esprimere disaccordo · passato prossimo">
+  <p class="hint" style="margin-top:10px">Cosa mettere nel foglio:</p>
+  <div class="chips">
+    <label class="chip"><input id="cn-charts" type="checkbox" checked> due sondaggi</label>
+    <label class="chip"><input id="cn-texts" type="checkbox" checked> due testi da leggere</label>
+    <label class="chip"><input id="cn-role" type="checkbox" checked> telefonata di ruolo</label>
+    <label class="chip"><input id="cn-photos" type="checkbox" checked> cerca le foto</label>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <button id="cn-go" class="primary">✨ Genera l'unità</button>
+    <button id="cn-blank">Parto da un foglio vuoto</button>
+    <button id="cn-close">Annulla</button>
+  </div>
+  <div id="cn-msg" class="hint" style="margin-top:8px"></div>
 </dialog>
 
 <dialog id="dlg-act-try">
@@ -391,14 +461,14 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260901-51"></script>
-<script src="exercises.js?v=20260901-51"></script>
-<script src="generator.js?v=20260901-51"></script>
-<script src="activities.js?v=20260901-51"></script>
-<script src="ai.js?v=20260901-51"></script>
-<script src="demo-data.js?v=20260901-51"></script>
-<script src="bookmarklet.js?v=20260901-51"></script>
-<script src="sync.js?v=20260901-51"></script>
-<script src="app.js?v=20260901-51"></script>
+<script src="lang.js?v=20260901-52"></script>
+<script src="exercises.js?v=20260901-52"></script>
+<script src="generator.js?v=20260901-52"></script>
+<script src="activities.js?v=20260901-52"></script>
+<script src="ai.js?v=20260901-52"></script>
+<script src="demo-data.js?v=20260901-52"></script>
+<script src="bookmarklet.js?v=20260901-52"></script>
+<script src="sync.js?v=20260901-52"></script>
+<script src="app.js?v=20260901-52"></script>
 </body>
 </html>

@@ -134,17 +134,21 @@
     Object.keys(S.lessons).forEach(function (id) { migrateLesson(S.lessons[id]); });
     try { Object.assign(S.settings, JSON.parse(localStorage.getItem('vle.settings') || '{}') || {}); } catch (e) { /* ignore */ }
   }
+  // Una scheda che non ha modificato niente non deve MAI riscrivere il magazzino: la sua fotografia e' vecchia
+  // e sovrascriverebbe quello che nel frattempo ha salvato un'altra scheda (o un altro computer).
+  let saveArmed = false;
   function saveLessons() {
     // i campi che iniziano con "_" sono cache di sessione (candidati foto, lessico): non si salvano
+    saveArmed = false;
     try { localStorage.setItem('vle.lessons', JSON.stringify(S.lessons, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })); } catch (e) { toast('Impossibile salvare nel browser: ' + e.message); }
     if (CLOUD.sync) CLOUD.sync.noteLocalChange();   // il cloud capisce da solo cosa è cambiato (confronto per impronta)
   }
   function saveSettings() { try { localStorage.setItem('vle.settings', JSON.stringify(S.settings)); } catch (e) { /* ignore */ } }
-  const saveDebounced = (function () { let t; return function () { clearTimeout(t); t = setTimeout(function () { saveLessons(); const s = $('#e-saved'); if (s) { s.textContent = 'Salvato'; setTimeout(function () { s.textContent = ''; }, 1500); } }, 400); }; })();
+  const saveDebounced = (function () { let t; return function () { saveArmed = true; clearTimeout(t); t = setTimeout(function () { saveLessons(); const s = $('#e-saved'); if (s) { s.textContent = 'Salvato'; setTimeout(function () { s.textContent = ''; }, 1500); } }, 400); }; })();
   function current() { return S.lessons[S.currentId]; }
   function touch(lesson) { lesson.updatedAt = new Date().toISOString(); undoNote(lesson); saveDebounced(); }
   // chiusura/ricarica della pagina: salva subito quello che il debounce non ha ancora scritto
-  window.addEventListener('pagehide', function () { try { saveLessons(); } catch (e) { /* ignore */ } });
+  window.addEventListener('pagehide', function () { try { if (saveArmed) saveLessons(); } catch (e) { /* ignore */ } });
 
   // ---------- ANNULLA / RIPETI (pulsante + Cmd/Ctrl+Z) ----------
   // Storia della lezione aperta nell'editor: a ogni touch() si confronta lo stato con l'ultimo "fermo immagine" e, se è
@@ -154,8 +158,8 @@
   function undoButtons() {
     const can = UNDO.id != null && S.currentId === UNDO.id;
     const mac = /Mac|iPhone|iPad/.test(navigator.platform || '');
-    ['#btn-undo', '#a-undo'].forEach(function (s) { const b = $(s); if (!b) return; b.disabled = !(can && UNDO.stack.length); b.title = 'Annulla l\'ultima modifica (' + (mac ? '⌘Z' : 'Ctrl+Z') + ')'; });
-    ['#btn-redo', '#a-redo'].forEach(function (s) { const b = $(s); if (!b) return; b.disabled = !(can && UNDO.redo.length); b.title = 'Ripeti la modifica annullata (' + (mac ? '⇧⌘Z' : 'Ctrl+Y') + ')'; });
+    ['#btn-undo', '#a-undo', '#c-undo'].forEach(function (s) { const b = $(s); if (!b) return; b.disabled = !(can && UNDO.stack.length); b.title = 'Annulla l\'ultima modifica (' + (mac ? '⌘Z' : 'Ctrl+Z') + ')'; });
+    ['#btn-redo', '#a-redo', '#c-redo'].forEach(function (s) { const b = $(s); if (!b) return; b.disabled = !(can && UNDO.redo.length); b.title = 'Ripeti la modifica annullata (' + (mac ? '⇧⌘Z' : 'Ctrl+Y') + ')'; });
   }
   /** All'apertura di una lezione nell'editor: stessa lezione → si tiene la storia (ma il punto di partenza è lo stato attuale); altra → si riparte. */
   function undoOpen(ls) {
@@ -192,6 +196,7 @@
       UNDO.base = snapshot(ls);
       UNDO.last = 0;
       if (S.view === 'act' && ls.activity) openActEditor(ls.id);
+      if (S.view === 'conv' && ls.conv) openConvEditor(ls.id);
       else if (S.view === 'editor') { editorHeader(ls); renderEditorBody(); }
     } finally { UNDO.busy = false; }
     undoButtons();
@@ -212,7 +217,7 @@
     if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
     const k = (e.key || '').toLowerCase();
     if (k !== 'z' && k !== 'y') return;
-    const inEditor = S.view === 'editor' || S.view === 'act';
+    const inEditor = S.view === 'editor' || S.view === 'act' || S.view === 'conv';
     if (!inEditor) {   // portfolio (o studente): Cmd/Ctrl+Z riporta indietro l'ultima lezione/attività eliminata
       if (k === 'z' && !e.shiftKey && trashFresh()) { e.preventDefault(); hideUndoBar(); restoreDeleted(); }
       return;
@@ -251,6 +256,8 @@
   // un'altra scheda ha salvato: questa ha in memoria una fotografia vecchia e salvando la sovrascriverebbe
   window.addEventListener('storage', function (e) {
     if (e.key !== 'vle.lessons' || S.view === 'student' || S.standalone) return;
+    // niente di mio in sospeso e sono nel portfolio: prendo quello che ha salvato l'altra scheda invece di restare indietro
+    if (!saveArmed && S.view === 'home') { loadState(); renderHome(); return; }
     appBar('Le lezioni sono state salvate in un\'altra scheda: questa è rimasta indietro e salvando potrebbe sovrascriverle.');
   });
   document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - lastCheck > 300000) checkAppVersion(); });
@@ -286,8 +293,8 @@
     renderHome();
     toastUndo(what + ' eliminata: ' + (ls.title || 'senza titolo'), restoreDeleted);
   }
-  ['#btn-undo', '#a-undo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!undo()) toast('Niente da annullare'); }); });
-  ['#btn-redo', '#a-redo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!redo()) toast('Niente da ripetere'); }); });
+  ['#btn-undo', '#a-undo', '#c-undo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!undo()) toast('Niente da annullare'); }); });
+  ['#btn-redo', '#a-redo', '#c-redo'].forEach(function (s) { const b = $(s); if (b) b.addEventListener('click', function () { if (!redo()) toast('Niente da ripetere'); }); });
 
   // ---------- cloud (Supabase, opzionale) ----------
   // Le lezioni restano in localStorage (cache); con l'accesso vengono anche caricate nel cloud e unite tra i computer (vince l'ultima modifica).
@@ -697,6 +704,23 @@
         list.appendChild(cardA);
         return;
       }
+      // conversazione standalone: nessun video, si apre il foglio A4
+      if (ls.conv && !Array.isArray(ls.exercises)) {
+        const u = ls.conv;
+        const openC = function () { openConvPrint(ls.id); };
+        const cardC = el('div', { class: 'lesson-card' },
+          el('div', { class: 'thumb act-thumb conv-thumb', onclick: openC, title: 'Apri il foglio' }, '\uD83D\uDCAC'),
+          el('div', { class: 'body' },
+            el('div', { class: 'title', text: ls.title || '(conversazione senza titolo)', onclick: openC }),
+            el('div', { class: 'meta', text: 'Conversazione \u00b7 ' + (u.questions || []).length + ' domande \u00b7 livello ' + (u.level || 'B1') + (u.focus ? ' \u00b7 ' + u.focus : '') + (ls.updatedAt ? ' \u00b7 ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            el('div', { class: 'actions' },
+              el('button', { class: 'small primary', text: '\uD83D\uDDA8 Foglio A4', onclick: openC }),
+              el('button', { class: 'small', text: '\u270E Modifica', onclick: function () { openConvEditor(ls.id); } }),
+              el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'conversazione') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, conv: ls.conv }, null, 1)); } }),
+              el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'conversazione senza titolo') + '"?')) deleteLesson(ls); } }))));
+        list.appendChild(cardC);
+        return;
+      }
       const eff = G.effectiveDuration(ls.cuts || [], ls.duration);
       const thumbStyle = ls.videoId && ls.videoId !== 'demo' ? 'background-image:url(https://i.ytimg.com/vi/' + ls.videoId + '/mqdefault.jpg)' : '';
       const open = function () { openStudent(ls.id); };
@@ -719,6 +743,12 @@
     r.onload = function () {
       try {
         const ls = JSON.parse(r.result);
+        if (ls && ls.conv && !Array.isArray(ls.exercises)) {
+          ls.id = ls.id && !S.lessons[ls.id] ? ls.id : uid();
+          ls.updatedAt = new Date().toISOString();
+          S.lessons[ls.id] = ls; saveLessons(); renderHome(); toast('Conversazione importata');
+          return;
+        }
         if (ls && ls.activity && !Array.isArray(ls.exercises)) {
           ls.id = ls.id && !S.lessons[ls.id] ? ls.id : uid();
           ls.updatedAt = new Date().toISOString();
@@ -2898,7 +2928,13 @@
     const helps = String(q.help || '').split(/\s*[·|;]\s*/).map(function (h) { return h.trim(); }).filter(Boolean);
     if (helps.length) {
       p.appendChild(el('div', { class: 'hint', text: 'Per rispondere puoi usare:' }));
-      p.appendChild(el('div', { class: 'talk-help' }, helps.map(function (h) { return el('span', { class: 'chip', text: h }); })));
+      // anche le espressioni utili sono parole cliccabili per la stella: sono proprio quelle che lo studente deve portarsi a casa.
+      // Ogni chip e' un contenitore a se': parole stellate vicine DENTRO lo stesso chip fanno una voce sola ("mi preoccupa perche'").
+      p.appendChild(el('div', { class: 'talk-help' }, helps.map(function (h) {
+        const c = el('span', { class: 'chip', title: 'Clicca una parola per la stella \u2605' });
+        c.appendChild(starSpans(ls, h));
+        return c;
+      })));
     }
     const fb = el('div', { class: 'feedback' });
     const nav = el('div', { class: 'row fc-nav' });
@@ -2995,14 +3031,31 @@
     actions.appendChild(replayBtn); actions.appendChild(withTextLbl); actions.appendChild(checkBtn); actions.appendChild(hintBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
     if (S.settings.apiKey) {
       // traduzione con l'AI (inglese britannico): tutta la frase, oppure solo le parole selezionate col mouse
-      const trBtn = el('button', { class: 'small', text: '🌐 Traduci', title: 'Traduzione in inglese britannico: seleziona alcune parole per tradurre solo quelle, altrimenti tutta la frase' });
+      // La traduzione aiuta a CAPIRE la frase, non a risolverla: finché l'esercizio non è chiuso le parole da trovare
+      // escono come "___" (1/9, Edoardo: "se clicco su traduci prima che lo studente scrive le parole appare la frase
+      // intera e non va bene perché sarebbe un suggerimento"). Nel riordino non c'è niente da mascherare — la risposta è
+      // l'ordine di TUTTE le parole — quindi lì prima di risolvere si traduce solo quello che lo studente seleziona.
+      const trBtn = el('button', { class: 'small', text: '🌐 Traduci', title: 'Traduzione in inglese britannico: seleziona alcune parole per tradurre solo quelle, altrimenti tutta la frase (le parole da trovare restano coperte)' });
       const trBox = el('div', { class: 'translation', style: 'display:none' });
       trBtn.addEventListener('click', function () {
+        const done = solved || !!opts.review || preview;
         const sel = String(window.getSelection ? window.getSelection().toString() : '').trim();
         const partial = sel && sel.length < ex.sentence.length && ex.sentence.toLowerCase().indexOf(sel.toLowerCase().slice(0, 30)) !== -1;
+        if (!done && !partial && ex.type === 'scramble') {
+          trBox.style.display = '';
+          trBox.innerHTML = '';
+          trBox.appendChild(el('span', { class: 'hint', text: 'Qui la risposta è proprio l\'ordine delle parole: seleziona con il mouse le parole che non capisci e ripremi 🌐 Traduci.' }));
+          return;
+        }
+        const hide = done || partial ? [] : EX.hiddenWords(ex);
         trBtn.disabled = true; trBtn.textContent = '… traduco';
-        AI.translateSentence({ text: partial ? sel : ex.sentence, whole: !partial, sentence: ex.sentence, lang: ls.lang, context: '', apiKey: S.settings.apiKey, model: S.settings.model })
-          .then(function (r) { trBox.style.display = ''; trBox.innerHTML = ''; trBox.appendChild(el('span', { class: 'hint', text: (partial ? '"' + sel + '" → ' : 'Traduzione: ') })); trBox.appendChild(el('b', { text: r.translation })); })
+        AI.translateSentence({ text: partial ? sel : ex.sentence, whole: !partial, sentence: ex.sentence, lang: ls.lang, context: '', hide: hide, literal: !done && (ex.type === 'extra' || ex.type === 'wrong'), apiKey: S.settings.apiKey, model: S.settings.model })
+          .then(function (r) {
+            trBox.style.display = ''; trBox.innerHTML = '';
+            trBox.appendChild(el('span', { class: 'hint', text: (partial ? '"' + sel + '" → ' : 'Traduzione: ') }));
+            trBox.appendChild(el('b', { text: r.translation }));
+            if (hide.length) trBox.appendChild(el('div', { class: 'hint', text: '___ = quello che devi trovare tu. Dopo la risposta la traduzione si vede per intero.' }));
+          })
           .catch(function (e) { toast('AI: ' + e.message, 6000); })
           .then(function () { trBtn.disabled = false; trBtn.textContent = '🌐 Traduci'; });
       });
@@ -3168,7 +3221,10 @@
         while (ok < chosen.length && ok < d.words.length && sameWord(shown[chosen[ok]], d.words[ok])) ok++;
         if (ok >= d.words.length) return false;
         chosen.length = ok;
-        const idx = shown.findIndex(function (w, i) { return chosen.indexOf(i) === -1 && sameWord(w, d.words[ok]); });
+        // la tessera giusta e' quella IDENTICA: sameWord ignora gli accenti (serve per correggere lo studente con indulgenza)
+        // e faceva scegliere "e" al posto di "e'" quando in frase ci sono tutte e due (segnalato da Edoardo l'1/9).
+        let idx = shown.findIndex(function (w, i) { return chosen.indexOf(i) === -1 && w === d.words[ok]; });
+        if (idx === -1) idx = shown.findIndex(function (w, i) { return chosen.indexOf(i) === -1 && sameWord(w, d.words[ok]); });
         if (idx === -1) return false;
         chosen.push(idx); render();
         const last = ans.lastElementChild; if (last) last.classList.add('hinted');
@@ -3581,6 +3637,467 @@
     return b;
   }
 
+  // ---------- CONVERSAZIONE: unità da parlare, senza video (portfolio → foglio A4) ----------
+  // Il pezzo che l'insegnante paga di più non sono le domande (venti secondi di AI) ma l'impaginato:
+  // lessico, sondaggi, foto, testi e telefonata su due pagine A4 pronte da fotocopiare.
+  const CONV_LANGS = [['it', 'Italiano'], ['en', 'Inglese'], ['es', 'Spagnolo'], ['fr', 'Francese'], ['de', 'Tedesco'], ['pt', 'Portoghese']];
+  function langOpts(sel, val) {
+    if (!sel) return;
+    sel.innerHTML = '';
+    CONV_LANGS.forEach(function (l) { sel.appendChild(el('option', { value: l[0], text: l[1] })); });
+    sel.value = val || 'it';
+  }
+  function blankConv(over) {
+    return Object.assign({
+      id: 'c1', title: '', topic: '', level: 'B1', lang: 'it', uiLang: 'en', focus: '', n: 10,
+      vocab: [], questions: [], charts: [], texts: [], roleplay: null, photos: []
+    }, over || {});
+  }
+  function newConversation(unit) {
+    const u = blankConv(unit);
+    const ls = { id: uid(), title: u.title || u.topic || '', conv: u, updatedAt: new Date().toISOString() };
+    S.lessons[ls.id] = ls; saveLessons();
+    openConvEditor(ls.id);
+    return ls;
+  }
+  /** Dialog "Nuova conversazione": chiede argomento, livello, quante domande, le due lingue e il focus. */
+  function openConvNew() {
+    const d = $('#dlg-conv-new');
+    langOpts($('#cn-lang'), 'it'); langOpts($('#cn-uilang'), 'en');
+    $('#cn-msg').textContent = '';
+    $('#cn-go').disabled = false;
+    d.showModal();
+    $('#cn-topic').focus();
+  }
+  $('#btn-new-conv').addEventListener('click', openConvNew);
+  $('#cn-close').addEventListener('click', function () { $('#dlg-conv-new').close(); });
+  $('#cn-blank').addEventListener('click', function () {
+    $('#dlg-conv-new').close();
+    newConversation({ topic: $('#cn-topic').value.trim(), level: $('#cn-level').value, lang: $('#cn-lang').value, uiLang: $('#cn-uilang').value, focus: $('#cn-focus').value.trim(), n: +$('#cn-n').value || 10 });
+  });
+  $('#cn-go').addEventListener('click', function () {
+    const topic = $('#cn-topic').value.trim();
+    if (!topic) { $('#cn-msg').textContent = 'Scrivi prima di che cosa si parla.'; $('#cn-topic').focus(); return; }
+    if (!S.settings.apiKey) { $('#cn-msg').textContent = 'Serve la chiave API (Impostazioni AI) oppure parti da un foglio vuoto.'; return; }
+    const params = {
+      topic: topic, level: $('#cn-level').value, n: +$('#cn-n').value || 10,
+      lang: $('#cn-lang').value, uiLang: $('#cn-uilang').value, focus: $('#cn-focus').value.trim(),
+      parts: { charts: $('#cn-charts').checked, texts: $('#cn-texts').checked, roleplay: $('#cn-role').checked },
+      apiKey: S.settings.apiKey, model: S.settings.model
+    };
+    const wantPhotos = $('#cn-photos').checked;
+    $('#cn-go').disabled = true;
+    $('#cn-msg').textContent = 'Scrivo l\'unità… (lessico, domande, sondaggi, testi: una ventina di secondi)';
+    AI.generateConvUnit(params).then(function (r) {
+      $('#dlg-conv-new').close();
+      const ls = newConversation(Object.assign(r.unit, { n: params.n }));
+      ls.title = r.unit.title;
+      $('#c-title').value = ls.title;
+      toast('Unità pronta' + (r.ai && r.ai.cost ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''), 3500);
+      if (wantPhotos && r.unit.photos.length) fillConvPhotos(ls);
+    }).catch(function (e) {
+      $('#cn-go').disabled = false;
+      $('#cn-msg').textContent = 'AI: ' + e.message;
+    });
+  });
+  /** Foto delle scene: cerca su Wikipedia/Commons con la query inglese scritta dall'AI. Scene di vita quotidiana
+   *  su Commons si trovano a fatica: quello che non esce si mette a mano con "Altra foto" o incollando un URL. */
+  function fillConvPhotos(ls) {
+    const u = ls.conv; if (!u || !u.photos.length) return;
+    toast('Cerco le foto…', 2000);
+    let found = 0;
+    const steps = u.photos.map(function (ph) {
+      return function () {
+        return searchImages('en', ph.query, '').then(function (list) {
+          ph._imgs = list; ph._imgIdx = 0;
+          if (list.length) { ph.url = list[0].url; found++; }
+        }).catch(function () { /* la foto si mette a mano */ });
+      };
+    });
+    steps.reduce(function (pr, f) { return pr.then(f); }, Promise.resolve()).then(function () {
+      touch(ls);
+      if (S.view === 'conv') renderConvFields(ls);
+      toast(found + ' foto su ' + u.photos.length + (found < u.photos.length ? ' · le altre mettile a mano (Altra foto o URL)' : ''), 4000);
+    });
+  }
+  function openConvEditor(id) {
+    const ls = S.lessons[id]; if (!ls || !ls.conv) return renderHome();
+    S.currentId = id;
+    show('conv');
+    undoOpen(ls);
+    const u = ls.conv;
+    const ti = $('#c-title'); ti.value = ls.title || '';
+    ti.onchange = function () { ls.title = ti.value.trim(); u.title = ls.title; touch(ls); };
+    langOpts($('#c-lang'), u.lang); langOpts($('#c-uilang'), u.uiLang);
+    $('#c-topic').value = u.topic || ''; $('#c-level').value = u.level || 'B1';
+    $('#c-focus').value = u.focus || ''; $('#c-n').value = u.n || (u.questions || []).length || 10;
+    [['#c-topic', 'topic'], ['#c-level', 'level'], ['#c-lang', 'lang'], ['#c-uilang', 'uiLang'], ['#c-focus', 'focus']].forEach(function (pair) {
+      $(pair[0]).onchange = function () { u[pair[1]] = $(pair[0]).value.trim ? $(pair[0]).value.trim() : $(pair[0]).value; touch(ls); };
+    });
+    $('#c-n').onchange = function () { u.n = Math.max(3, Math.min(14, +$('#c-n').value || 10)); touch(ls); };
+    renderConvFields(ls);
+  }
+  function convKey() { return S.settings.apiKey; }
+  /** Un pezzo solo, rigenerato con l'AI: il resto dell'unità non si tocca. */
+  function convRegen(ls, what, opts, apply) {
+    if (!convKey()) return toast('Serve la chiave API (Impostazioni AI)', 4000);
+    const btn = opts.btn;
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    AI.regenerateConvPart(Object.assign({ what: what, unit: ls.conv, apiKey: convKey(), model: S.settings.model }, opts))
+      .then(function (r) { apply(r.value); touch(ls); renderConvFields(ls); toast('Fatto' + (r.ai && r.ai.cost ? ' · ' + (r.ai.cost * 100).toFixed(2) + ' cent' : '')); })
+      .catch(function (e) { toast('AI: ' + e.message, 6000); })
+      .then(function () { if (btn) { btn.disabled = false; btn.textContent = '✨'; } });
+  }
+  function sparkle(title, onclick) { return el('button', { class: 'small ai', text: '✨', title: title, onclick: onclick }); }
+  function convCard(title, hint, body, extra) {
+    return el('div', { class: 'card conv-card' },
+      el('div', { class: 'row' }, el('h3', { class: 'grow', style: 'margin:0', text: title }), extra || null),
+      hint ? el('p', { class: 'hint', text: hint }) : null, body);
+  }
+  function renderConvFields(ls) {
+    const u = ls.conv, host = $('#c-fields'); if (!host) return;
+    keepScroll(function () {
+      host.innerHTML = '';
+      const changed = function () { touch(ls); };
+
+      // --- lessico utile
+      const vb = el('div', { class: 'conv-vocab' });
+      u.vocab.forEach(function (w, i) {
+        vb.appendChild(el('div', { class: 'row conv-row' },
+          el('input', { class: 'grow', value: w.it, placeholder: 'parola o espressione (usa ≠ per i contrari, / per i sinonimi)', onchange: function (e) { w.it = e.target.value.trim(); changed(); } }),
+          el('input', { class: 'grow', value: w.en, placeholder: 'glossa', onchange: function (e) { w.en = e.target.value.trim(); changed(); } }),
+          el('button', { class: 'small danger', text: '✕', title: 'Togli la parola', onclick: function () { u.vocab.splice(i, 1); changed(); renderConvFields(ls); undoBarFor('parola'); } })));
+      });
+      host.appendChild(convCard('Lessico utile', u.vocab.length + ' voci · vanno nella colonna di sinistra del foglio', vb,
+        el('span', { class: 'row' },
+          el('button', { class: 'small', text: '+ parola', onclick: function () { u.vocab.push({ it: '', en: '' }); changed(); renderConvFields(ls); } }),
+          sparkle('Chiedi all\'AI altre parole per questo argomento', function (e) {
+            convRegen(ls, 'vocab', { btn: e.target, count: 6, avoid: u.vocab.map(function (w) { return w.it; }) }, function (v) {
+              (Array.isArray(v.vocab) ? v.vocab : []).forEach(function (w) { if (w && w.it) u.vocab.push({ it: String(w.it).trim(), en: String(w.en || '').trim() }); });
+            });
+          }))));
+
+      // --- domande
+      const REFS = [['', 'niente'], ['photo', 'guarda la foto'], ['chart1', 'guarda il sondaggio 1'], ['chart2', 'guarda il sondaggio 2'], ['text1', 'leggi il testo 1'], ['text2', 'leggi il testo 2']];
+      const qb = el('div');
+      u.questions.forEach(function (q, i) {
+        const grow = function (t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
+        const qi = el('textarea', { class: 'af-in q', rows: '2', placeholder: 'Domanda ' + (i + 1) });
+        qi.value = q.text || '';
+        qi.addEventListener('input', function () { grow(qi); });
+        qi.addEventListener('change', function () { q.text = qi.value.trim(); changed(); });
+        requestAnimationFrame(function () { grow(qi); });
+        const sel = el('select', { class: 'small', title: 'Che cosa deve guardare o leggere lo studente', onchange: function (e) { q.ref = e.target.value; changed(); } });
+        REFS.forEach(function (r) { sel.appendChild(el('option', { value: r[0], text: r[1] })); });
+        sel.value = q.ref || '';
+        qb.appendChild(el('div', { class: 'conv-q' },
+          el('div', { class: 'row' }, el('span', { class: 'qn', text: (i + 1) + '.' }), qi,
+            sparkle('Rigenera questa domanda con l\'AI', function (e) {
+              convRegen(ls, 'question', { btn: e.target, avoid: u.questions.map(function (x) { return x.text; }) }, function (v) {
+                if (v && v.text) { q.text = String(v.text).trim(); q.help = String(v.help || '').trim(); }
+              });
+            }),
+            el('button', { class: 'small danger', text: '✕', title: 'Togli la domanda', onclick: function () { u.questions.splice(i, 1); changed(); renderConvFields(ls); undoBarFor('domanda'); } })),
+          el('div', { class: 'row' }, el('span', { class: 'qn' }),
+            el('input', { class: 'grow', value: q.help || '', placeholder: 'Per rispondere puoi usare: … · … · …', onchange: function (e) { q.help = e.target.value.trim(); changed(); } }), sel)));
+      });
+      host.appendChild(convCard('Domande', 'Nell\'ordine in cui le farai in classe: si stampano numerate nella colonna larga.', qb,
+        el('span', { class: 'row' },
+          el('button', { class: 'small', text: '+ domanda', onclick: function () { u.questions.push({ text: '', help: '', ref: '' }); changed(); renderConvFields(ls); } }),
+          sparkle('Aggiungi una domanda scritta dall\'AI', function (e) {
+            convRegen(ls, 'question', { btn: e.target, avoid: u.questions.map(function (x) { return x.text; }) }, function (v) {
+              if (v && v.text) u.questions.push({ text: String(v.text).trim(), help: String(v.help || '').trim(), ref: '' });
+            });
+          }))));
+
+      // --- sondaggi: i numeri sono inventati, e il foglio lo dichiara
+      const cb = el('div');
+      u.charts.forEach(function (c, ci) {
+        const rows = el('div', { class: 'conv-chart-rows' });
+        c.rows.forEach(function (r, ri) {
+          rows.appendChild(el('div', { class: 'row conv-row' },
+            el('input', { class: 'grow', value: r.label, placeholder: 'voce', onchange: function (e) { r.label = e.target.value.trim(); changed(); } }),
+            el('input', { type: 'number', min: '0', max: '100', value: r.pct, style: 'width:80px', onchange: function (e) { r.pct = Math.max(0, Math.min(100, +e.target.value || 0)); changed(); } }),
+            el('span', { class: 'hint', text: '%' }),
+            el('button', { class: 'small danger', text: '✕', onclick: function () { c.rows.splice(ri, 1); changed(); renderConvFields(ls); undoBarFor('voce'); } })));
+        });
+        const srcSel = el('select', { class: 'small', onchange: function (e) { c.source = e.target.value; changed(); renderConvFields(ls); } });
+        srcSel.appendChild(el('option', { value: 'invented', text: 'dati inventati (stampati, con l\'etichetta)' }));
+        srcSel.appendChild(el('option', { value: 'class', text: 'da riempire in classe (barre vuote)' }));
+        srcSel.value = c.source || 'invented';
+        cb.appendChild(el('div', { class: 'conv-chart' },
+          el('div', { class: 'row' },
+            el('input', { class: 'grow', value: c.title, placeholder: 'Domanda del sondaggio', onchange: function (e) { c.title = e.target.value.trim(); changed(); } }),
+            srcSel,
+            sparkle('Rigenera questo sondaggio con l\'AI', function (e) {
+              convRegen(ls, 'chart', { btn: e.target, avoid: u.charts.map(function (x) { return x.title; }) }, function (v) {
+                if (v && v.title) { c.title = String(v.title).trim(); c.rows = (Array.isArray(v.rows) ? v.rows : []).map(function (r) { return { label: String(r.label || '').trim(), pct: Math.max(0, Math.min(100, Math.round(+r.pct) || 0)) }; }).filter(function (r) { return r.label; }); }
+              });
+            }),
+            el('button', { class: 'small danger', text: '✕', title: 'Togli il sondaggio', onclick: function () { u.charts.splice(ci, 1); changed(); renderConvFields(ls); undoBarFor('sondaggio'); } })),
+          rows,
+          el('button', { class: 'small', text: '+ voce', onclick: function () { c.rows.push({ label: '', pct: 0 }); changed(); renderConvFields(ls); } })));
+      });
+      host.appendChild(convCard('Sondaggi', 'Le percentuali le inventa l\'AI: nel foglio compaiono con la scritta "dati di esempio per la discussione". Se vuoi numeri veri, metti il sondaggio su "da riempire in classe" e contate i voti alla lavagna.', cb,
+        el('button', { class: 'small', text: '+ sondaggio', onclick: function () { u.charts.push({ title: '', source: 'invented', rows: [] }); changed(); renderConvFields(ls); } })));
+
+      // --- testi
+      const tb = el('div');
+      u.texts.forEach(function (t, ti2) {
+        const body = el('textarea', { class: 'af-in', rows: '6', placeholder: 'Testo' });
+        body.value = t.body || '';
+        body.addEventListener('change', function () { t.body = body.value.trim(); changed(); });
+        tb.appendChild(el('div', { class: 'conv-text' },
+          el('div', { class: 'row' },
+            el('span', { class: 'badge', text: (ti2 + 1) + ' · ' + (t.kind === 'article' ? 'articolo' : 'intervista') }),
+            el('input', { class: 'grow', value: t.title || '', placeholder: t.kind === 'article' ? 'Titolo di sezione' : 'La frase tra virgolette', onchange: function (e) { t.title = e.target.value.trim(); changed(); } }),
+            sparkle('Riscrivi questo testo con l\'AI', function (e) {
+              convRegen(ls, 'text', { btn: e.target, kind: t.kind, avoid: [t.body] }, function (v) {
+                if (v && v.body) { t.title = String(v.title || t.title).trim(); t.who = String(v.who || t.who || '').trim(); t.body = String(v.body).trim(); t.quote = String(v.quote || t.quote || '').trim(); }
+              });
+            }),
+            el('button', { class: 'small danger', text: '✕', title: 'Togli il testo', onclick: function () { u.texts.splice(ti2, 1); changed(); renderConvFields(ls); undoBarFor('testo'); } })),
+          t.kind === 'interview' ? el('input', { class: 'grow', value: t.who || '', placeholder: 'Nome Cognome, NN anni, mestiere', onchange: function (e) { t.who = e.target.value.trim(); changed(); } }) : null,
+          body,
+          t.kind === 'article' ? el('input', { class: 'grow', value: t.quote || '', placeholder: 'La frase da stampare grande in prima pagina', onchange: function (e) { t.quote = e.target.value.trim(); changed(); } }) : null));
+      });
+      host.appendChild(convCard('Testi da leggere', 'Le persone di questi testi sono personaggi inventati per la classe: il foglio lo scrive in fondo, così nessuno li cerca come fonti vere.', tb,
+        el('span', { class: 'row' },
+          el('button', { class: 'small', text: '+ intervista', onclick: function () { u.texts.push({ kind: 'interview', title: '', who: '', body: '', quote: '', fiction: true }); changed(); renderConvFields(ls); } }),
+          el('button', { class: 'small', text: '+ articolo', onclick: function () { u.texts.push({ kind: 'article', title: '', who: '', body: '', quote: '', fiction: true }); changed(); renderConvFields(ls); } }))));
+
+      // --- telefonata di ruolo
+      const rp = u.roleplay;
+      const rb = el('div');
+      if (rp) {
+        const intro = el('textarea', { class: 'af-in', rows: '2' });
+        intro.value = rp.intro || '';
+        intro.addEventListener('change', function () { rp.intro = intro.value.trim(); changed(); });
+        rb.appendChild(intro);
+        [0, 1, 2].forEach(function (k) {
+          rb.appendChild(el('div', { class: 'row conv-row' }, el('span', { class: 'qn', text: '◆' }),
+            el('input', { class: 'grow', value: rp.steps[k] || '', placeholder: 'passo ' + (k + 1), onchange: function (e) { rp.steps[k] = e.target.value.trim(); changed(); } })));
+        });
+      } else {
+        rb.appendChild(el('p', { class: 'hint', text: 'Nessuna telefonata: è l\'ultimo esercizio della pagina 2.' }));
+      }
+      host.appendChild(convCard('Telefonata di ruolo', 'Un amico nei guai per colpa dell\'argomento: lo studente telefona e fa tre cose.', rb,
+        el('span', { class: 'row' },
+          rp ? el('button', { class: 'small danger', text: '✕ Togli', onclick: function () { u.roleplay = null; changed(); renderConvFields(ls); undoBarFor('telefonata'); } }) : null,
+          sparkle('Scrivi o riscrivi la telefonata con l\'AI', function (e) {
+            convRegen(ls, 'roleplay', { btn: e.target, avoid: rp ? [rp.intro] : [] }, function (v) {
+              if (v && v.intro) u.roleplay = { intro: String(v.intro).trim(), steps: (Array.isArray(v.steps) ? v.steps : []).map(function (x) { return String(x).trim(); }).filter(Boolean).slice(0, 3) };
+            });
+          }))));
+
+      // --- foto
+      const SLOTS = [['top', 'in alto (pagina 1)'], ['mid', 'in mezzo (pagina 1)'], ['role', 'accanto alla telefonata (pagina 2)']];
+      const pb = el('div');
+      u.photos.forEach(function (ph, pi) {
+        const slot = el('select', { class: 'small', onchange: function (e) { ph.slot = e.target.value; changed(); } });
+        SLOTS.forEach(function (sl) { slot.appendChild(el('option', { value: sl[0], text: sl[1] })); });
+        slot.value = ph.slot || 'top';
+        pb.appendChild(el('div', { class: 'conv-photo' },
+          el('div', { class: 'thumbimg' }, ph.url ? el('img', { src: ph.url, alt: '', referrerpolicy: 'no-referrer' }) : el('span', { class: 'hint', text: 'nessuna foto' })),
+          el('div', { class: 'grow' },
+            el('div', { class: 'row' }, slot,
+              el('input', { class: 'grow', value: ph.query || '', placeholder: 'ricerca in inglese, es. "open fridge full of food"', onchange: function (e) { ph.query = e.target.value.trim(); ph._imgs = null; changed(); } }),
+              el('button', { class: 'small', text: '🔍 Cerca', onclick: function () { convFindPhoto(ls, ph, false); } }),
+              el('button', { class: 'small', text: 'Altra foto', onclick: function () { convFindPhoto(ls, ph, true); } }),
+              el('button', { class: 'small danger', text: '✕', onclick: function () { u.photos.splice(pi, 1); changed(); renderConvFields(ls); undoBarFor('foto'); } })),
+            el('div', { class: 'row' },
+              el('input', { class: 'grow', value: ph.url || '', placeholder: 'oppure incolla l\'URL di un\'immagine', onchange: function (e) { ph.url = e.target.value.trim(); changed(); renderConvFields(ls); } }),
+              el('input', { class: 'grow', value: ph.alt || '', placeholder: 'che cosa mostra la foto', onchange: function (e) { ph.alt = e.target.value.trim(); changed(); } })))));
+      });
+      host.appendChild(convCard('Foto', 'Le cerca su Wikipedia e Wikimedia Commons, che di scene di vita quotidiana ne hanno poche: se non esce niente di buono, incolla l\'URL di una foto tua.', pb,
+        el('button', { class: 'small', text: '+ foto', onclick: function () { u.photos.push({ slot: 'top', query: '', alt: '', url: '' }); changed(); renderConvFields(ls); } })));
+    });
+  }
+  function convFindPhoto(ls, ph, next) {
+    const q = String(ph.query || '').trim();
+    if (!q) return toast('Scrivi prima che cosa cercare (in inglese)');
+    const go = function () {
+      const list = ph._imgs || [];
+      if (!list.length) return toast('Niente per "' + q + '" su Wikipedia e Commons: cambia le parole o incolla l\'URL di una foto tua', 5000);
+      ph._imgIdx = next ? ((ph._imgIdx || 0) + 1) % list.length : 0;
+      ph.url = list[ph._imgIdx].url;
+      touch(ls); renderConvFields(ls);
+      toast((ph._imgIdx + 1) + '/' + list.length + ' · ' + list[ph._imgIdx].title, 2500);
+    };
+    if (ph._imgs && ph._imgsFor === q) return go();
+    toast('Cerco "' + q + '"…', 1500);
+    searchImages('en', q, '').then(function (list) { ph._imgs = list; ph._imgsFor = q; ph._imgIdx = -1; go(); });
+  }
+  $('#c-save').addEventListener('click', function () { saveLessons(); renderHome(); });
+  $('#c-print').addEventListener('click', function () { const ls = current(); if (ls && ls.conv) openConvPrint(ls.id); });
+  $('#c-delete').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    if (!confirm('Eliminare "' + (ls.title || 'conversazione senza titolo') + '"?')) return;
+    deleteLesson(ls);
+  });
+  $('#c-regen').addEventListener('click', function () {
+    const ls = current(); if (!ls || !ls.conv) return;
+    if (!convKey()) return toast('Serve la chiave API (Impostazioni AI)', 4000);
+    const u = ls.conv;
+    if (!u.topic) return toast('Scrivi prima l\'argomento');
+    if ((u.questions.length || u.vocab.length) && !confirm('Rigenerare tutta l\'unità? Quello che c\'è adesso viene sostituito (si annulla con Ctrl+Z).')) return;
+    const btn = $('#c-regen'); btn.disabled = true; btn.textContent = '… scrivo l\'unità';
+    AI.generateConvUnit({ topic: u.topic, level: u.level, n: u.n || 10, lang: u.lang, uiLang: u.uiLang, focus: u.focus, apiKey: convKey(), model: S.settings.model })
+      .then(function (r) {
+        Object.assign(u, r.unit, { n: u.n });
+        ls.title = u.title; $('#c-title').value = ls.title;
+        touch(ls); renderConvFields(ls);
+        toast('Unità rigenerata' + (r.ai && r.ai.cost ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '') + ' · annulla con ' + undoKeyLabel(), 5000);
+        if (u.photos.length) fillConvPhotos(ls);
+      })
+      .catch(function (e) { toast('AI: ' + e.message, 6000); })
+      .then(function () { btn.disabled = false; btn.textContent = '✨ Rigenera tutta l\'unità'; });
+  });
+
+  // ---------- CONVERSAZIONE: il foglio A4 ----------
+  function openConvPrint(id) {
+    const ls = S.lessons[id]; if (!ls || !ls.conv) return renderHome();
+    S.currentId = id;
+    show('convprint');
+    renderConvSheet(ls);
+  }
+  $('#cp-back').addEventListener('click', function () { const ls = current(); if (ls) openConvEditor(ls.id); });
+  $('#cp-print').addEventListener('click', function () { window.print(); });
+  $('#cp-photos').addEventListener('change', function () { const ls = current(); if (ls && ls.conv) renderConvSheet(ls); });
+  function photoBySlot(u, slot) { return (u.photos || []).find(function (p) { return p.slot === slot && p.url; }) || null; }
+  function chartBox(c, n) {
+    const blank = c.source === 'class';
+    const box = el('div', { class: 'cp-chart' },
+      el('div', { class: 'cp-chart-h' }, el('b', { text: c.title }), el('span', { class: 'cp-ref', text: '→ dom. ' + (n || '') })),
+      el('div', { class: 'cp-rows' }, c.rows.map(function (r) {
+        return el('div', { class: 'cp-row' },
+          el('span', { class: 'lb', text: r.label }),
+          el('span', { class: 'bar' }, el('i', { style: 'width:' + (blank ? 0 : r.pct) + '%' })),
+          el('span', { class: 'pc', text: blank ? '' : r.pct + '%' }));
+      })));
+    box.appendChild(el('div', { class: 'cp-note', text: blank ? 'contate i voti della classe e riempite le barre' : 'dati di esempio per la discussione, non un sondaggio reale' }));
+    return box;
+  }
+  function paras(text) { return String(text || '').split(/\n{2,}|\n/).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function renderConvSheet(ls) {
+    const u = ls.conv, sheet = $('#cp-sheet'); if (!sheet) return;
+    const withPhotos = $('#cp-photos') ? $('#cp-photos').checked : true;
+    const num = function (kind, which) {
+      const i = u.questions.findIndex(function (q) { return q.ref === which; });
+      return i === -1 ? '' : (i + 1);
+    };
+    sheet.innerHTML = '';
+    const title = ls.title || u.title || u.topic || 'Conversazione';
+    const lvl = u.level || 'B1';
+    const foot = function (n) { return el('div', { class: 'cp-foot' }, el('span', { class: 'grow', text: title + ' · livello ' + lvl }), el('span', { text: String(n) })); };
+
+    // ---- pagina 1
+    const p1 = el('div', { class: 'cp-page' });
+    p1.appendChild(el('div', { class: 'cp-head' },
+      el('span', { class: 'cp-num', text: '1' }),
+      el('h1', { class: 'grow', text: title }),
+      el('span', { class: 'cp-lvl' }, 'livello ', el('b', { text: lvl }))));
+
+    const left = el('div', { class: 'cp-left' });
+    if (u.vocab.length) {
+      left.appendChild(el('div', { class: 'cp-box' },
+        el('div', { class: 'cp-box-h', text: 'Lessico utile' }),
+        el('ul', { class: 'cp-vocab' }, u.vocab.map(function (w) { return el('li', { text: w.it, title: w.en }); }))));
+    }
+    u.charts.forEach(function (c, i) { left.appendChild(chartBox(c, num('chart', 'chart' + (i + 1)))); });
+    const quoteText = (u.texts.find(function (t) { return t.quote; }) || {}).quote;
+    if (quoteText) {
+      left.appendChild(el('div', { class: 'cp-quote' },
+        el('p', { text: '«' + quoteText.replace(/^[«"']+|[»"']+$/g, '') + '»' }),
+        el('span', { class: 'cp-src', text: '— dal testo n. 2, pag. 2' })));
+    }
+
+    const right = el('div', { class: 'cp-right' });
+    const ph1 = withPhotos ? photoBySlot(u, 'top') : null;
+    if (ph1) right.appendChild(el('figure', { class: 'cp-photo' }, el('img', { src: ph1.url, alt: ph1.alt || '', referrerpolicy: 'no-referrer' })));
+    // le domande si spezzano attorno alla seconda foto: quelle che rimandano a una foto la vogliono vicina
+    const midAt = u.questions.findIndex(function (q, i) { return i > 1 && q.ref === 'photo'; });
+    const cut = midAt === -1 ? Math.ceil(u.questions.length / 2) : midAt;
+    const qlist = function (from, to) {
+      return el('ol', { class: 'cp-q', start: String(from + 1) }, u.questions.slice(from, to).map(function (q) {
+        return el('li', {}, el('span', { text: q.text }));
+      }));
+    };
+    right.appendChild(qlist(0, cut));
+    const ph2 = withPhotos ? photoBySlot(u, 'mid') : null;
+    if (ph2) right.appendChild(el('figure', { class: 'cp-photo' }, el('img', { src: ph2.url, alt: ph2.alt || '', referrerpolicy: 'no-referrer' })));
+    right.appendChild(qlist(cut, u.questions.length));
+
+    p1.appendChild(el('div', { class: 'cp-cols' }, left, right));
+    p1.appendChild(foot(1));
+    sheet.appendChild(p1);
+
+    // ---- pagina 2
+    const p2 = el('div', { class: 'cp-page' });
+    p2.appendChild(el('div', { class: 'cp-band' }, el('span', { class: 'cp-num sm', text: '2' }), el('b', { text: title })));
+    if (u.roleplay) {
+      const rp = el('div', { class: 'cp-role' },
+        el('div', { class: 'cp-role-txt' },
+          el('div', { class: 'cp-role-n', text: (u.questions.length + 1) + '.' }),
+          el('div', {}, el('p', { text: u.roleplay.intro }),
+            el('ul', { class: 'cp-steps' }, u.roleplay.steps.map(function (st2) { return el('li', { text: st2 }); })))));
+      const ph3 = withPhotos ? photoBySlot(u, 'role') : null;
+      if (ph3) rp.appendChild(el('figure', { class: 'cp-photo side' }, el('img', { src: ph3.url, alt: ph3.alt || '', referrerpolicy: 'no-referrer' })));
+      p2.appendChild(rp);
+    }
+    u.texts.forEach(function (t, i) {
+      const bodyCols = el('div', { class: 'cp-body' }, paras(t.body).map(function (x) { return el('p', { text: x }); }));
+      if (t.kind === 'article') {
+        p2.appendChild(el('div', { class: 'cp-text article' },
+          el('div', { class: 'cp-tab' }, el('span', { class: 'cp-tn', text: String(i + 1) }), el('span', { class: 'cp-vert', text: t.title || '' })),
+          bodyCols));
+      } else {
+        p2.appendChild(el('div', { class: 'cp-text' },
+          el('div', { class: 'cp-th' }, el('span', { class: 'cp-tn', text: String(i + 1) }),
+            el('b', { text: t.title || '' })),
+          t.who ? el('div', { class: 'cp-who', text: 'tratto dall\'intervista a ' + t.who }) : null,
+          bodyCols));
+      }
+    });
+    if (u.texts.some(function (t) { return t.fiction !== false; }) || u.charts.length) {
+      p2.appendChild(el('div', { class: 'cp-disc', text: 'Materiale didattico: le persone e i numeri di questa unità sono inventati per la discussione in classe, non sono interviste né sondaggi reali.' }));
+    }
+    p2.appendChild(foot(2));
+    sheet.appendChild(p2);
+    fitConvPages();
+    // le foto arrivano dopo: quando sono caricate la pagina si rimisura, altrimenti "ci sta" e' una bugia
+    $$('#cp-sheet img').forEach(function (im) { if (!im.complete) im.addEventListener('load', fitConvPages, { once: true }); });
+  }
+  /**
+   * Due pagine A4 vogliono dire DUE pagine: se il contenuto sfora, il foglio si rimpicciolisce finche' ci sta
+   * (stessa regola delle schede parole: quello che c'e' si deve vedere tutto, senza scoprirlo alla fotocopiatrice).
+   * Sotto una certa soglia rimpicciolire non e' piu' leggibile: li si dice all'insegnante che deve togliere qualcosa.
+   */
+  function fitConvPages() {
+    const sheet = $('#cp-sheet'); if (!sheet) return;
+    const probe = el('div', { style: 'position:absolute;visibility:hidden;height:297mm;width:1mm' });
+    document.body.appendChild(probe);
+    const A4 = probe.getBoundingClientRect().height;
+    probe.remove();
+    if (!A4) return;
+    let tight = 0;
+    $$('.cp-page', sheet).forEach(function (pg) {
+      pg.style.fontSize = '';
+      pg.classList.remove('cp-tight');
+      let k = 1;
+      while (pg.getBoundingClientRect().height > A4 + 1 && k > 0.74) {
+        k -= 0.02;
+        pg.style.fontSize = (9.4 * k).toFixed(2) + 'pt';
+      }
+      if (pg.getBoundingClientRect().height > A4 + 1) { pg.classList.add('cp-tight'); tight++; }
+    });
+    const warn = $('#cp-warn');
+    if (warn) {
+      warn.textContent = tight ? '⚠ ' + tight + (tight === 1 ? ' pagina non ci sta' : ' pagine non ci stanno') + ' nemmeno rimpicciolita: togli qualche parola dal lessico o una domanda.' : '';
+      warn.style.display = tight ? '' : 'none';
+    }
+  }
+
   // ---------- schede delle parole utili (prima del video) ----------
   function cardsFor(ls) {
     const vb = vocabState(ls), ready = cardVocab(ls);
@@ -3921,6 +4438,6 @@
     }
     renderHome();
   }
-  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync };
+  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk };
   init();
 })();

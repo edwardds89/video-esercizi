@@ -359,6 +359,148 @@
     return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
+  /**
+   * UNITÀ DI CONVERSAZIONE (senza video): da argomento + livello CEFR nasce un'unità completa come una pagina di libro —
+   * lessico utile, domande numerate con le espressioni per rispondere, due sondaggi, due testi da leggere e un gioco di ruolo.
+   * params: { topic, level, n, lang, uiLang, focus?, parts?, apiKey, model, fetchImpl } → { unit, ai }
+   *
+   * I sondaggi sono INVENTATI e vanno sempre mostrati con l'etichetta "dati di esempio": non sono ricerche vere.
+   * Per lo stesso motivo le persone dei testi sono personaggi, non fonti: il campo "fiction" lo dice a chi impagina.
+   */
+  async function generateConvUnit(params) {
+    const lang = params.lang || 'it';
+    const uiLang = params.uiLang || lang;
+    const level = params.level || 'B1';
+    const n = Math.max(3, Math.min(14, params.n || 10));
+    const topic = String(params.topic || '').trim();
+    if (!topic) throw new Error('Manca l\'argomento');
+    const want = params.parts || {};
+    const charts = want.charts !== false, texts = want.texts !== false, role = want.roleplay !== false;
+    const nCharts = charts ? 2 : 0;
+
+    const system = 'You are an experienced language-textbook author. You write conversation units for a language class: '
+      + 'everything is material for SPEAKING practice, graded to the CEFR level. Output ONLY a JSON object, no prose, no markdown fences.';
+
+    const tasks = [];
+    tasks.push('"title": a short unit title in ' + lang + ' about "' + topic + '" (like a textbook chapter, e.g. "Cibo: cucinare, ordinare, sprecare").');
+    tasks.push('"vocab": 18-24 useful words and expressions in ' + lang + ' for this topic at ' + level
+      + '. Real class vocabulary, not a dictionary dump: verbs and expressions too, not only nouns. '
+      + 'Use "≠" between a word and its opposite ("comodo ≠ scomodo"), "/" between near-synonyms ("errore / sbaglio"), "=" between equivalents. '
+      + 'Each entry: {"it":"the word or expression as it goes on the page","en":"short gloss in ' + uiLang + '"}. Order them so related words sit together.');
+    tasks.push('"questions": exactly ' + n + ' numbered questions in ' + lang + ', in the order a teacher would ask them across a lesson: '
+      + 'start from describing an image and from the student\'s own habits, move to memories and personal stories, then opinions, then the harder abstract ones. '
+      + 'Every question is OPEN (never answerable yes/no or with one word) and asks for real talking. Two or three sentences at most, and it may contain a sub-question ("...? Secondo te perché?"). '
+      + 'Each: {"text":"...","help":"2 or 3 sentence-openers in ' + lang + ' separated by ·, e.g. Secondo me… · Non sono d\'accordo perché…","ref":"photo|chart1|chart2|text1|text2|null"}. '
+      + '"ref" says what the question makes the student look at: use "photo" for the 1-2 questions that describe an image, '
+      + (charts ? '"chart1"/"chart2" for the two that send the student to a survey, ' : '')
+      + (texts ? '"text1"/"text2" for the two that ask about the reading texts (put these last), ' : '')
+      + 'null for the rest. Language and grammar suited to a ' + level + ' student.');
+    if (charts) tasks.push('"charts": exactly 2 objects {"title":"the survey question in ' + lang + ', short","rows":[{"label":"...","pct":58}]}, 6 rows each, '
+      + 'percentages plausible and NOT summing to 100 (people pick more than one), sorted from highest to lowest, with a low "none/never" row last. '
+      + 'chart1 belongs to the question whose ref is "chart1", chart2 to "chart2". These numbers are INVENTED for discussion, so keep them believable but round.');
+    if (texts) tasks.push('"texts": exactly 2 reading texts in ' + lang + ' graded to ' + level + '. '
+      + 'text1 = a first-person interview with ONE INVENTED person whose job the topic has changed: {"kind":"interview","title":"a quoted sentence they say, with « »","who":"Name Surname, NN anni, job","body":"280-350 words, 6-8 paragraphs, plain spoken language, concrete details, no moral at the end"}. '
+      + 'text2 = a short magazine article on the same topic: {"kind":"article","title":"a 2-3 word section heading","body":"260-320 words with 2 invented named experts quoted in « »","quote":"the one sentence from text2 worth printing big on page 1"}. '
+      + 'The people are CHARACTERS you invent for the class, never real named individuals, and the article quotes no real organisation, study or statistic.');
+    if (role) tasks.push('"roleplay": a phone-call task {"intro":"2-3 sentences in ' + lang + ' setting up a friend in trouble because of this topic","steps":["fatti raccontare…","spiegagli perché…","convincilo a…"]} — exactly 3 steps, imperative, second person singular.');
+    tasks.push('"photos": 3 objects {"slot":"top|mid|role","query":"a 3-6 word ENGLISH search query for a photo of a REAL EVERYDAY SCENE about this topic","alt":"what the photo shows, in ' + lang + '"} — the scenes the questions with ref "photo" describe.');
+
+    const user = ['TOPIC: ' + topic,
+      'LANGUAGE OF THE UNIT (everything the student reads): ' + lang,
+      'TEACHER / GLOSS LANGUAGE: ' + uiLang,
+      'STUDENT LEVEL (CEFR): ' + level,
+      params.focus ? 'GRAMMAR OR FUNCTION TO PRACTISE: ' + params.focus + ' — build the questions and the help expressions so that this comes out naturally in the answers; never announce it, never turn a question into a grammar drill.' : '',
+      '',
+      'Write ONE conversation unit with these fields:',
+      tasks.map(function (t, i) { return (i + 1) + '. ' + t; }).join('\n'),
+      '',
+      'SCHEMA: {"title":"...","vocab":[{"it":"...","en":"..."}],"questions":[{"text":"...","help":"... · ...","ref":null}]'
+      + (charts ? ',"charts":[{"title":"...","rows":[{"label":"...","pct":58}]}]' : '')
+      + (texts ? ',"texts":[{"kind":"interview","title":"...","who":"...","body":"..."},{"kind":"article","title":"...","body":"...","quote":"..."}]' : '')
+      + (role ? ',"roleplay":{"intro":"...","steps":["...","...","..."]}' : '')
+      + ',"photos":[{"slot":"top","query":"...","alt":"..."}]}'].filter(Boolean).join('\n');
+
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 8000, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    const str = function (v) { return String(v == null ? '' : v).trim(); };
+    const unit = {
+      title: str(j.title) || topic,
+      topic: topic, level: level, lang: lang, uiLang: uiLang, focus: str(params.focus),
+      vocab: (Array.isArray(j.vocab) ? j.vocab : []).map(function (w) { return { it: str(w && w.it), en: str(w && w.en) }; })
+        .filter(function (w) { return w.it; }).slice(0, 26),
+      questions: (Array.isArray(j.questions) ? j.questions : []).map(function (q) {
+        const ref = str(q && q.ref).toLowerCase();
+        return { text: str(q && q.text), help: str(q && q.help), ref: /^(photo|chart1|chart2|text1|text2)$/.test(ref) ? ref : '' };
+      }).filter(function (q) { return q.text; }).slice(0, n),
+      charts: (Array.isArray(j.charts) ? j.charts : []).slice(0, nCharts).map(function (c) {
+        return {
+          title: str(c && c.title),
+          // "invented": i numeri sono inventati e in pagina vanno etichettati; "class" = grafico vuoto da riempire coi voti della classe
+          source: 'invented',
+          rows: (Array.isArray(c && c.rows) ? c.rows : []).map(function (r) {
+            const pct = Math.round(Number(r && r.pct));
+            return { label: str(r && r.label), pct: isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0 };
+          }).filter(function (r) { return r.label; }).slice(0, 8)
+        };
+      }).filter(function (c) { return c.title && c.rows.length; }),
+      texts: (Array.isArray(j.texts) ? j.texts : []).slice(0, 2).map(function (t) {
+        return {
+          kind: str(t && t.kind) === 'article' ? 'article' : 'interview',
+          title: str(t && t.title), who: str(t && t.who), body: str(t && t.body), quote: str(t && t.quote),
+          fiction: true   // personaggi inventati per la classe: chi impagina lo dichiara in pagina
+        };
+      }).filter(function (t) { return t.body; }),
+      roleplay: role && j.roleplay ? {
+        intro: str(j.roleplay.intro),
+        steps: (Array.isArray(j.roleplay.steps) ? j.roleplay.steps : []).map(str).filter(Boolean).slice(0, 3)   // l'impaginato A4 ne tiene tre
+      } : null,
+      photos: (Array.isArray(j.photos) ? j.photos : []).map(function (ph) {
+        const slot = str(ph && ph.slot).toLowerCase();
+        return { slot: /^(top|mid|role)$/.test(slot) ? slot : 'top', query: str(ph && ph.query), alt: str(ph && ph.alt), url: '' };
+      }).filter(function (ph) { return ph.query; }).slice(0, 3)
+    };
+    if (unit.roleplay && !unit.roleplay.intro) unit.roleplay = null;
+    return { unit: unit, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  /** Rigenerazione di UN pezzo dell'unità, lasciando intatto il resto. what: 'question'|'vocab'|'chart'|'text'|'roleplay'
+   *  params: { what, unit, index?, avoid?, note?, apiKey, model, fetchImpl } → { value, ai } */
+  async function regenerateConvPart(params) {
+    const u = params.unit || {};
+    const lang = u.lang || 'it', level = u.level || 'B1', topic = u.topic || u.title || '';
+    const what = params.what;
+    const system = 'You are a language-textbook author revising ONE piece of an existing conversation unit. Output ONLY a JSON object, no prose, no markdown fences.';
+    const avoid = (params.avoid || []).map(function (a) { return String(a || '').trim(); }).filter(Boolean);
+    let task, schema;
+    if (what === 'question') {
+      task = 'Write ONE new open question in ' + lang + ' for this unit, with 2-3 sentence-openers to answer it. It must ask for real talking (never yes/no) and suit a ' + level + ' student.';
+      schema = '{"text":"...","help":"... · ... · ..."}';
+    } else if (what === 'vocab') {
+      task = 'Write ' + (params.count || 6) + ' more useful words or expressions in ' + lang + ' for this topic at ' + level + ', in the same style (use ≠ for opposites, / for near-synonyms).';
+      schema = '{"vocab":[{"it":"...","en":"..."}]}';
+    } else if (what === 'chart') {
+      task = 'Write ONE new survey-style chart in ' + lang + ' for this unit: a short survey question and 6 rows with plausible invented percentages that do NOT sum to 100, highest first, a low "never/none" row last.';
+      schema = '{"title":"...","rows":[{"label":"...","pct":58}]}';
+    } else if (what === 'text') {
+      task = (params.kind === 'article')
+        ? 'Write ONE new short magazine article in ' + lang + ' on this topic, 260-320 words, graded to ' + level + ', quoting 2 invented named experts in « », plus the one sentence worth printing big.'
+        : 'Write ONE new first-person interview in ' + lang + ' with an INVENTED person whose job this topic has changed: 280-350 words, 6-8 short paragraphs, plain spoken language, graded to ' + level + '.';
+      schema = (params.kind === 'article') ? '{"kind":"article","title":"...","body":"...","quote":"..."}' : '{"kind":"interview","title":"«…»","who":"Name Surname, NN anni, job","body":"..."}';
+    } else if (what === 'roleplay') {
+      task = 'Write ONE new phone-call role-play task in ' + lang + ' for this topic: a friend in trouble because of it, and exactly 3 imperative steps.';
+      schema = '{"intro":"...","steps":["...","...","..."]}';
+    } else {
+      throw new Error('Pezzo sconosciuto: ' + what);
+    }
+    if (avoid.length) task += ' Do NOT repeat or paraphrase what is already in the unit: ' + avoid.map(function (a) { return '"' + a.slice(0, 160) + '"'; }).join('; ') + '.';
+    if (params.note) task += ' Teacher\'s note, follow it: ' + params.note;
+    if (u.focus) task += ' Grammar or function to practise, brought out naturally and never announced: ' + u.focus;
+    const user = ['UNIT: ' + (u.title || topic) + '   TOPIC: ' + topic + '   LANGUAGE: ' + lang + '   LEVEL: ' + level, task, 'SCHEMA: ' + schema].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 2500, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    return { value: j, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
   /** Serie di domande a scelta multipla per l'attività Quiz: da un argomento (topic) o dal testo di un video (chunks).
    *  params: { topic?, chunks?, lang, level, n, apiKey, model, fetchImpl } → { questions:[{q,options,correct}], ai } */
   async function generateQuizSet(params) {
@@ -463,10 +605,19 @@
     const lang = params.lang || 'it';
     const target = params.target || 'British English';
     const system = 'You are a professional translator for language teachers. Output ONLY a JSON object, no prose, no markdown fences.';
+    // La traduzione e' un aiuto alla comprensione, non la soluzione: le parole che lo studente deve ancora
+    // trovare escono come "___" (segnalazione di Edoardo, 1/9: su un fill the gaps la traduzione le conteneva tutte).
+    const hide = (params.hide || []).map(function (w) { return String(w || '').trim(); }).filter(Boolean);
     const user = ['Translate the TEXT from ' + lang + ' into natural, idiomatic ' + target + ' (British spelling: colour, realise, organise; British idiom). Keep the register of the original. ' +
-      (params.whole ? 'Translate the whole sentence.' : 'The TEXT is a fragment of the SENTENCE: translate only the fragment, as it works inside that sentence (not the whole sentence).'),
+      (params.whole ? 'Translate the whole sentence.' : 'The TEXT is a fragment of the SENTENCE: translate only the fragment, as it works inside that sentence (not the whole sentence).') +
+      (params.literal ? ' Translate exactly what is written, word for word where possible: the sentence may contain a deliberate mistake or an extra word and you must NOT correct it, tidy it or leave it out.' : ''),
+      hide.length
+        ? 'IMPORTANT — the student is doing a listening exercise and still has to produce these ' + lang + ' words: ' + hide.map(function (w) { return '"' + w + '"'; }).join(', ') + '. '
+          + 'In your translation, replace whatever renders each of them with "___" (three underscores, one run per item, in the place where it belongs) and translate everything else normally, so the sentence still reads as a sentence with blanks. '
+          + 'Never write those words, their ' + target + ' equivalents, a synonym, or a paraphrase that gives them away — not even between brackets or as a note.'
+        : '',
       'SCHEMA: {"translation":"..."}', '',
-      'TEXT: ' + String(params.text || ''), '', 'SENTENCE: ' + String(params.whole ? params.text : (params.sentence || '')), '', 'CONTEXT:', String(params.context || '').slice(0, 2000)].join('\n');
+      'TEXT: ' + String(params.text || ''), '', 'SENTENCE: ' + String(params.whole ? params.text : (params.sentence || '')), '', 'CONTEXT:', String(params.context || '').slice(0, 2000)].filter(Boolean).join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 400, fetchImpl: params.fetchImpl });
     const j = extractJSON(res.text);
     if (!j.translation) throw new Error('Nessuna traduzione nella risposta');
@@ -511,5 +662,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart };
 });

@@ -293,5 +293,22 @@
     return '';
   }
 
-  return { LABELS: LABELS, INSTRUCTIONS: INSTRUCTIONS, buildExercise: buildExercise, check: check, solution: solution, shuffle: shuffle, gapRuns: gapRuns, similarity: similarity, similarDistractors: similarDistractors };
+  /**
+   * Le parole che lo studente deve ancora produrre: la traduzione non deve svelarle, altrimenti "Traduci" diventa
+   * la soluzione (segnalato da Edoardo l'1/9 su un fill the gaps: la traduzione conteneva le parole da scrivere).
+   * 'extra' non ne ha: la parola di troppo e' gia' sotto gli occhi, l'esercizio e' capire QUALE.
+   * 'scramble' le ha tutte: li' non si maschera, si traduce solo quello che lo studente seleziona.
+   */
+  function hiddenWords(exercise) {
+    const d = exercise && exercise.data; if (!d) return [];
+    switch (exercise.type) {
+      case 'gap': case 'gapbank': return gapRuns(d).map(function (r) { return r.answer; });
+      case 'missing': return [d.answer];
+      case 'wrong': return [d.answer];
+      case 'scramble': return d.words ? d.words.slice() : [];
+      default: return [];
+    }
+  }
+
+  return { LABELS: LABELS, INSTRUCTIONS: INSTRUCTIONS, buildExercise: buildExercise, check: check, solution: solution, shuffle: shuffle, gapRuns: gapRuns, similarity: similarity, similarDistractors: similarDistractors, hiddenWords: hiddenWords };
 });
