@@ -1013,6 +1013,22 @@ async function noOverflow(page, where) {
   assert.strictEqual(await page.evaluate(function () { return Object.keys(window.VLApp.S.lessons).length; }), nPrima, 'lezione ripristinata con Ctrl+Z');
   assert.ok(await page.$('#lesson-list .lesson-card:has-text("' + titleNow.replace(/"/g, '\\"') + '")'), 'card di nuovo nel portfolio');
 
+  // ogni eliminazione di CONTENUTO nell'editor offre la stessa via d'uscita (esercizio: il caso che è costato una lezione rifatta)
+  await page.click('#lesson-list .lesson-card:has-text("' + titleNow.replace(/"/g, '\\"') + '") button:has-text("Modifica")');
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  await page.waitForTimeout(800);
+  const nEx = await page.$$eval('#e-exercises .ex-card', function (c) { return c.length; });
+  const primaFrase = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[0].sentence; });
+  await page.click('#e-exercises .ex-card:first-child button:has-text("Elimina")');
+  await page.waitForSelector('#undo-bar.show');
+  assert.ok(/Eliminato: esercizio 1/.test(await page.$eval('#undo-bar', function (b) { return b.textContent; })), 'la barra compare anche per un esercizio');
+  assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (c) { return c.length; }), nEx - 1, 'esercizio eliminato');
+  await page.click('#undo-bar .undo');
+  await page.waitForTimeout(300);
+  assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (c) { return c.length; }), nEx, 'esercizio ripristinato');
+  assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[0].sentence; }), primaFrase, 'stessa frase di prima');
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
