@@ -245,6 +245,13 @@ async function startVideo(page) {
   await page.fill('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(2) textarea.q', 'Ti è mai capitato di dimenticare qualcosa di importante?'); await page.dispatchEvent('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(2) textarea.q', 'change');
   await page.waitForTimeout(600);
   assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].talks[0].questions.length; }), 2, 'due domande salvate');
+  // il tipo della domanda (dopo il video) si assegna e si cambia cliccando l'etichetta: tipo? → comprensione → opinione
+  assert.strictEqual(await page.$eval('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) .kind', function (k) { return k.textContent; }), 'tipo?', 'domanda scritta a mano: tipo da assegnare');
+  await page.click('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) .kind');
+  await page.waitForSelector('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) .kind.check');
+  await page.click('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) .kind');
+  await page.waitForSelector('.talk-card[data-tid="t1"] .talk-box .talk-row:nth-child(1) .kind.talk');
+  assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].talks[0].questions[0].kind; }), 'talk');
 
   // struttura della lezione: "+ Parliamone" chiede QUANDO (prima = per entrare nel tema, dopo = comprensione e opinioni) e mette la sezione al posto giusto
   assert.strictEqual(await page.$$eval('#e-flow .flow-chip', function (c) { return c.length; }), 3, 'tre sezioni in partenza');
@@ -842,8 +849,90 @@ async function startVideo(page) {
   await page.click('#s-panel .mem-card:has-text("' + pair0.b + '")');
   await page.waitForSelector('#s-panel .mem-card.done', { timeout: 3000 });
   assert.strictEqual(await page.$$eval('#s-panel .mem-card.done', function (c) { return c.length; }), 2, 'coppia trovata nel memory della lezione');
+  // 🎨 template al volo durante il gioco: la coppia trovata resta trovata, il tema cambia (e si salva nella lezione del proprietario)
+  await page.click('#s-panel .act-theme-btn');
+  await page.waitForSelector('#s-panel .act-theme-pop:not([hidden])');
+  await page.click('#s-panel .act-theme-pop .theme-chip:has-text("Spazio")');
+  await page.waitForSelector('#s-panel .act[data-theme="space"] .mem-grid');
+  assert.strictEqual(await page.$$eval('#s-panel .mem-card.done', function (c) { return c.length; }), 2, 'cambio template senza reset: la coppia resta');
+  assert.ok(await page.$('#s-panel .act[data-theme="space"] .act-props'), 'elementi iconici del nuovo tema');
+  assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].acts[0].theme; }), 'space', 'tema salvato nella lezione (proprietario)');
   await page.click('#s-panel button:has-text("Salta questa attività")');
   await page.waitForFunction(function () { return window.VLApp.S.student.started; }, null, { timeout: 5000 });
+
+  console.log('10. annulla/ripeti (pulsante, Cmd/Ctrl+Z) e template al volo sulle schede delle Parole utili');
+  await page.click('#btn-edit');
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForTimeout(800);   // fuori dalla finestra di fusione delle modifiche
+  const flow0 = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].flow.map(function (s) { return s.kind; }); });
+  // operazione A: sposta l'attività dopo il video (▶ sul chip dell'attività)
+  const chips10 = await page.$$('#e-flow .flow-chip');
+  await (await chips10[2].$('button:has-text("▶")')).click();
+  await page.waitForTimeout(200);
+  const flowA = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].flow.map(function (s) { return s.kind; }); });
+  assert.notDeepStrictEqual(flowA, flow0, 'sezione spostata');
+  assert.ok(!(await page.$eval('#btn-undo', function (b) { return b.disabled; })), 'ora c\'è qualcosa da annullare');
+  await page.waitForTimeout(800);
+  // operazione B: digitazione veloce in una domanda di Parliamone = UNA sola operazione
+  const talkQ = await page.$('.talk-card textarea.talk-in.q');
+  const qBefore = await talkQ.inputValue();
+  await talkQ.fill(''); await talkQ.type('Nuova domanda?', { delay: 15 });
+  await page.click('#e-stats');   // il campo perde il fuoco → change → il modello si aggiorna
+  await page.waitForTimeout(150);
+  assert.strictEqual(await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.talks.map(function (t) { return t.questions.map(function (q) { return q.text; }); }).flat().indexOf('Nuova domanda?') >= 0; }), true, 'testo digitato nel modello');
+  // Cmd+Z fuori dai campi: annulla la digitazione, il riordino resta
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(200);
+  assert.strictEqual(await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.talks.map(function (t) { return t.questions.map(function (q) { return q.text; }); }).flat().indexOf('Nuova domanda?'); }), -1, 'digitazione annullata in blocco');
+  assert.strictEqual((await page.$eval('.talk-card textarea.talk-in.q', function (t) { return t.value; })), qBefore, 'la textarea mostra il testo di prima');
+  assert.deepStrictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].flow.map(function (s) { return s.kind; }); }), flowA, 'il riordino resta');
+  // Ctrl+Z: annulla anche il riordino → struttura iniziale; poi Ripeti con il pulsante
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  assert.deepStrictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].flow.map(function (s) { return s.kind; }); }), flow0, 'riordino annullato');
+  assert.ok(!(await page.$eval('#btn-redo', function (b) { return b.disabled; })), 'Ripeti disponibile');
+  await page.click('#btn-redo');
+  await page.waitForTimeout(200);
+  assert.deepStrictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].flow.map(function (s) { return s.kind; }); }), flowA, 'riordino ripetuto');
+  // dentro un campo Cmd+Z è del browser: la storia dell'app non si muove
+  const undoStateBefore = await page.$eval('#btn-undo', function (b) { return b.disabled; });
+  await page.focus('#e-title');
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(150);
+  assert.strictEqual(await page.$eval('#btn-undo', function (b) { return b.disabled; }), undoStateBefore, 'nessun undo dell\'app dentro un campo');
+  // quiz nell'editor: con la chiave AI compaiono ✨ per singola domanda e singola risposta
+  await page.evaluate(function () { window.VLApp.S.settings.apiKey = 'sk-test'; });
+  await page.click('#btn-flow-act');
+  await page.waitForSelector('#dlg-act-new[open]');
+  await page.click('#an-types button:has-text("Quiz gioco")');
+  await page.waitForSelector('#an-themes:not([hidden]) .an-theme[data-tid="tvshow"]');
+  await page.click('#an-themes .an-theme[data-tid="tvshow"]');
+  await page.waitForSelector('.act-card[data-aid="a2"]');
+  await page.click('.act-card[data-aid="a2"] button:has-text("+ Domanda")');
+  await page.waitForSelector('.act-card[data-aid="a2"] .af-quiz');
+  assert.strictEqual(await page.$$eval('.act-card[data-aid="a2"] .af-quiz .qrow .regen', function (b) { return b.length; }), 1, '✨ Rigenera sulla domanda');
+  assert.strictEqual(await page.$$eval('.act-card[data-aid="a2"] .af-quiz .orow .regen', function (b) { return b.length; }), 4, '✨ su ognuna delle 4 risposte');
+  await page.evaluate(function () { window.VLApp.S.settings.apiKey = ''; });
+  // schede delle Parole utili: 🎨 al volo dopo una coppia abbinata → la coppia resta e il tema cambia
+  await page.click('#btn-student');
+  await page.waitForSelector('#view-student.active');
+  await page.waitForSelector('#btn-start:visible');
+  await page.click('#btn-start');
+  await page.waitForSelector('#s-panel .match .mchip', { timeout: 5000 });
+  const w0 = await page.evaluate(function () { const c = document.querySelector('#s-panel .match .col .mchip'); return { id: c.getAttribute('data-id'), word: c.querySelector('.txt').textContent }; });
+  await page.click('#s-panel .match .mchip[data-id="' + w0.id + '"]');
+  const tr0 = await page.evaluate(function (id) { const ls = window.VLApp.S.student.lesson; const w = ls.vocab.words.find(function (x) { return x.id === id; }); return w.translation; }, w0.id);
+  await page.click('#s-panel .match .mchip.target:has-text("' + tr0 + '")');
+  await page.waitForSelector('#s-panel .match-done .mpair');
+  const themeBefore = await page.$eval('#s-panel', function (p) { return p.getAttribute('data-theme'); });
+  await page.click('#s-panel > .act-theme-btn');
+  await page.waitForSelector('#s-panel > .act-theme-pop:not([hidden])');
+  await page.click('#s-panel > .act-theme-pop .theme-chip:has-text("Halloween")');
+  await page.waitForSelector('#s-panel.vocab-act[data-theme="halloween"] .match-done .mpair');
+  assert.notStrictEqual(themeBefore, 'halloween');
+  assert.strictEqual(await page.$$eval('#s-panel .match-done .mpair', function (c) { return c.length; }), 1, 'la coppia abbinata resta dopo il cambio di template');
+  assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].vocab.theme; }), 'halloween', 'template delle schede salvato nella lezione');
+  assert.ok(await page.$('#s-panel > .act-props'), 'zucca e compagnia sul pannello');
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');

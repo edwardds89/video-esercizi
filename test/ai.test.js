@@ -195,6 +195,21 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(r.ai.cost > 0);
   });
 
+  await test('Parliamone: rigenerare UNA domanda di un tipo preciso, senza ripetere le altre', async function () {
+    const fakeFetch = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      const u = body.messages[0].content;
+      assert.ok(u.indexOf('Write exactly 1 question in it') !== -1, 'una sola domanda');
+      assert.ok(u.indexOf('COMPREHENSION questions') !== -1 && u.indexOf('DISCUSSION questions') === -1, 'solo il tipo richiesto (comprensione)');
+      assert.ok(u.indexOf('Do NOT repeat or paraphrase these questions, already in use: "Perché dormiamo?"; "Cosa succede al cervello?"') !== -1, 'le altre domande vanno evitate');
+      const text = '{"questions":[{"kind":"talk","text":"Quali fasi del sonno descrive il video?","help":"Il video dice che… · Prima… poi…"}]}';
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 300, output_tokens: 60 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 1, kind: 'check', avoid: ['Perché dormiamo?', '', 'Cosa succede al cervello?'], apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(r.questions.length, 1);
+    assert.strictEqual(r.questions[0].kind, 'check', 'il tipo richiesto vince su quello scritto dal modello');
+  });
+
   await test('Parliamone PRIMA del video (warmup): 3 domande di default, niente spoiler, kind "warmup"', async function () {
     const fakeFetch = async function (url, opts) {
       const body = JSON.parse(opts.body);
@@ -208,6 +223,42 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', mode: 'warmup', apiKey: 'k', fetchImpl: fakeFetch });
     assert.strictEqual(r.questions.length, 2);
     assert.ok(r.questions.every(function (q) { return q.kind === 'warmup'; }), 'tutte warmup, anche senza kind nel JSON');
+  });
+
+  await test('Quiz: rigenerare UNA domanda senza ripetere le altre, e UNA risposta (giusta riformulata / distrattore nuovo)', async function () {
+    const fakeFetch = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      const u = body.messages[0].content;
+      assert.ok(u.indexOf('Write 1 multiple-choice question in it') !== -1, 'una sola domanda');
+      assert.ok(u.indexOf('already in the quiz: "Come si saluta un amico?"; "Cosa si dice a tavola?"') !== -1, 'le altre domande vanno evitate');
+      const text = '{"questions":[{"q":"Cosa si dice quando si riceve un regalo?","options":["Grazie mille!","Permesso?","In bocca al lupo!","Buon viaggio!"],"correct":0}]}';
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 300, output_tokens: 60 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.generateQuizSet({ chunks: chunks, lang: 'it', level: 'A2', n: 1, avoid: ['Come si saluta un amico?', '', 'Cosa si dice a tavola?'], apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(r.questions.length, 1);
+    assert.strictEqual(r.questions[0].options.length, 4);
+    // una risposta: distrattore (indice 2, la giusta è 0)
+    const fakeOpt = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      const u = body.messages[0].content;
+      assert.ok(u.indexOf('QUESTION: Cosa si dice quando si riceve un regalo?') !== -1);
+      assert.ok(u.indexOf('is a WRONG option (currently: "In bocca al lupo!")') !== -1, 'sa quale opzione sostituisce');
+      assert.ok(u.indexOf('The correct answer is "Grazie mille!"') !== -1, 'conosce la giusta');
+      assert.ok(u.indexOf('OTHER OPTIONS (keep them, do not repeat them): "Grazie mille!", "Permesso?", "Buon viaggio!"') !== -1, 'non ripete le altre');
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 200, output_tokens: 10 }, content: [{ type: 'text', text: '{"option":"Arrivederci!"}' }] }; }, text: async function () { return ''; } };
+    };
+    const o = await AI.generateQuizOption({ q: 'Cosa si dice quando si riceve un regalo?', options: ['Grazie mille!', 'Permesso?', 'In bocca al lupo!', 'Buon viaggio!'], correct: 0, index: 2, chunks: chunks, lang: 'it', level: 'A2', apiKey: 'k', fetchImpl: fakeOpt });
+    assert.strictEqual(o.text, 'Arrivederci!');
+    // la risposta giusta: va riformulata, non sostituita con una sbagliata
+    const fakeCorrect = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      const u = body.messages[0].content;
+      assert.ok(u.indexOf('is the CORRECT answer (currently: "Grazie mille!")') !== -1, 'sa che è la giusta');
+      assert.ok(u.indexOf('formulated differently') !== -1);
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 200, output_tokens: 10 }, content: [{ type: 'text', text: '{"option":"Grazie, è bellissimo!"}' }] }; }, text: async function () { return ''; } };
+    };
+    const c = await AI.generateQuizOption({ q: 'Cosa si dice quando si riceve un regalo?', options: ['Grazie mille!', 'Permesso?', 'In bocca al lupo!', 'Buon viaggio!'], correct: 0, index: 0, topic: 'Le presentazioni', lang: 'it', apiKey: 'k', fetchImpl: fakeCorrect });
+    assert.strictEqual(c.text, 'Grazie, è bellissimo!');
   });
 
   console.log('Chiamata (fetch finta)');
