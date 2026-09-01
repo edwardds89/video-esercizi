@@ -16,6 +16,20 @@ async function startVideo(page) {
   await page.waitForFunction(function () { return window.VLApp.S.student.started; }, null, { timeout: 5000 });
 }
 
+/** Nessuno sfondamento orizzontale: il documento non deve essere più largo della finestra (una riga di chip che non va
+ *  a capo, un <select> con opzioni lunghe o una card troppo larga stirano tutta la pagina). */
+async function noOverflow(page, where) {
+  const r = await page.evaluate(function () {
+    const wide = [];
+    document.querySelectorAll('.view.active *').forEach(function (e) {
+      const b = e.getBoundingClientRect();
+      if (b.width && b.right > innerWidth + 2 && getComputedStyle(e).position !== 'fixed') wide.push((e.id ? '#' + e.id : e.tagName + '.' + String(e.className).slice(0, 30)) + ' →' + Math.round(b.right));
+    });
+    return { doc: document.documentElement.scrollWidth, win: innerWidth, wide: wide.slice(0, 5) };
+  });
+  assert.ok(r.doc <= r.win + 2, where + ': la pagina sfora in larghezza (' + r.doc + ' > ' + r.win + ') ' + r.wide.join(', '));
+}
+
 (async function () {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
@@ -39,6 +53,7 @@ async function startVideo(page) {
   assert.ok(/Durata per lo studente: 9:5\d|10:0\d|10:1\d/.test(stats), 'durata effettiva vicina a 10:00');
   assert.ok(await page.$$eval('#e-cuts .cut-row', function (els) { return els.length; }) >= 1, 'almeno un taglio');
   await page.screenshot({ path: 'test/shot-editor.png', fullPage: true });
+  await noOverflow(page, 'editor');
 
   console.log('2. editor: cambio tipo, toggle gap, altra frase, aggiungi/rimuovi taglio');
   const firstType = await page.$eval('#e-exercises .ex-card:first-child select', function (s) { return s.value; });
@@ -767,6 +782,7 @@ async function startVideo(page) {
   await page.click('#an-types button:has-text("Quiz gioco")');
   await page.click('#an-themes .an-theme[data-tid="classic"]');
   await page.waitForSelector('#view-act.active');
+  await noOverflow(page, 'editor attività');
   assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].activity.theme; }), 'classic', 'template scelto alla creazione');
   // anteprima grande al passaggio del mouse sui chip del selettore
   await page.hover('#a-themes .theme-chip:has-text("Spazio")');
@@ -819,6 +835,7 @@ async function startVideo(page) {
   await page.waitForSelector('.act-card[data-aid]');
   await page.click('.act-card button:has-text("Usa le Parole utili")');
   await page.waitForTimeout(300);
+  await noOverflow(page, 'editor con card attività');
   const pairsN = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.acts[0].data.pairs.length; });
   assert.ok(pairsN >= 3, 'coppie importate dalle Parole utili: ' + pairsN);
   assert.deepStrictEqual(await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.flow.map(function (s) { return s.kind + (s.id ? ':' + s.id : ''); }); }), ['vocab', 'talk:t2', 'video', 'act:a1', 'talk:t1'], 'attività subito dopo il video');
