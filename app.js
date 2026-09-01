@@ -1095,7 +1095,7 @@
     $('#btn-vocab-ai').style.display = S.settings.apiKey ? '' : 'none';
     $('#btn-vocab-translate').style.display = S.settings.apiKey ? '' : 'none';
     // template visivo delle schede (abbinamento e flashcards): gli stessi 18 delle attività
-    const tb = $('#v-theme'); if (tb) { tb.innerHTML = ''; tb.appendChild(themeChips(vb.theme || 'classic', function (id) { vb.theme = id; touch(ls); renderVocabEditor(ls); })); }
+    const tb = $('#v-theme'); if (tb) { tb.innerHTML = ''; tb.appendChild(themeChips(vb.theme || 'classic', function (id) { vb.theme = id; touch(ls); renderVocabEditor(ls); }, { vocab: ls })); }
     const box = $('#e-vocab'); box.innerHTML = '';
     if (!vb.words.length) { box.appendChild(el('p', { class: 'muted', text: 'Nessuna parola: "Proponi" le ricava dalle frasi degli esercizi e dal video, oppure aggiungile a mano.' })); return; }
     const table = el('div', { class: 'vocab-table' });
@@ -1389,21 +1389,69 @@
     if (extra) for (const k in extra) o[k] = extra[k];
     return o;
   }
-  /** Anteprima di un template: un Quiz VERO reso in scala dentro un riquadro (pointer-events: none), animazioni vive. */
-  function themePreviewNode(themeId, scale) {
+  /** Contenuto d'esempio per l'anteprima di un tipo di attività (quando quella vera non è ancora completa). */
+  const SAMPLE_DATA = {
+    quiz: { questions: [{ q: 'Come si dice "thank you"?', options: ['Grazie', 'Prego', 'Scusa', 'Ciao'], correct: 0 }] },
+    memory: { pairs: [{ a: 'il mare', b: 'the sea' }, { a: 'la spiaggia', b: 'the beach' }, { a: 'l\'ombrellone', b: 'the umbrella' }, { a: 'nuotare', b: 'to swim' }, { a: 'la sabbia', b: 'the sand' }, { a: 'il sole', b: 'the sun' }] },
+    anagram: { words: [{ word: 'grazie', hint: 'thank you' }, { word: 'spiaggia', hint: 'beach' }] },
+    wheel: { items: [{ text: 'Come ti chiami?' }, { text: 'Cosa fai nel weekend?' }, { text: 'Qual è il tuo piatto preferito?' }, { text: 'Descrivi la tua città' }, { text: 'Che tempo fa oggi?' }, { text: 'Parla della tua famiglia' }] }
+  };
+  /** L'attività da mostrare nell'anteprima: QUELLA VERA (stesso tipo, stesso contenuto) se è completa, altrimenti un esempio dello stesso tipo. */
+  function previewAct(act, themeId) {
+    const type = act && ACT.TYPES[act.type] ? act.type : 'quiz';
     const th = ACT.THEMES.find(function (t) { return t.id === themeId; }) || ACT.THEMES[0];
+    const real = act && !ACT.validate(act).length;
+    const data = real ? JSON.parse(JSON.stringify(act.data)) : SAMPLE_DATA[type];
+    return { id: 'tp-' + themeId, type: type, theme: themeId, title: (act && act.title) || (ACT.TYPES[type].emoji + ' ' + ACT.TYPES[type].label + ' — ' + th.name), data: data };
+  }
+  /** Replica FEDELE delle schede Parole utili (abbinamento) con il template: stesse classi del pannello dello studente, parole vere se ce ne sono. */
+  function vocabPreviewPanel(themeId, ls) {
+    const panel = el('div', { class: 'ex-panel pop vocab-act act', 'data-theme': themeId, style: 'position:relative;width:900px;height:620px;padding:44px 24px 12px;overflow:hidden;display:block;isolation:isolate;--rowh:64px;border-radius:14px' });
+    ACT.decorate(panel, { id: 'vp', theme: themeId }, { fx: true });
+    const wrap = el('div', { class: 'vocab-wrap' });
+    panel.appendChild(wrap);
+    const real = ls ? cardVocab(ls) : [];
+    const words = (real.length >= 3 ? real : [{ word: 'il mare', translation: 'the sea' }, { word: 'la spiaggia', translation: 'the beach' }, { word: 'nuotare', translation: 'to swim' }, { word: 'la sabbia', translation: 'the sand' }, { word: 'il sole', translation: 'the sun' }]).slice(0, 5);
+    cardHeader(wrap, 'Parole utili: abbina', '');
+    wrap.appendChild(el('div', { class: 'instr', text: 'Tocca una parola e poi la sua foto o traduzione (o il contrario): le coppie giuste salgono in alto, legate.' }));
+    const done = el('div', { class: 'match-done' });
+    const first = words[0];
+    done.appendChild(el('div', { class: 'mpair' }, [
+      el('div', { class: 'mchip good' }, [el('span', { class: 'txt', text: first.word }), el('button', { class: 'star', text: '★' })]),
+      el('div', { class: 'link' }),
+      el('div', { class: 'mchip good target' }, [backOf(first)])]));
+    wrap.appendChild(done);
+    const grid = el('div', { class: 'match' }), left = el('div', { class: 'col' }), right = el('div', { class: 'col' });
+    const rest = words.slice(1);
+    rest.forEach(function (w, i) { left.appendChild(el('div', { class: 'mchip' + (i === 0 ? ' sel' : '') }, [el('span', { class: 'txt', text: w.word }), el('button', { class: 'star', text: '★' })])); });
+    rest.slice().reverse().forEach(function (w) { right.appendChild(el('div', { class: 'mchip target' }, [backOf(w)])); });
+    grid.appendChild(left); grid.appendChild(right); wrap.appendChild(grid);
+    wrap.appendChild(el('div', { class: 'actions' }, el('button', { class: 'link', text: 'Salta questa scheda' }), el('button', { class: 'link', text: 'Salta le schede ▶' })));
+    return panel;
+  }
+  /** Anteprima di un template: la scena VERA resa in scala dentro un riquadro (pointer-events: none), animazioni vive.
+   *  spec: { act } → quell'attività (tipo e contenuto veri, o un esempio dello stesso tipo); { vocab: ls } → le schede delle Parole utili; niente → un Quiz d'esempio. */
+  function themePreviewNode(themeId, scale, spec) {
     const wrap = el('div', { class: 'tp-wrap' });
     wrap.style.width = Math.round(900 * scale) + 'px'; wrap.style.height = Math.round(620 * scale) + 'px';
     const inner = el('div', { class: 'tp-scale' }); inner.style.transform = 'scale(' + scale + ')';
     wrap.appendChild(inner);
-    ACT.render(inner, { id: 'tp-' + themeId, type: 'quiz', theme: themeId, title: th.emoji + ' ' + th.name, data: { questions: [{ q: 'Come si dice "thank you"?', options: ['Grazie', 'Prego', 'Scusa', 'Ciao'], correct: 0 }] } }, { fx: true });
+    if (spec && spec.vocab) inner.appendChild(vocabPreviewPanel(themeId, spec.vocab));
+    else ACT.render(inner, previewAct(spec && spec.act, themeId), { fx: true });
     return wrap;
+  }
+  /** Chiave dell'anteprima: tema + cosa viene mostrato (tipo e contenuto), così cambiando attività l'anteprima si rifà. */
+  function previewKey(themeId, spec) {
+    if (spec && spec.vocab) return themeId + '|vocab|' + cardVocab(spec.vocab).slice(0, 5).map(function (w) { return w.word + '=' + (w.translation || w.image); }).join(',');
+    if (spec && spec.act) return themeId + '|' + spec.act.type + '|' + JSON.stringify(spec.act.data || {});
+    return themeId + '|quiz';
   }
   /** Anteprima grande al passaggio del mouse su un chip del selettore (riquadro fisso, uno solo). */
   let themePrev = null;
-  function showThemePreview(anchor, themeId) {
+  function showThemePreview(anchor, themeId, spec) {
     if (!themePrev) { themePrev = el('div', { class: 'theme-preview' }); document.body.appendChild(themePrev); }
-    if (themePrev.getAttribute('data-tid') !== themeId) { themePrev.innerHTML = ''; themePrev.appendChild(themePreviewNode(themeId, 0.44)); themePrev.setAttribute('data-tid', themeId); }
+    const key = previewKey(themeId, spec);
+    if (themePrev.getAttribute('data-key') !== key) { themePrev.innerHTML = ''; themePrev.appendChild(themePreviewNode(themeId, 0.44, spec)); themePrev.setAttribute('data-key', key); themePrev.setAttribute('data-tid', themeId); }
     themePrev.classList.add('show');
     // centrata sotto il chip se c'è spazio, altrimenti sopra; sempre dentro la finestra
     const r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, W = 396 + 10, H = 273 + 10;
@@ -1413,8 +1461,9 @@
     themePrev.style.left = left + 'px'; themePrev.style.top = top + 'px';
   }
   function hideThemePreview() { if (themePrev) themePrev.classList.remove('show'); }
-  /** Chips dei template visivi, con l'anteprima dei colori e l'anteprima grande al passaggio del mouse. */
-  function themeChips(current, onPick) {
+  /** Chips dei template visivi, con l'anteprima dei colori e l'anteprima grande al passaggio del mouse.
+   *  spec = cosa mostrare nell'anteprima ({act} o {vocab: ls}): l'anteprima è SEMPRE la stessa cosa che si sta modificando. */
+  function themeChips(current, onPick, spec) {
     hideThemePreview();
     const box = el('div', { class: 'chips', style: 'gap:8px' });
     ACT.THEMES.forEach(function (t) {
@@ -1422,9 +1471,9 @@
         el('span', { class: 'sw', style: 'background:' + t.sw }),
         t.emoji + ' ' + t.name);
       c.addEventListener('click', function () { hideThemePreview(); onPick(t.id); });
-      c.addEventListener('mouseenter', function () { showThemePreview(c, t.id); });
+      c.addEventListener('mouseenter', function () { showThemePreview(c, t.id, spec); });
       c.addEventListener('mouseleave', hideThemePreview);
-      c.addEventListener('focus', function () { showThemePreview(c, t.id); });
+      c.addEventListener('focus', function () { showThemePreview(c, t.id, spec); });
       c.addEventListener('blur', hideThemePreview);
       box.appendChild(c);
     });
@@ -1663,7 +1712,7 @@
       themes.innerHTML = '';
       ACT.THEMES.forEach(function (th) {
         const item = el('button', { type: 'button', class: 'an-theme', 'data-tid': th.id, title: th.name });
-        item.appendChild(themePreviewNode(th.id, 0.27));
+        item.appendChild(themePreviewNode(th.id, 0.27, { act: { type: type, theme: th.id, data: {} } }));   // anteprima DEL TIPO scelto
         item.appendChild(el('div', { class: 'lbl', text: th.emoji + ' ' + th.name }));
         item.addEventListener('click', function () { dlg.close(); themes.innerHTML = ''; onPick(type, th.id); });
         themes.appendChild(item);
@@ -1704,7 +1753,7 @@
     head.appendChild(rm);
     card.appendChild(head);
     card.appendChild(el('div', { class: 'row', style: 'margin:8px 0 2px' }, el('span', { class: 'hint', text: 'Template:' })));
-    card.appendChild(themeChips(act.theme || 'classic', function (id) { act.theme = id; touch(ls); renderFlow(ls); }));
+    card.appendChild(themeChips(act.theme || 'classic', function (id) { act.theme = id; touch(ls); renderFlow(ls); }, { act: act }));
     const conv = convertRow(act, function () { touch(ls); renderFlow(ls); });
     if (conv) card.appendChild(conv);
     const fields = el('div');
@@ -1748,7 +1797,7 @@
       $('#a-emoji').textContent = t2.emoji;
       $('#a-type-hint').textContent = t2.label + ' — ' + t2.hint;
       const th = $('#a-themes'); th.innerHTML = '';
-      th.appendChild(themeChips(act.theme || 'classic', function (tid) { act.theme = tid; touch(ls); redraw(); }));
+      th.appendChild(themeChips(act.theme || 'classic', function (tid) { act.theme = tid; touch(ls); redraw(); }, { act: act }));
       const conv = convertRow(act, function () { touch(ls); redraw(); });
       if (conv) th.appendChild(conv);
       renderActFields($('#a-fields'), act, { lesson: null, changed: function () { touch(ls); }, redraw: redraw });
