@@ -450,7 +450,13 @@ async function noOverflow(page, where) {
       assert.ok(/Prima rispondi/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })), 'senza spazio scelto non si controlla');
       // posto sbagliato + parola giusta → non ancora, con il suggerimento sul posto
       const wrongK = ex.data.missingIndex === 0 ? 1 : 0;
-      await page.click('#s-panel .gapfinder .slot[data-k="' + wrongK + '"]');
+      // gli spazi a riposo sono larghi zero (v52, per non rientrare le righe): si clicca la frase nel punto dello spazio,
+      // che e' quello che fa anche lo studente — il gestore su .gapfinder sceglie lo spazio piu' vicino al puntatore
+      await page.evaluate(function (k) {
+        const s = document.querySelector('#s-panel .gapfinder');
+        const r = s.querySelector('.slot[data-k="' + k + '"]').getBoundingClientRect();
+        s.dispatchEvent(new MouseEvent('click', { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true }));
+      }, wrongK);
       await page.fill('#s-panel input.gapfind', ex.data.answer);
       await page.click('#s-panel button:has-text("Controlla")');
       assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })), 'posto sbagliato = non ancora');
@@ -1044,6 +1050,128 @@ async function noOverflow(page, where) {
   await page.waitForTimeout(300);
   assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (c) { return c.length; }), nEx, 'esercizio ripristinato');
   assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[0].sentence; }), primaFrase, 'stessa frase di prima');
+
+  console.log('12. Parliamone: anche le espressioni gialle sono parole da stellare');
+  await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    ls.talks[0].questions = [{ id: 'q1', kind: 'talk', text: 'Ti preoccupa il futuro del pianeta?', help: 'mi preoccupa perché… · Ho paura che…' }];
+    window.VLApp.S.student = { lesson: ls, stars: {}, talkIdx: 0, queue: [], done: new Set(), results: {}, attempts: {}, hints: {} };
+    window.VLApp.renderTalk(ls.talks[0].questions, false);
+  });
+  await page.waitForSelector('#s-panel .talk-help .chip', { state: 'attached' });
+  const nChipW = await page.$$eval('#s-panel .talk-help .chip .w', function (w) { return w.length; });
+  assert.ok(nChipW >= 5, 'le espressioni gialle sono fatte di parole cliccabili, non di solo testo (erano ' + nChipW + ')');
+  const stellata = await page.evaluate(function () {
+    const w = document.querySelectorAll('#s-panel .talk-help .chip .w')[1];
+    w.click();
+    return { on: w.classList.contains('starred'), stars: Object.keys(window.VLApp.S.student.stars).length };
+  });
+  assert.ok(stellata.on, 'la parola del chip giallo prende la stella');
+  assert.ok(stellata.stars > 0, 'la stella finisce nel riepilogo');
+
+  console.log('13. Conversazione senza video: editor e foglio A4 in due pagine');
+  await page.evaluate(function () {
+    const u = {
+      id: 'c1', title: 'Cibo e spreco', topic: 'Cibo', level: 'B1', lang: 'it', uiLang: 'en', focus: '', n: 6,
+      vocab: [{ it: 'fare la spesa', en: 'to shop' }, { it: 'gli avanzi', en: 'leftovers' }, { it: 'buttare via', en: 'to throw away' }],
+      questions: [{ text: 'Descrivi la foto in alto.', help: 'Nella foto c’è…', ref: 'photo' },
+      { text: 'Quante volte cucini?', help: 'Di solito…', ref: 'chart1' },
+      { text: 'Leggi il testo n. 1: che cosa è cambiato?', help: 'Il testo dice…', ref: 'text1' }],
+      charts: [{ title: 'Perché ordini a domicilio?', source: 'invented', rows: [{ label: 'Non ho tempo', pct: 64 }, { label: 'Mai', pct: 14 }] },
+      { title: 'Che cosa butti?', source: 'class', rows: [{ label: 'Frutta', pct: 58 }, { label: 'Pane', pct: 46 }] }],
+      texts: [{ kind: 'interview', title: '«Cucino per cento persone»', who: 'Maria Bellini, 41 anni, cuoca', body: 'Ho aperto la trattoria dodici anni fa.\n\nPoi sono arrivate le app.', fiction: true },
+      { kind: 'article', title: 'Che spreco!', body: 'Ogni anno finisce nella spazzatura un quinto del cibo.', quote: 'Lo spreco nasce al supermercato.', fiction: true }],
+      roleplay: { intro: 'Un tuo amico ordina ogni sera. Telefonagli e:', steps: ['fatti raccontare…', 'spiegagli…', 'convincilo…'] },
+      photos: []
+    };
+    const ls = { id: 'convsmoke', title: 'Cibo e spreco', conv: u, updatedAt: new Date().toISOString() };
+    window.VLApp.S.lessons[ls.id] = ls;
+    window.VLApp.openConvEditor(ls.id);
+  });
+  await page.waitForSelector('#view-conv.active');
+  await page.waitForTimeout(400);
+  assert.strictEqual(await page.$$eval('#c-fields .conv-q', function (c) { return c.length; }), 3, 'le domande sono modificabili una per una');
+  assert.strictEqual(await page.$$eval('#c-fields .conv-chart', function (c) { return c.length; }), 2, 'i due sondaggi sono modificabili');
+  assert.ok(await page.$('#c-fields .conv-q button.ai'), 'ogni domanda ha il ✨ per rigenerarla da sola');
+  await noOverflow(page, 'editor della conversazione');
+
+  await page.click('#c-print');
+  await page.waitForSelector('#view-convprint.active .cp-page');
+  await page.waitForTimeout(500);
+  assert.strictEqual(await page.$$eval('#cp-sheet .cp-page', function (c) { return c.length; }), 2, 'il foglio è di due pagine');
+  // due pagine A4 devono restare due pagine A4: quello che non ci sta lo si scopre qui, non alla fotocopiatrice
+  const fitA4 = await page.evaluate(function () {
+    const pr = document.createElement('div');
+    pr.style.cssText = 'position:absolute;visibility:hidden;height:297mm;width:1mm';
+    document.body.appendChild(pr);
+    const A4 = pr.getBoundingClientRect().height;
+    pr.remove();
+    return [].map.call(document.querySelectorAll('.cp-page'), function (p) { return Math.round(p.getBoundingClientRect().height - A4); });
+  });
+  assert.ok(fitA4.every(function (d) { return d <= 1; }), 'nessuna pagina sfora l\'A4 (scarto in px: ' + JSON.stringify(fitA4) + ')');
+  assert.strictEqual(await page.$$eval('#cp-sheet .cp-vocab li', function (c) { return c.length; }), 3, 'il lessico va nella colonna di sinistra');
+  assert.strictEqual(await page.$$eval('#cp-sheet .cp-q li', function (c) { return c.length; }), 3, 'le domande sono numerate nella colonna larga');
+  assert.strictEqual(await page.$$eval('#cp-sheet .cp-steps li', function (c) { return c.length; }), 3, 'la telefonata ha i suoi tre passi');
+  // i numeri inventati vanno dichiarati in pagina, e il sondaggio "di classe" si stampa vuoto
+  const notes = await page.$$eval('#cp-sheet .cp-note', function (n) { return n.map(function (x) { return x.textContent; }); });
+  assert.ok(/dati di esempio/.test(notes[0]), 'il sondaggio inventato lo dichiara: ' + notes[0]);
+  assert.ok(/classe/.test(notes[1]), 'il sondaggio da riempire in classe lo dice');
+  assert.strictEqual(await page.$$eval('#cp-sheet .cp-chart', function (c) { return c[1].querySelector('.bar i').style.width; }), '0%', 'le barre del sondaggio di classe partono vuote');
+  assert.ok(/inventati/.test(await page.$eval('#cp-sheet .cp-disc', function (d) { return d.textContent; })), 'in fondo il foglio dice che le persone sono inventate');
+  await noOverflow(page, 'foglio A4');
+
+  console.log('14. una scheda senza modifiche non sovrascrive quello che ha salvato un\'altra');
+  const salvate = await page.evaluate(function () {
+    // la scheda non ha modifiche in sospeso: chiudendosi non deve riscrivere niente
+    const prima = localStorage.getItem('vle.lessons');
+    localStorage.setItem('vle.lessons', JSON.stringify({ altra: { id: 'altra', title: 'salvata da un altro computer' } }));
+    window.dispatchEvent(new Event('pagehide'));
+    const dopo = JSON.parse(localStorage.getItem('vle.lessons'));
+    localStorage.setItem('vle.lessons', prima);
+    return Object.keys(dopo);
+  });
+  assert.deepStrictEqual(salvate, ['altra'], 'la scheda ferma non ha sovrascritto le lezioni dell\'altra');
+
+  console.log('15. "trova la parola mancante": le righe partono tutte allineate, e lo spazio si apre lo stesso');
+  await page.evaluate(function () {
+    const S = window.VLApp.S, EX = window.VLEx;
+    // dopo la conversazione S.currentId punta a un'unità senza esercizi: qui serve la lezione col video
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    const f = 'E attenzione, i dati ci dicono con chiarezza che il Mediterraneo è il mare che si sta scaldando con la velocità più in assoluto.';
+    const nb = EX.buildExercise('missing', f, { lang: 'it', seed: 4 });
+    const ex = ls.exercises[0];
+    ex.type = 'missing'; ex.sentence = f; ex.data = nb.data;
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForTimeout(900);
+  await page.click('#e-exercises .ex-card:first-child button:has-text("Anteprima")');
+  await page.waitForSelector('.gapfinder');
+  await page.waitForTimeout(400);
+  const gf = await page.evaluate(function () {
+    const s = document.querySelector('.gapfinder');
+    const box = s.getBoundingClientRect();
+    const words = [].slice.call(s.querySelectorAll('.w'));
+    const rows = {};
+    words.forEach(function (x) { const r = x.getBoundingClientRect(); const k = Math.round(r.top); (rows[k] = rows[k] || []).push(Math.round(r.left - box.left)); });
+    const starts = Object.keys(rows).sort(function (a, b) { return a - b; }).map(function (k) { return Math.min.apply(null, rows[k]); });
+    const w4 = words[4].getBoundingClientRect();
+    const x = w4.right + 1, y = w4.top + w4.height / 2;
+    s.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: true }));
+    const near = s.querySelector('.slot.near');
+    return new Promise(function (r) {
+      setTimeout(function () {
+        const larghezza = near ? Math.round(near.getBoundingClientRect().width) : 0;
+        s.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true }));
+        r({ starts: starts, near: !!near, larghezza: larghezza, scrivibile: !!s.querySelector('.slot.sel input.gapfind') });
+      }, 300);
+    });
+  });
+  // gli spazi cliccabili sono larghi 0,4em: davanti alla prima parola di ogni riga la spingevano dentro
+  assert.ok(gf.starts.length > 1, 'la frase di prova va a capo (righe: ' + gf.starts.length + ')');
+  assert.ok(gf.starts.every(function (x) { return x <= 1; }), 'tutte le righe partono dal margine (inizi: ' + JSON.stringify(gf.starts) + ')');
+  assert.ok(gf.near && gf.larghezza >= 20, 'lo spazio si apre lo stesso sotto il puntatore (largo ' + gf.larghezza + 'px)');
+  assert.ok(gf.scrivibile, 'e cliccandolo ci si può scrivere dentro');
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');

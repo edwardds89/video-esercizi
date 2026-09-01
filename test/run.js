@@ -397,4 +397,38 @@ test('scelta multipla: cambiando frase resta "mc" (domanda vuota da compilare), 
   assert.strictEqual(withQ.type, 'gap');
 });
 
+// L'aiuto del riordino deve mettere la tessera IDENTICA, non una che si assomiglia:
+// in "Come vedete non e' salita..., e' aumentata... e piuttosto leggera" ci sono sia "e" sia "e'",
+// e sameWord (che ignora gli accenti per correggere lo studente con indulgenza) faceva scegliere quella sbagliata.
+test('riordino: le parole che differiscono solo per l\'accento non si confondono', function () {
+  const frase = 'Come vedete non \u00e8 salita in modo regolare, \u00e8 aumentata dal 99 al 2013 in maniera abbastanza costante e piuttosto leggera.';
+  const ex = EX.buildExercise('scramble', frase, { lang: 'it', seed: 5 });
+  const w = ex.data.words;
+  assert.ok(w.indexOf('e') !== -1 && w.indexOf('\u00e8') !== -1, 'la frase di prova ha davvero sia "e" sia "\u00e8"');
+  const presi = [];
+  w.forEach(function (target) {
+    let idx = w.findIndex(function (x, i) { return presi.indexOf(i) === -1 && x === target; });
+    if (idx === -1) idx = w.findIndex(function (x, i) { return presi.indexOf(i) === -1 && L.normalize(x) === L.normalize(target); });
+    presi.push(idx);
+  });
+  assert.deepStrictEqual(presi.map(function (i) { return w[i]; }), w, 'l\'aiuto ricostruisce la frase con gli accenti giusti');
+  // controprova sul mucchio MESCOLATO (e' cosi' che lo vede lo studente): se la "e" senza accento capita prima,
+  // la ricerca per sola forma normalizzata la prende al posto della "\u00e8" -> e' il difetto segnalato
+  const shown = w.slice();
+  shown.unshift(shown.splice(shown.indexOf('e'), 1)[0]);
+  const soloNorm = [];
+  w.forEach(function (target) {
+    soloNorm.push(shown.findIndex(function (x, i) { return soloNorm.indexOf(i) === -1 && L.normalize(x) === L.normalize(target); }));
+  });
+  assert.notDeepStrictEqual(soloNorm.map(function (i) { return shown[i]; }), w, 'senza la corrispondenza esatta l\'accento si perde');
+  const esatta = [];
+  w.forEach(function (target) {
+    let i2 = shown.findIndex(function (x, i) { return esatta.indexOf(i) === -1 && x === target; });
+    if (i2 === -1) i2 = shown.findIndex(function (x, i) { return esatta.indexOf(i) === -1 && L.normalize(x) === L.normalize(target); });
+    esatta.push(i2);
+  });
+  assert.deepStrictEqual(esatta.map(function (i) { return shown[i]; }), w, 'con la corrispondenza esatta il mucchio mescolato torna giusto');
+});
+
+
 console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));

@@ -287,5 +287,141 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(err && /401/.test(err.message));
   });
 
+  console.log('Traduzione che non fa da soluzione');
+  const trFetch = function (calls) {
+    return async function (url, opts) {
+      calls.push(JSON.parse(opts.body));
+      return { ok: true, status: 200, json: async function () { return { model: 'm', usage: { input_tokens: 200, output_tokens: 60 }, content: [{ type: 'text', text: '{"translation":"Fish accustomed to cooler waters ___ ___, while…"}' }] }; }, text: async function () { return ''; } };
+    };
+  };
+  await test('le parole da trovare non finiscono nella traduzione', async function () {
+    const calls = [];
+    await AI.translateSentence({ text: 'I pesci scappano verso nord', whole: true, lang: 'it', hide: ['scappano verso nord', 'abituati a vivere'], apiKey: 'sk', fetchImpl: trFetch(calls) });
+    const u = calls[0].messages[0].content;
+    assert.ok(u.indexOf('"scappano verso nord"') !== -1 && u.indexOf('"abituati a vivere"') !== -1, 'le parole da coprire arrivano al modello');
+    assert.ok(u.indexOf('"___"') !== -1, 'devono uscire come ___');
+    assert.ok(/synonym|paraphrase/.test(u), 'nemmeno un sinonimo o una parafrasi');
+  });
+  await test('a esercizio chiuso la traduzione torna intera', async function () {
+    const calls = [];
+    await AI.translateSentence({ text: 'I pesci scappano verso nord', whole: true, lang: 'it', hide: [], apiKey: 'sk', fetchImpl: trFetch(calls) });
+    assert.ok(calls[0].messages[0].content.indexOf('___') === -1, 'niente mascheratura quando non c\'è più niente da nascondere');
+  });
+  await test('parola in più / sbagliata: si traduce quello che c\'è scritto, senza correggerlo', async function () {
+    const calls = [];
+    await AI.translateSentence({ text: 'I pesci scappano molto verso nord', whole: true, lang: 'it', literal: true, apiKey: 'sk', fetchImpl: trFetch(calls) });
+    assert.ok(/must NOT correct it/.test(calls[0].messages[0].content), 'il modello non deve sistemare la frase da solo');
+  });
+  await test('quali parole coprire, per tipo di esercizio', function () {
+    const gap = EX.buildExercise('gap', 'I pesci abituati al fresco scappano verso nord ogni anno adesso', { lang: 'it', seed: 3 });
+    assert.ok(EX.hiddenWords(gap).length > 0, 'nel fill the gaps si copre quello che va scritto');
+    const mc = { type: 'mc', data: { options: ['a', 'b'], correct: 0 } };
+    assert.deepStrictEqual(EX.hiddenWords(mc), [], 'nella scelta multipla non c\'è niente da coprire nella frase');
+    assert.deepStrictEqual(EX.hiddenWords({ type: 'extra', data: { extraWord: 'molto' } }), [], 'la parola di troppo è già sotto gli occhi');
+    assert.deepStrictEqual(EX.hiddenWords({ type: 'wrong', data: { wrongWord: 'caldo', answer: 'fresco' } }), ['fresco'], 'la parola giusta resta coperta');
+  });
+
+  console.log('Unita di conversazione (senza video)');
+  const convReply = function (over) {
+    const u = {
+      title: 'Cibo: cucinare, ordinare, sprecare',
+      vocab: [{ it: 'fare la spesa', en: 'to do the shopping' }, { it: 'comodo ≠ scomodo', en: 'handy / awkward' }, { it: '', en: 'scartata' }],
+      questions: [
+        { text: 'Osserva la foto e descrivi che cosa vedi.', help: 'Nella foto c’è… · Secondo me…', ref: 'photo' },
+        { text: 'Quante volte a settimana cucini?', help: 'Di solito… · Quasi mai…', ref: 'chart1' },
+        { text: 'Leggi il testo n. 1: che cosa è cambiato?', help: 'Il testo dice che…', ref: 'text1' },
+        { text: '', help: 'scartata', ref: null }
+      ],
+      charts: [{ title: 'Perché ordini cibo a domicilio?', rows: [{ label: 'Non ho tempo', pct: 64 }, { label: 'Mai', pct: 140 }, { label: '', pct: 9 }] }],
+      texts: [{ kind: 'interview', title: '«Cucino per cento persone»', who: 'Maria Bellini, 41 anni, cuoca', body: 'Ho aperto la mia trattoria dodici anni fa.' },
+      { kind: 'article', title: 'Che spreco!', body: 'Ogni anno finisce nella spazzatura un quinto del cibo.', quote: 'Lo spreco nasce al supermercato.' },
+      { kind: 'article', title: 'terzo, da scartare', body: 'x' }],
+      roleplay: { intro: 'Un tuo amico ordina cibo ogni sera.', steps: ['fatti raccontare…', 'spiegagli…', 'convincilo…', 'quarto di troppo'] },
+      photos: [{ slot: 'top', query: 'man eating takeaway at laptop', alt: 'un uomo mangia davanti al computer' }, { slot: 'zzz', query: 'open fridge', alt: 'frigorifero' }, { slot: 'role', query: '', alt: 'scartata' }]
+    };
+    Object.assign(u, over || {});
+    return u;
+  };
+  const convFetch = function (grab, over) {
+    return async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      if (grab) grab.push(body);
+      return {
+        ok: true, status: 200,
+        json: async function () { return { model: body.model, usage: { input_tokens: 900, output_tokens: 2200 }, content: [{ type: 'text', text: JSON.stringify(convReply(over)) }] }; },
+        text: async function () { return ''; }
+      };
+    };
+  };
+
+  await test('il prompt porta argomento, livello, lingue e focus grammaticale', async function () {
+    const calls = [];
+    await AI.generateConvUnit({ topic: 'Cibo e spreco', level: 'A2', n: 8, lang: 'it', uiLang: 'en', focus: 'congiuntivo', apiKey: 'sk', fetchImpl: convFetch(calls) });
+    const u = calls[0].messages[0].content;
+    assert.ok(u.indexOf('TOPIC: Cibo e spreco') !== -1);
+    assert.ok(u.indexOf('STUDENT LEVEL (CEFR): A2') !== -1);
+    assert.ok(u.indexOf('TEACHER / GLOSS LANGUAGE: en') !== -1);
+    assert.ok(u.indexOf('congiuntivo') !== -1, 'il focus grammaticale deve arrivare al modello');
+    assert.ok(u.indexOf('never announce it') !== -1, 'il focus non deve diventare un esercizio di grammatica');
+  });
+  await test('unita completa: lessico, domande con ref, grafici, testi, roleplay, foto', async function () {
+    const r = await AI.generateConvUnit({ topic: 'Cibo', level: 'B1', n: 10, lang: 'it', apiKey: 'sk', fetchImpl: convFetch() });
+    const u = r.unit;
+    assert.strictEqual(u.title, 'Cibo: cucinare, ordinare, sprecare');
+    assert.strictEqual(u.vocab.length, 2, 'le voci senza parola si scartano');
+    assert.strictEqual(u.questions.length, 3, 'le domande vuote si scartano');
+    assert.deepStrictEqual(u.questions.map(function (q) { return q.ref; }), ['photo', 'chart1', 'text1']);
+    assert.strictEqual(u.texts.length, 2, 'al massimo due testi');
+    assert.strictEqual(u.roleplay.steps.length, 3, 'il roleplay ha 3 passi');
+    assert.ok(r.ai.cost > 0);
+  });
+  await test('i sondaggi restano etichettati come inventati e con percentuali valide', async function () {
+    const r = await AI.generateConvUnit({ topic: 'Cibo', level: 'B1', n: 6, lang: 'it', apiKey: 'sk', fetchImpl: convFetch() });
+    const c = r.unit.charts[0];
+    assert.strictEqual(c.source, 'invented', 'i dati sono inventati: la pagina deve poterlo dichiarare');
+    assert.deepStrictEqual(c.rows.map(function (x) { return x.pct; }), [64, 100], 'percentuali fuori scala corrette, righe senza etichetta scartate');
+  });
+  await test('i personaggi dei testi sono marcati come inventati', async function () {
+    const r = await AI.generateConvUnit({ topic: 'Cibo', level: 'B1', n: 6, lang: 'it', apiKey: 'sk', fetchImpl: convFetch() });
+    assert.ok(r.unit.texts.every(function (t) { return t.fiction === true; }));
+    assert.strictEqual(r.unit.texts[0].who, 'Maria Bellini, 41 anni, cuoca');
+  });
+  await test('le foto tengono solo gli slot noti e con query', async function () {
+    const r = await AI.generateConvUnit({ topic: 'Cibo', level: 'B1', n: 6, lang: 'it', apiKey: 'sk', fetchImpl: convFetch() });
+    assert.strictEqual(r.unit.photos.length, 2, 'la foto senza query si scarta');
+    assert.deepStrictEqual(r.unit.photos.map(function (p) { return p.slot; }), ['top', 'top'], 'slot sconosciuto ripiegato su top');
+  });
+  await test('senza argomento non si genera niente', async function () {
+    let err = null;
+    try { await AI.generateConvUnit({ topic: '  ', level: 'B1', apiKey: 'sk', fetchImpl: convFetch() }); } catch (e) { err = e; }
+    assert.ok(err && /argomento/i.test(err.message));
+  });
+  await test('parti disattivabili: niente grafici, testi o roleplay nel prompt', async function () {
+    const calls = [];
+    const r = await AI.generateConvUnit({ topic: 'Cibo', level: 'B1', n: 6, lang: 'it', parts: { charts: false, texts: false, roleplay: false }, apiKey: 'sk', fetchImpl: convFetch(calls) });
+    const u = calls[0].messages[0].content;
+    assert.ok(u.indexOf('"charts"') === -1 && u.indexOf('"roleplay"') === -1);
+    assert.strictEqual(r.unit.charts.length, 0);
+    assert.strictEqual(r.unit.roleplay, null);
+  });
+  await test('rigenerazione di una sola domanda, senza ripetere le altre', async function () {
+    const calls = [];
+    const fake = async function (url, opts) {
+      calls.push(JSON.parse(opts.body));
+      return { ok: true, status: 200, json: async function () { return { model: 'm', usage: { input_tokens: 300, output_tokens: 120 }, content: [{ type: 'text', text: '{"text":"Nuova domanda?","help":"Secondo me…"}' }] }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.regenerateConvPart({ what: 'question', unit: { title: 'Cibo', lang: 'it', level: 'B1', focus: 'congiuntivo' }, avoid: ['Quante volte cucini?'], note: 'piu personale', apiKey: 'sk', fetchImpl: fake });
+    const u = calls[0].messages[0].content;
+    assert.ok(u.indexOf('Quante volte cucini?') !== -1, 'le domande gia presenti vanno evitate');
+    assert.ok(u.indexOf('piu personale') !== -1, 'la nota dell\'insegnante arriva al modello');
+    assert.ok(u.indexOf('congiuntivo') !== -1);
+    assert.strictEqual(r.value.text, 'Nuova domanda?');
+  });
+  await test('un pezzo sconosciuto non parte nemmeno', async function () {
+    let err = null;
+    try { await AI.regenerateConvPart({ what: 'boh', unit: {}, apiKey: 'sk', fetchImpl: async function () { throw new Error('non deve chiamare'); } }); } catch (e) { err = e; }
+    assert.ok(err && /sconosciuto/.test(err.message));
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();
