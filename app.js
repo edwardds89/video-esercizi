@@ -1406,6 +1406,24 @@
     const aiBtn = el('button', { class: 'small right', text: '✨ Proponi con l\'AI' });
     if (!S.settings.apiKey) aiBtn.style.display = 'none';
     head.appendChild(aiBtn);
+    // Le espressioni per rispondere devono essere attacchi di frase, non contenuto: in una domanda di comprensione
+    // un suggerimento che contiene la risposta annulla la domanda (segnalato da Edoardo il 2/9). Le domande generate
+    // prima della v54 possono averli sporchi: qui si ripuliscono senza rigenerare niente e senza toccare le opinioni.
+    const leaky = function (q) {
+      const k = before ? 'warmup' : (q.kind || 'talk');
+      if (k !== 'warmup' && k !== 'check') return false;
+      return !!q.help && AI.frameHelp(q.help, k) !== q.help;
+    };
+    if (sec.questions.some(leaky)) {
+      const n = sec.questions.filter(leaky).length;
+      const clean = el('button', { class: 'small', text: '🧹 Togli le risposte dai suggerimenti (' + n + ')', title: 'In ' + n + (n === 1 ? ' domanda un suggerimento contiene la risposta' : ' domande i suggerimenti contengono la risposta') + ': resta solo l\'attacco di frase' });
+      clean.addEventListener('click', function () {
+        sec.questions.forEach(function (q) { if (leaky(q)) q.help = AI.frameHelp(q.help, before ? 'warmup' : q.kind); });
+        touch(ls); renderFlow(ls);
+        toastUndo('Suggerimenti ripuliti in ' + n + (n === 1 ? ' domanda' : ' domande'), function () { if (!undo()) toast('Niente da annullare'); });
+      });
+      head.appendChild(clean);
+    }
     head.appendChild(el('button', { class: 'small', text: '+ Domanda', onclick: function () { sec.questions.push({ id: uid(), text: '', help: '' }); touch(ls); renderFlow(ls, { keep: false }); const rows = $$('.talk-card[data-tid="' + sec.id + '"] .talk-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('textarea, input').focus(); } }));
     if (ls.talks.length > 1) {
       const rm = el('button', { class: 'small danger', text: '✕ Sezione', title: 'Togli questa sezione con le sue domande' });

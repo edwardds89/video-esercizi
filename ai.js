@@ -326,6 +326,24 @@
    */
   /** Domande "Parliamone". mode 'warmup' = PRIMA del video (3 domande per far emergere il tema, niente spoiler);
    *  default = DOPO il video: prima domande di COMPRENSIONE specifiche di questo video ("kind":"check"), poi opinioni ancorate ai suoi punti ("kind":"talk"). */
+  /**
+   * Le espressioni per rispondere devono essere ATTACCHI DI FRASE, non contenuto: se dentro c'e' la risposta,
+   * una domanda di comprensione smette di essere di comprensione (segnalato da Edoardo il 2/9) e una domanda
+   * prima del video diventa uno spoiler. Il prompt lo chiede; questo e' il filtro che lo fa rispettare davvero.
+   * Uno spezzone lungo, o pieno di numeri, non e' un attacco di frase: e' un pezzo di risposta, e si butta.
+   * Se non ne resta nessuno la domanda va senza suggerimenti — per una comprensione e' la cosa giusta.
+   */
+  function frameHelp(help, kind) {
+    const strict = kind === 'check' || kind === 'warmup';
+    const max = strict ? 6 : 8;
+    return String(help || '').split(/\s*·\s*/).map(function (h) { return h.trim(); }).filter(function (h) {
+      if (!h) return false;
+      if (h.split(/\s+/).length > max) return false;          // troppo lungo per essere un attacco: porta contenuto
+      if (strict && /\d/.test(h)) return false;                // cifre = dati del video
+      return true;
+    }).slice(0, 3).join(' · ');
+  }
+
   async function suggestDiscussion(params) {
     const lang = params.lang || 'it';
     const level = params.level || 'B1';
@@ -346,7 +364,11 @@
     if (avoid.length) task += ' Do NOT repeat or paraphrase these questions, already in use: ' + avoid.map(function (a) { return '"' + a + '"'; }).join('; ') + '. Ask about something else in the video.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + level,
       task +
-      ' For each question give "help": 2 or 3 short chunks or expressions (in ' + lang + ', separated by " · ") the student can use to answer, e.g. "Secondo me… · Non sono d\'accordo perché… · Il video dice che…".' +
+      ' For each question give "help": 2 or 3 SENTENCE OPENERS (in ' + lang + ', separated by " · ") — the words the student uses to START the answer, nothing more. '
+      + 'Each is at most 5 words and ends with "…", e.g. "Secondo me… · Non sono d\'accordo perché… · Il video dice che…". '
+      + 'They must carry NO information: never a fact, a name, a number, a place, a cause or any part of the answer, and never a word taken from the video that is not already in the question. '
+      + 'A student must be able to read them without learning anything about the video. '
+      + (warmup ? 'These come before the video: an opener that hints at what the video says is a spoiler.' : 'This matters most for the comprehension questions: if the opener contains the answer, the question stops being comprehension.') +
       (params.focus ? ' Teacher\'s note: ' + params.focus : ''),
       'SCHEMA: {"questions":[{"kind":"' + (warmup ? 'warmup' : 'check|talk') + '","text":"...","help":"... · ... · ..."}]}', '',
       'VIDEO TEXT' + (warmup ? ' (for your eyes only — the questions must not reveal it)' : '') + ':', text].join('\n');
@@ -354,7 +376,7 @@
     const plan = extractJSON(res.text);
     const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) {
       const kind = warmup ? 'warmup' : kindOnly ? params.kind : (String((q && q.kind) || '').toLowerCase() === 'check' ? 'check' : 'talk');
-      return { kind: kind, text: String((q && q.text) || '').trim(), help: String((q && q.help) || '').trim() };
+      return { kind: kind, text: String((q && q.text) || '').trim(), help: frameHelp(String((q && q.help) || ''), kind) };
     }).filter(function (q) { return q.text; }).slice(0, 12);
     return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
@@ -662,5 +684,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart };
 });
