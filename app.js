@@ -4186,12 +4186,12 @@
   }
   function renderMatching(p, ls, st) {
     const all = EX.shuffle(cardVocab(ls), L.rng(Date.now() % 9973));
-    // quante coppie per round: quante ce ne stanno DAVVERO nello spazio disponibile (riga minima 44 px + spazio per
-    // intestazione, consegna, "Tutte abbinate!" e i pulsanti). Su uno schermo basso si fanno più round, ma i pulsanti si vedono sempre.
-    const per = Math.max(3, Math.min(8, Math.floor((($('#s-panel').clientHeight || 560) - 260) / 52)));
-    const rounds = Math.ceil(all.length / per);
+    // Quante coppie per schermata. Si PARTE mettendole tutte insieme e si divide in più round SOLO se, misurando lo
+    // spazio vero, le righe scenderebbero sotto l'altezza leggibile. In v51 c'era una stima aritmetica
+    // (altezza - 260) / 52: troppo prudente, divideva in due schermate lasciando mezzo schermo vuoto.
+    const MIN_PER = 3, COMFORT = 44;   // riga leggibile: 44 px
+    let per = all.length, rounds = 1, round = 0, fitted = false;
     const fx = !ls.options || ls.options.fx !== false;
-    let round = 0;
     const playRound = function () {
       p.innerHTML = '';
       const words = all.slice(round * per, (round + 1) * per);
@@ -4252,9 +4252,22 @@
       // altrimenti a schermo intero le righe si prendono tutto e i pulsanti finiscono sotto il bordo (si dovrebbe scorrere)
       const RESERVE = 96;
       const host = p.closest('#s-panel') || p;   // p è il wrapper: lo spazio vero (e il padding) è quello del pannello
+      const availNow = function () {
+        return host.clientHeight - (grid.getBoundingClientRect().top - host.getBoundingClientRect().top) - fb.offsetHeight - foot.offsetHeight - 20 - Math.max(0, RESERVE - fb.offsetHeight);
+      };
+      // una volta sola, alla prima schermata: quante coppie ci stanno davvero qui dentro
+      if (!fitted) {
+        fitted = true;
+        const cap = Math.max(MIN_PER, Math.floor(availNow() / (COMFORT + 6)));
+        if (cap < all.length) {
+          rounds = Math.ceil(all.length / cap);
+          per = Math.ceil(all.length / rounds);   // round bilanciati: 5 coppie in 2 giri fanno 3+2, non 4+1
+          return playRound();
+        }
+      }
       const sizeRows = function () {
         if (!p.isConnected) return;
-        const avail = host.clientHeight - (grid.getBoundingClientRect().top - host.getBoundingClientRect().top) - fb.offsetHeight - foot.offsetHeight - 20 - Math.max(0, RESERVE - fb.offsetHeight);
+        const avail = availNow();
         const rowh = Math.max(40, Math.min(150, Math.floor(avail / words.length) - 6));
         host.style.setProperty('--rowh', rowh + 'px');
         requestAnimationFrame(function () {
