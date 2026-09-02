@@ -287,6 +287,42 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(err && /401/.test(err.message));
   });
 
+  console.log('Parliamone: i suggerimenti non contengono la risposta');
+  const helpFetch = function (calls, help) {
+    return async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      if (calls) calls.push(body);
+      const qs = { questions: [{ kind: 'check', text: 'Che cosa dice il video sul Mediterraneo?', help: help }] };
+      return { ok: true, status: 200, json: async function () { return { model: 'm', usage: { input_tokens: 500, output_tokens: 200 }, content: [{ type: 'text', text: JSON.stringify(qs) }] }; }, text: async function () { return ''; } };
+    };
+  };
+  await test('il prompt chiede attacchi di frase senza informazioni', async function () {
+    const calls = [];
+    await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 4, apiKey: 'sk', fetchImpl: helpFetch(calls, 'Secondo me…') });
+    const u = calls[0].messages[0].content;
+    assert.ok(/SENTENCE OPENERS/.test(u), 'devono essere attacchi di frase');
+    assert.ok(/carry NO information/.test(u) && /never a fact, a name, a number/.test(u), 'e non devono portare informazioni');
+    assert.ok(/stops being comprehension/.test(u), 'il modello deve sapere perché conta');
+  });
+  await test('gli spezzoni che contengono la risposta vengono buttati', async function () {
+    // il caso segnalato: la "comprensione" arrivava con la risposta dentro i suggerimenti
+    const leak = 'Il video dice che il Mediterraneo è il mare che si scalda più velocemente al mondo · Secondo il video…';
+    const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 1, kind: 'check', apiKey: 'sk', fetchImpl: helpFetch(null, leak) });
+    assert.strictEqual(r.questions[0].help, 'Secondo il video…', 'resta solo l\'attacco di frase');
+  });
+  await test('niente cifre nei suggerimenti di una comprensione', async function () {
+    const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 1, kind: 'check', apiKey: 'sk', fetchImpl: helpFetch(null, 'Sono aumentati di 2 gradi · Il video dice che…') });
+    assert.strictEqual(r.questions[0].help, 'Il video dice che…');
+  });
+  await test('se non resta niente, la comprensione va senza suggerimenti', async function () {
+    const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 1, kind: 'check', apiKey: 'sk', fetchImpl: helpFetch(null, 'Perché le correnti calde arrivano dall\'Atlantico e restano intrappolate') });
+    assert.strictEqual(r.questions[0].help, '', 'meglio nessun suggerimento che un suggerimento che risponde');
+  });
+  await test('le domande di opinione tengono attacchi un po\' piu\' lunghi', async function () {
+    const r = await AI.suggestDiscussion({ chunks: chunks, lang: 'it', level: 'B1', n: 1, kind: 'talk', apiKey: 'sk', fetchImpl: helpFetch(null, 'Non sono d\'accordo perché secondo me… · Nel mio paese…') });
+    assert.strictEqual(r.questions[0].help.split(' · ').length, 2, 'per le opinioni un attacco piu\' articolato va bene');
+  });
+
   console.log('Traduzione che non fa da soluzione');
   const trFetch = function (calls) {
     return async function (url, opts) {

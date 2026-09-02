@@ -1229,6 +1229,37 @@ async function noOverflow(page, where) {
   assert.ok(mc2.scroll <= 1 && mc2.pulsantiDentro >= 0, 'e anche lì niente scorrimento, pulsanti dentro');
   await page.setViewportSize({ width: 1280, height: 900 });
 
+  console.log('17. Parliamone: i suggerimenti di una comprensione non contengono la risposta');
+  await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    ls.talks[0].questions = [
+      { id: 'q1', kind: 'check', text: 'Che cosa dice il video sul Mediterraneo?', help: 'Il video dice che il Mediterraneo è il mare che si scalda più in fretta al mondo · Secondo il video…' },
+      { id: 'q2', kind: 'check', text: 'Perché i pesci si spostano?', help: 'Perché l\'acqua è salita di 2 gradi · Si spostano perché…' },
+      { id: 'q3', kind: 'talk', text: 'Ti preoccupa?', help: 'Non sono d\'accordo perché secondo me… · Nel mio paese…' }
+    ];
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForTimeout(800);
+  const pulisci = page.locator('.talk-card button', { hasText: 'Togli le risposte' });
+  assert.strictEqual(await pulisci.count(), 1, 'l\'editor si accorge dei suggerimenti che rispondono al posto dello studente');
+  assert.ok(/\(2\)/.test(await pulisci.textContent()), 'e dice quante domande sono');
+  await pulisci.click();
+  await page.waitForTimeout(500);
+  const dopo = await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    return ls.talks[0].questions.map(function (q) { return q.help; });
+  });
+  assert.strictEqual(dopo[0], 'Secondo il video…', 'della comprensione resta solo l\'attacco di frase');
+  assert.strictEqual(dopo[1], 'Si spostano perché…', 'via anche lo spezzone con le cifre');
+  assert.ok(dopo[2].indexOf('Nel mio paese') !== -1, 'le domande di opinione non si toccano');
+  assert.ok(await page.$('#undo-bar.show'), 'e si può annullare');
+  assert.strictEqual(await page.locator('.talk-card button', { hasText: 'Togli le risposte' }).count(), 0, 'il pulsante sparisce quando non serve più');
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
