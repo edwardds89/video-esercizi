@@ -1173,6 +1173,62 @@ async function noOverflow(page, where) {
   assert.ok(gf.near && gf.larghezza >= 20, 'lo spazio si apre lo stesso sotto il puntatore (largo ' + gf.larghezza + 'px)');
   assert.ok(gf.scrivibile, 'e cliccandolo ci si può scrivere dentro');
 
+  console.log('16. schede parole: si divide in piu\' schermate solo quando serve davvero');
+  await page.setViewportSize({ width: 1512, height: 950 });
+  await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    ls.vocab = ls.vocab || {};
+    ls.vocab.support = 'en';
+    ls.vocab.cards = { matching: true, flashcards: false, write: false };
+    ls.vocab.words = ['fondere/to melt', 'scappare/to escape', 'i dati/data', 'abituato/accustomed', 'il ghiaccio/ice', 'sciogliersi/to dissolve', 'la corrente/current', 'riscaldarsi/to warm up']
+      .map(function (x, i) { const q = x.split('/'); return { id: 'w' + i, word: q[0], translation: q[1], image: '', selected: true }; });
+    window.VLApp.openStudent(ls.id);
+  });
+  await page.waitForSelector('#view-student.active');
+  await page.click('#btn-start');
+  await page.waitForSelector('#s-panel .match');
+  await page.waitForTimeout(900);
+  const mc = await page.evaluate(function () {
+    const p = document.querySelector('#s-panel');
+    const foot = p.querySelector('.card-foot') || p.querySelector('.actions');
+    return {
+      coppie: p.querySelectorAll('.match .col:first-child .mchip').length,
+      testata: (p.textContent.match(/\(\d+ di \d+\)/) || [''])[0],
+      scroll: p.scrollHeight - p.clientHeight,
+      pulsantiDentro: foot ? Math.round(p.getBoundingClientRect().bottom - foot.getBoundingClientRect().bottom) : 1
+    };
+  });
+  // v52 stimava lo spazio con (altezza - 260)/52 e spezzava in due schermate lasciando mezzo schermo vuoto:
+  // ora si misura lo spazio vero, quindi con 8 parole su uno schermo normale ci stanno tutte
+  assert.strictEqual(mc.coppie, 8, 'con spazio a sufficienza le 8 coppie stanno in una sola schermata (erano ' + mc.coppie + ')');
+  assert.strictEqual(mc.testata, '', 'e non compare "(1 di 2)"');
+  assert.ok(mc.scroll <= 1, 'senza barra di scorrimento');
+  assert.ok(mc.pulsantiDentro >= 0, 'con i pulsanti sempre dentro il pannello');
+  // schermo basso: si divide, ma in round BILANCIATI e senza mai scorrere
+  await page.setViewportSize({ width: 1180, height: 620 });
+  await page.evaluate(function () { window.VLApp.openStudent(window.VLApp.S.student.lesson.id); });
+  await page.waitForSelector('#view-student.active');
+  await page.click('#btn-start');
+  await page.waitForSelector('#s-panel .match');
+  await page.waitForTimeout(900);
+  const mc2 = await page.evaluate(function () {
+    const p = document.querySelector('#s-panel');
+    const foot = p.querySelector('.card-foot') || p.querySelector('.actions');
+    const m = p.textContent.match(/\((\d+) di (\d+)\)/);
+    return {
+      coppie: p.querySelectorAll('.match .col:first-child .mchip').length,
+      giri: m ? +m[2] : 1,
+      scroll: p.scrollHeight - p.clientHeight,
+      pulsantiDentro: foot ? Math.round(p.getBoundingClientRect().bottom - foot.getBoundingClientRect().bottom) : 1
+    };
+  });
+  assert.ok(mc2.giri > 1, 'su uno schermo basso si divide');
+  assert.ok(mc2.coppie * mc2.giri - 8 < mc2.giri, 'i giri sono bilanciati, niente ultimo giro con una coppia sola (' + mc2.coppie + ' x ' + mc2.giri + ')');
+  assert.ok(mc2.scroll <= 1 && mc2.pulsantiDentro >= 0, 'e anche lì niente scorrimento, pulsanti dentro');
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
