@@ -952,3 +952,4 @@ button.small.ai { background: #f3e8ff; border-color: #c99cf5; }
   .cp-photo, .cp-chart, .cp-box, .cp-role, .cp-text { break-inside: avoid; }
 }
 .cp-page.cp-tight { outline: 2px dashed #d94a4a; }
+button.small.warn { background: #fff1c2; border-color: #f5c400; color: #7a5a00; font-weight: 600; }

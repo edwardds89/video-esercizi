@@ -203,7 +203,7 @@
       const seg = { start: Math.max(0, loc.start - 0.5), end: Math.min(D, loc.end + 0.6) };
       exercises.push({
         id: 'e' + c.id + '-' + Math.floor(Math.random() * 1e6).toString(36),
-        chunkId: c.id, type: ex.type, sentence: sentenceText, segment: seg, markerTime: seg.end + 0.05,
+        chunkId: c.id, type: ex.type, sentence: sentenceText, segment: seg, markerTime: seg.end,
         data: ex.data, source: 'ai', note: pe.why || ''
       });
       loc.chunkIds.forEach(function (id) { used.add(id); });

@@ -602,7 +602,7 @@
     }
     if (!ex) return null;
     const seg = { start: Math.max(0, p.start - 0.2), end: p.end + 0.35 };
-    return { id: 'e' + p.chunkIds[0] + '-' + Math.floor(Math.random() * 1e6).toString(36), chunkId: p.chunkIds[0], chunkIds: p.chunkIds.slice(), type: ex.type, sentence: text, segment: seg, markerTime: seg.end + 0.05, data: ex.data, source: opts.source || 'rules', range: opts.range || null };
+    return { id: 'e' + p.chunkIds[0] + '-' + Math.floor(Math.random() * 1e6).toString(36), chunkId: p.chunkIds[0], chunkIds: p.chunkIds.slice(), type: ex.type, sentence: text, segment: seg, markerTime: seg.end, data: ex.data, source: opts.source || 'rules', range: opts.range || null };
   }
 
   /** Chunk alternativo vicino a un tempo (per "altra frase" nell'editor). */
@@ -856,7 +856,7 @@
       type: ex.type,
       sentence: text,
       segment: seg,
-      markerTime: seg.end + 0.05,
+      markerTime: seg.end,
       data: ex.data,
       source: opts.source || 'rules'
     };

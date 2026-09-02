@@ -88,6 +88,7 @@
       const same = L.normalize(nb.data.words.join(' ')) === L.normalize(ex.data.words.join(' '));
       if (same && nb.data.words.join(' ') !== ex.data.words.join(' ')) ex.data = nb.data;
     });
+    syncMarkers(ls);   // lezioni fatte prima della v55: il segnaposto torna a coincidere con la fine della frase
     lessonFlow(ls);
     return ls;
   }
@@ -146,7 +147,7 @@
   function saveSettings() { try { localStorage.setItem('vle.settings', JSON.stringify(S.settings)); } catch (e) { /* ignore */ } }
   const saveDebounced = (function () { let t; return function () { saveArmed = true; clearTimeout(t); t = setTimeout(function () { saveLessons(); const s = $('#e-saved'); if (s) { s.textContent = 'Salvato'; setTimeout(function () { s.textContent = ''; }, 1500); } }, 400); }; })();
   function current() { return S.lessons[S.currentId]; }
-  function touch(lesson) { lesson.updatedAt = new Date().toISOString(); undoNote(lesson); saveDebounced(); }
+  function touch(lesson) { syncMarkers(lesson); lesson.updatedAt = new Date().toISOString(); undoNote(lesson); saveDebounced(); }
   // chiusura/ricarica della pagina: salva subito quello che il debounce non ha ancora scritto
   window.addEventListener('pagehide', function () { try { if (saveArmed) saveLessons(); } catch (e) { /* ignore */ } });
 
@@ -1028,7 +1029,14 @@
     if (c && container._timeMap) { const tm = container._timeMap; c.style.left = (100 * Math.min(tm.toV(t), tm.V) / tm.V) + '%'; return; }
     if (c) c.style.left = (100 * Math.min(t, D) / (D || 1)) + '%';
   }
-  function sortExercises(lesson) { lesson.exercises.sort(function (a, b) { return a.markerTime - b.markerTime; }); }
+  /**
+   * Il segnaposto (dove il video si ferma) e' SEMPRE la fine della frase. Prima era un terzo tempo separato,
+   * tenuto 0,1 s dopo la fine: un numero in piu' da capire e da tenere allineato a mano, per un margine che
+   * la frase ha gia' dentro di se' (i tempi salvati arrivano 0,35 s dopo l'ultima parola). Segnalato da Edoardo
+   * il 2/9: "voglio solo due numeri, e devono essere identici quando provo l'esercizio con lo studente".
+   */
+  function syncMarkers(lesson) { (lesson.exercises || []).forEach(function (e) { if (e && e.segment) e.markerTime = e.segment.end; }); }
+  function sortExercises(lesson) { syncMarkers(lesson); lesson.exercises.sort(function (a, b) { return a.markerTime - b.markerTime; }); }
 
   // ---------- EDITOR ----------
   function openEditor(id) {
@@ -2169,6 +2177,34 @@
       });
     return out;
   }
+  /**
+   * Il contrario di retimeSentence: dati due tempi, che cosa si sente davvero in mezzo.
+   * Si tiene una parola se il suo centro cade dentro l'intervallo — i tempi delle parole sono interpolati
+   * dentro la riga dei sottotitoli, quindi al bordo si sbaglia di poco e il centro e' il criterio piu' stabile.
+   * Richiesta di Edoardo (2/9): dopo aver spostato "frase da"/"a" vuole un pulsante che riscriva la frase.
+   */
+  function textForRange(ls, seg) {
+    const out = [];
+    (ls.chunks || []).filter(function (c) { return !c.silence && c.end >= seg.start - 1 && c.start <= seg.end + 1; })
+      .sort(function (a, b) { return a.start - b.start; })
+      .forEach(function (c) {
+        const raw = String(c.text || '').split(/\s+/).filter(Boolean);
+        let times = G.wordTimes(c);
+        if (times.length !== raw.length) {
+          const d = (c.end - c.start) / Math.max(1, raw.length);
+          times = raw.map(function (w, i) { return { start: c.start + i * d, end: c.start + (i + 1) * d }; });
+        }
+        raw.forEach(function (w, i) {
+          const t = times[i]; if (!t) return;
+          const mid = (t.start + t.end) / 2;
+          if (mid >= seg.start && mid <= seg.end) out.push(w);
+        });
+      });
+    let txt = out.join(' ').replace(/\s+([,.;:!?…])/g, '$1').trim();
+    if (txt) txt = txt.charAt(0).toUpperCase() + txt.slice(1);
+    return txt;
+  }
+
   /** Dopo una modifica a mano della frase: ritrova le sue parole nella trascrizione e restituisce {start, end} (o null). */
   function retimeSentence(ls, ex) {
     const words = L.words(ex.sentence);
@@ -2255,7 +2291,27 @@
       helperSel.appendChild(el('option', { value: String(k), selected: isCur ? 'selected' : null, text: (isCur ? '✓ (attuale) ' : '') + fmtMin(p.start) + ' · ' + p.wordCount + ' parole · ' + (p.text.length > 70 ? p.text.slice(0, 70) + '…' : p.text) }));
     });
     helperSel.addEventListener('change', function () { const k = parseInt(helperSel.value, 10); if (!isNaN(k) && cands[k]) applyCandidate(ls, ex, cands[k]); });
-    const alignMarker = function () { ex.markerTime = Math.round((ex.segment.end + 0.1) * 10) / 10; };
+    const alignMarker = function () { ex.markerTime = ex.segment.end; };
+    // "Aggiorna testo": riscrive la frase con quello che si sente tra i due tempi. Si accende (arancione) quando
+    // il testo scritto non e' piu' quello dell'intervallo, cioe' esattamente dopo che si sono spostati i secondi.
+    const rangeTxt = textForRange(ls, ex.segment);
+    const stale = !!rangeTxt && L.words(rangeTxt).join(' ') !== L.words(ex.sentence).join(' ');
+    const updBtn = el('button', {
+      class: 'small' + (stale ? ' warn' : ''),
+      text: '⟳ Aggiorna testo',
+      title: stale ? 'Tra questi due tempi si sente un\'altra frase: clicca per riscriverla' : 'Riscrive la frase con quello che si sente tra "frase da" e "a"',
+      onclick: function () {
+        const txt = textForRange(ls, ex.segment);
+        if (!txt) return toast('Tra questi due tempi la trascrizione non ha parole: allarga l\'intervallo', 4000);
+        if (L.words(txt).join(' ') === L.words(ex.sentence).join(' ')) return toast('La frase è già questa');
+        ex.sentence = txt;
+        if (!rebuildExercise(ls, ex, ex.type, ex.type === 'mc' ? ex.data : null)) {
+          toast('Frase troppo corta per "' + (EX.LABELS[ex.type] || ex.type) + '": allarga i tempi o cambia tipo', 5000);
+        }
+        touch(ls); renderEditorBody();
+        toast('Testo riscritto su ' + fmt(ex.segment.start) + ' → ' + fmt(ex.segment.end) + ' (' + L.words(txt).length + ' parole) · annulla con ' + undoKeyLabel(), 5000);
+      }
+    });
     const lbl = EX.LABELS[ex.type] || ex.type, par = lbl.indexOf(' (');
     card.appendChild(el('div', { class: 'ex-title' },
       el('span', { class: 'num', text: String(i + 1) }),
@@ -2265,14 +2321,12 @@
       el('span', { class: 'hint', text: 'frase da' }),
       timeInput(ex.segment.start, function (t) { ex.segment.start = t; touch(ls); renderEditorBody(); }, ex.id + ':start'),
       el('span', { class: 'hint', text: 'a' }),
-      timeInput(ex.segment.end, function (t) { const wasAligned = Math.abs(ex.markerTime - ex.segment.end) < 0.6; ex.segment.end = t; if (wasAligned || ex.markerTime < t) alignMarker(); sortExercises(ls); touch(ls); renderEditorBody(); }, ex.id + ':end'),
-      el('button', { class: 'small play', text: '▶', title: 'Ascolta esattamente da inizio a fine: parte da "frase da" e si ferma da solo ad "a"', onclick: function () { playSegment(ex.segment); } }),
+      timeInput(ex.segment.end, function (t) { ex.segment.end = t; sortExercises(ls); touch(ls); renderEditorBody(); }, ex.id + ':end'),
+      el('button', { class: 'small play', text: '▶', title: 'Ascolta esattamente da inizio a fine: parte da "frase da" e si ferma da solo ad "a" — è anche il punto in cui il video si ferma per lo studente', onclick: function () { playSegment(ex.segment); } }),
       el('button', { class: 'small play', text: '▶ -3s', title: 'Ascolta solo gli ultimi 3 secondi: per controllare dove finisce il taglio', onclick: function () { playSegment({ start: Math.max(ex.segment.start, ex.segment.end - 3), end: ex.segment.end }); } }),
-      el('span', { class: 'hint', text: '· il video si ferma a' }),
-      timeInput(ex.markerTime, function (t) { ex.markerTime = t; sortExercises(ls); touch(ls); renderEditorBody(); }, ex.id + ':marker'),
-      el('button', { class: 'small', text: '= fine frase', title: 'Ferma il video subito dopo la fine della frase', onclick: function () { alignMarker(); sortExercises(ls); touch(ls); renderEditorBody(); } }),
+      updBtn,
       el('button', { class: 'small', text: 'Inizio = ora', title: 'Usa il tempo corrente del player come inizio della frase', onclick: function () { if (S.player) { ex.segment.start = Math.round(S.player.time() * 10) / 10; touch(ls); renderEditorBody(); } } }),
-      el('button', { class: 'small', text: 'Fine = ora', title: 'Usa il tempo corrente del player come fine della frase', onclick: function () { if (S.player) { ex.segment.end = Math.round(S.player.time() * 10) / 10; alignMarker(); sortExercises(ls); touch(ls); renderEditorBody(); } } })
+      el('button', { class: 'small', text: 'Fine = ora', title: 'Usa il tempo corrente del player come fine della frase', onclick: function () { if (S.player) { ex.segment.end = Math.round(S.player.time() * 10) / 10; sortExercises(ls); touch(ls); renderEditorBody(); } } })
     );
     card.appendChild(timesRow);
     const head = el('div', { class: 'head', style: 'margin-top:6px' },
@@ -2298,9 +2352,7 @@
         // parole cambiate: inizio e fine si ricalcolano sulle parole ritrovate nella trascrizione (se solo la punteggiatura cambia, i tempi restano)
         const rt = retimeSentence(ls, ex);
         if (rt) {
-          const wasAligned = Math.abs(ex.markerTime - ex.segment.end) < 0.6;
           ex.segment = { start: Math.max(0, Math.round((rt.start - 0.2) * 10) / 10), end: Math.round((rt.end + 0.35) * 10) / 10 };
-          if (wasAligned || ex.markerTime < ex.segment.end) ex.markerTime = Math.round((ex.segment.end + 0.1) * 10) / 10;
           sortExercises(ls);
           toast('Tempi ricalcolati sulle parole: ' + fmt(ex.segment.start) + ' → ' + fmt(ex.segment.end) + (rt.partial ? ' (solo prima e ultima parola ritrovate)' : ''), 3500);
         } else toast('Frase non ritrovata nella trascrizione: tempi lasciati com\'erano', 3500);
@@ -2890,7 +2942,8 @@
     st.lastT = t; st.lastAt = now;
     const elapsed = prevAt ? (now - prevAt) / 1000 * (S.player.kind === 'mock' ? (S.speed || 1) : 1) : 0;
     const natural = prev != null && t >= prev && t - prev <= elapsed + 1.5;
-    const next = natural ? ls.exercises.find(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && exerciseReady(e) && t >= e.markerTime - 0.1 && prev < e.markerTime - 0.1; }) : null;
+    // il video si ferma QUANDO la frase e' finita, mai un attimo prima: meglio due decimi in piu' che l'ultima parola mozzata
+    const next = natural ? ls.exercises.find(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && exerciseReady(e) && t >= e.markerTime && prev < e.markerTime; }) : null;
     if (!next && st.lock && S.player.state() === 1) {
       // barra bloccata: se si è andati oltre un esercizio ancora da fare, si torna all'inizio della sua frase
       const passed = ls.exercises.find(function (e) { return !st.done.has(e.id) && t > e.markerTime + 1.5; });
