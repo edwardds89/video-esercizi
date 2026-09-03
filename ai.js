@@ -309,7 +309,7 @@
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
     const system = 'You help a language teacher prepare vocabulary for a video lesson. Output ONLY a JSON object, no prose, no markdown fences.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + (params.level || 'B1') + '   TRANSLATION LANGUAGE: ' + sup,
-      'List ' + (params.n || 14) + ' words (or short fixed expressions) a ' + (params.level || 'B1') + ' student whose own language is ' + sup + ' must LEARN to understand the video. Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (e.g. Italian "globale" ≈ English "global"), basic words a ' + (params.level || 'B1') + ' student already knows, proper names and numbers. Prioritize words that occur in the EXERCISE SENTENCES (mark "inExercise": true), then other key words of the video. ' +
+      'List ' + (params.n || 14) + ' words (or short fixed expressions) a ' + (params.level || 'B1') + ' student whose own language is ' + sup + ' must LEARN to understand the video. Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (Italian "globale" ≈ English "global", "stupido" ≈ "stupid": a student guesses those without help), basic words a ' + (params.level || 'B1') + ' student already knows, proper names and numbers. Multi-word expressions are welcome when the single word would mislead ("un conto è", "andare a male", "fare a meno di"). Prioritize words that occur in the EXERCISE SENTENCES (mark "inExercise": true), then other key words of the video. ' +
       'Dictionary form as used in the video (singular noun, infinitive verb, masculine adjective); "translation" in ' + sup + '.' +
       (params.exclude && params.exclude.length ? ' Do NOT include: ' + params.exclude.join(', ') + '.' : ''),
       'SCHEMA: {"vocab":[{"word":"...","translation":"...","inExercise":true}]}', '',
@@ -647,6 +647,50 @@
   }
 
   /** Traduzioni per una lista di parole (nel contesto del video). params: { words:[...], lang, support, context, apiKey, model, fetchImpl } → { translations: {word: translation} } */
+  /**
+   * CONTROLLO DELLE PAROLE UTILI. Una parola presa da sola perde il senso che aveva nella frase: "un conto" tradotto
+   * "a bill" non e' sbagliato in assoluto, ma nel video vuol dire "one thing is" (segnalato da Edoardo il 3/9).
+   * Qui il modello rilegge ogni voce DENTRO la frase da cui viene e dice: va bene, e' ambigua, o la traduzione e'
+   * proprio quella sbagliata — e quando serve propone di allungare l'espressione ("un conto" -> "un conto e'").
+   * params: { words:[{word, translation}], sentences?, lang, support, context, apiKey, model, fetchImpl }
+   *   -> { items:[{word, verdict:'ok'|'ambigua'|'sbagliata', why, suggest:{word, translation}|null}], ai }
+   */
+  async function checkVocab(params) {
+    const lang = params.lang || 'it', sup = params.support || (lang === 'en' ? 'it' : 'en');
+    const words = (params.words || []).filter(function (w) { return w && w.word; });
+    if (!words.length) return { items: [], ai: null };
+    const system = 'You check a language teacher\'s vocabulary list against the text it was taken from. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['LANGUAGE: ' + lang + '   GLOSS LANGUAGE: ' + sup, '',
+      'For each entry, judge the ' + sup + ' gloss AS IT WILL BE SHOWN TO STUDENTS on a flashcard, next to the ' + lang + ' word alone.',
+      'What counts is the meaning the word has in the EXERCISE SENTENCES: those are the sentences the students actually work on, and the teacher picked these words FOR them. The rest of the video is background only.',
+      'verdict "ok" = the gloss is the meaning the word has in the text.',
+      'verdict "ambigua" = the gloss is a real meaning of the word but NOT the one it has here, or the word alone is misleading out of context (e.g. ' + lang + ' "un conto" glossed "a bill" when in the text it means "one thing is").',
+      'verdict "sbagliata" = the gloss is simply not a meaning of this word.',
+      'When the entry only works as part of a longer expression, put that expression in "suggest.word" (copied from the text, 2-4 words) with its gloss in "suggest.translation". Otherwise "suggest": null.',
+      '"why" = one short sentence in Italian for the teacher, saying what the problem is. Empty when the verdict is "ok".',
+      'Be strict but not pedantic: a gloss that a student would understand correctly on the card is "ok". Judge every entry, in the same order, copying "word" exactly as given.',
+      '', 'SCHEMA: {"items":[{"word":"...","verdict":"ok|ambigua|sbagliata","why":"...","suggest":{"word":"...","translation":"..."}}]}',
+      '', 'ENTRIES:',
+      words.map(function (w) { return '- ' + w.word + ' = ' + (w.translation || '(senza traduzione)'); }).join('\n'),
+      '', 'EXERCISE SENTENCES (what the students will work on):',
+      (params.sentences || []).map(function (x, i) { return (i + 1) + '. ' + x; }).join('\n') || '(none)',
+      '', 'REST OF THE VIDEO (background):', String(params.context || '').slice(0, 6000)].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 2500, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    const raw = Array.isArray(j.items) ? j.items : [];
+    const str = function (v) { return String(v == null ? '' : v).trim(); };
+    const byKey = {};
+    raw.forEach(function (it, i) { if (it && it.word) wordKeys(str(it.word)).forEach(function (k) { if (!(k in byKey)) byKey[k] = it; }); it && (it.__i = i); });
+    const items = words.map(function (w, i) {
+      const hit = wordKeys(w.word).map(function (k) { return byKey[k]; }).filter(Boolean)[0] || (raw.length === words.length ? raw[i] : null);
+      const v = str(hit && hit.verdict).toLowerCase();
+      const verdict = v === 'ambigua' || v === 'sbagliata' ? v : 'ok';
+      const sg = hit && hit.suggest && str(hit.suggest.word) ? { word: str(hit.suggest.word), translation: str(hit.suggest.translation) } : null;
+      return { word: w.word, translation: w.translation || '', verdict: verdict, why: verdict === 'ok' ? '' : str(hit && hit.why), suggest: verdict === 'ok' ? null : sg };
+    });
+    return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
   /** Chiavi con cui riconoscere la stessa voce: com'e' scritta e senza l'articolo/il "to" davanti
    *  ("i farmaci" e "farmaci", "to clone" e "clone"). Serve perche' il modello riporta spesso la forma del dizionario. */
   function wordKeys(word) {
@@ -706,5 +750,5 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart };
 });

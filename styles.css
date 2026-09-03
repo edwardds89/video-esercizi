@@ -276,7 +276,7 @@ body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barr
 .vocab-row input[type=text] { padding: 4px 8px; }
 .vocab-row .v-img { display: flex; gap: 4px; align-items: center; }
 .vocab-row .v-img img { width: 44px; height: 32px; object-fit: cover; border-radius: 4px; cursor: zoom-in; border: 1px solid var(--line); }
-.img-preview { position: fixed; z-index: 60; display: none; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25); padding: 6px; max-width: 392px; pointer-events: none; }
+.img-preview { position: fixed; z-index: 60; display: none; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25); padding: 6px; max-width: 392px; }
 .img-preview.show { display: block; }
 .img-preview img { display: block; max-width: 380px; max-height: 290px; min-width: 120px; min-height: 60px; border-radius: 8px; object-fit: contain; background: #f2f4f7; }
 .img-preview .cap { font-size: 12px; color: var(--muted); margin-top: 4px; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -960,3 +960,38 @@ button.small.warn { background: #fff1c2; border-color: #f5c400; color: #7a5a00; 
 .ex-card.rules.reviewed, .ex-card.ai.reviewed { border-left-color: #57b47e; }
 .ex-card.reviewed .num { background: #2e9e5b; }
 button.small.ok { background: #e6f6ea; border-color: #7fc99a; color: #17663a; font-weight: 600; }
+
+/* Controllo delle traduzioni delle parole utili: proposte, mai applicate da sole */
+.vocab-warn { margin-top: 8px; }
+.vw-row { border-top: 1px solid rgba(0,0,0,.08); padding: 7px 0; }
+.vw-row:first-of-type { border-top: 0; }
+.vw-row .badge.bad { background: #ffe1e1; color: #a11; }
+.notice.warn { background: #fff8e6; border: 1px solid #f0d089; border-radius: var(--radius); padding: 10px 12px; }
+
+/* Traduci con la bandiera della lingua scelta + elenco delle lingue */
+.tr-wrap { position: relative; display: inline-flex; }
+.tr-wrap .tr-btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.tr-wrap .tr-pick { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; padding-left: 7px; padding-right: 7px; }
+.tr-menu { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 40; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; max-height: 320px; overflow: auto; }
+.tr-opt { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 6px 10px; border-radius: 7px; cursor: pointer; font-size: 14px; white-space: nowrap; text-align: left; }
+.tr-opt:hover { background: var(--chip); }
+.tr-opt.on { background: #e8f0fe; font-weight: 700; }
+.tr-opt .fl { font-size: 17px; }
+
+/* Aiuto di "parola in più / parola sbagliata": segna una ZONA che lampeggia, non la parola */
+.chip.zone { background: #fff3d0; border-color: #f0c469; box-shadow: inset 0 -2px 0 0 #f5c400; }
+.chip.zone-flash { animation: zone-blink .42s ease-in-out 4; }
+@keyframes zone-blink { 0%,100% { background: #fff3d0; } 50% { background: #ffd873; transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .chip.zone-flash { animation: none; } }
+
+/* Foto delle schede: si ingrandisce al CLIC (l'hover restava aperto e copriva le parole).
+   I blocchi con la foto e quelli con la parola hanno la stessa altezza: la riga e' una griglia. */
+.back.zoomable { position: relative; cursor: zoom-in; }
+.back .zoom-hint { position: absolute; right: 6px; bottom: 4px; font-size: 10px; line-height: 1; color: #33475b; background: rgba(255,255,255,.85); border-radius: 999px; padding: 3px 7px; pointer-events: none; white-space: nowrap; }
+/* i blocchi con la foto e quelli con la parola hanno la stessa altezza */
+.match .col .mchip { height: var(--rowh, 56px); box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+/* la ✕ dell'ingrandimento: bianca con ombra scura, leggibile su qualunque foto e su qualunque tema */
+.img-preview .img-x { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(0,0,0,.55); color: #fff; font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  text-shadow: 0 1px 3px rgba(0,0,0,.9); box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.img-preview .img-x:hover { background: rgba(0,0,0,.78); }

@@ -1059,7 +1059,70 @@
     $('#e-fx').checked = ls.options.fx !== false;
     $('#e-lock').checked = !!ls.options.lock;
     $('#e-cover').checked = !!coverState(ls).on;
+    showSync(ls);
   }
+  // ---------- sincronia audio: un solo numero per lezione, regolabile a mano o a orecchio ----------
+  function fmtOffset(o) { return (o > 0 ? '+' : o < 0 ? '−' : '') + Math.abs(o).toFixed(1).replace('.', ',') + ' s'; }
+  function showSync(ls) {
+    const v = $('#e-sync-val'); if (!v) return;
+    const o = audioOffset(ls);
+    v.textContent = fmtOffset(o);
+    v.style.color = o ? 'var(--marker)' : '';
+    const z = $('#e-sync-zero'); if (z) z.style.display = o ? '' : 'none';
+  }
+  function setOffset(ls, o) {
+    ls.options.audioOffset = Math.max(-3, Math.min(3, Math.round(o * 10) / 10));
+    touch(ls); showSync(ls);
+  }
+  function bumpOffset(d) { const ls = current(); if (!ls) return; setOffset(ls, audioOffset(ls) + d); toast('Sincronia audio: ' + fmtOffset(audioOffset(ls)) + ' · prova con ▶ su una frase', 3500); }
+  $('#e-sync-minus').addEventListener('click', function () { bumpOffset(-0.1); });
+  $('#e-sync-plus').addEventListener('click', function () { bumpOffset(0.1); });
+  $('#e-sync-zero').addEventListener('click', function () { const ls = current(); if (ls) { setOffset(ls, 0); toast('Sincronia azzerata'); } });
+  // Calibrazione a orecchio: si ascolta una frase da 3 s prima e si preme quando comincia davvero.
+  // Al tempo premuto si tolgono 0,25 s di tempo di reazione: e' una stima, e infatti resta il ritocco a mano ±0,1.
+  const SYNC = { ex: null, t0: 0, off: 0 };
+  $('#e-sync-cal').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    const ex = (ls.exercises || []).filter(function (e) { return e.segment && e.sentence; })[0];
+    if (!ex) return toast('Serve almeno un esercizio con una frase');
+    if (!S.player) return toast('Il video non è ancora pronto');
+    SYNC.ex = ex; SYNC.off = null;
+    $('#sync-sentence').textContent = ex.sentence;
+    $('#sync-out').textContent = '';
+    $('#sync-apply').style.display = 'none';
+    $('#sync-again').style.display = 'none';
+    $('#sync-go').textContent = '▶ Ascolta e premi quando comincia';
+    $('#sync-go').disabled = false;
+    $('#dlg-sync').showModal();
+  });
+  $('#sync-close').addEventListener('click', function () { if (S.player) S.player.pause(); S.editor.replay = null; $('#dlg-sync').close(); });
+  $('#sync-again').addEventListener('click', function () { $('#sync-go').disabled = false; $('#sync-go').textContent = '▶ Ascolta e premi quando comincia'; $('#sync-out').textContent = ''; $('#sync-apply').style.display = 'none'; $('#sync-again').style.display = 'none'; });
+  $('#sync-go').addEventListener('click', function () {
+    const ls = current(), ex = SYNC.ex; if (!ls || !ex || !S.player) return;
+    const b = $('#sync-go');
+    if (b.textContent.indexOf('Adesso') === -1) {
+      // primo clic: parte l'ascolto dai 3 secondi prima, SENZA offset (si sta misurando l'errore vero)
+      playSegment({ start: Math.max(0, ex.segment.start - 3), end: ex.segment.end + 1 }, true);
+      b.textContent = '⏱ Adesso! (premi alla prima parola)';
+      $('#sync-out').textContent = 'Ascolta…';
+      return;
+    }
+    const t = S.player.time();
+    S.player.pause(); S.editor.replay = null;
+    const off = Math.round((t - 0.25 - ex.segment.start) * 10) / 10;
+    SYNC.off = Math.max(-3, Math.min(3, off));
+    $('#sync-out').innerHTML = 'La frase comincia davvero <b>' + fmtOffset(SYNC.off) + '</b> rispetto a quello che dice la trascrizione.'
+      + (Math.abs(SYNC.off) < 0.1 ? ' Praticamente in orario: puoi lasciare tutto com\'è.' : ' Applicandolo, tutte le frasi della lezione si spostano di altrettanto.');
+    $('#sync-apply').style.display = '';
+    $('#sync-again').style.display = '';
+    b.disabled = true;
+  });
+  $('#sync-apply').addEventListener('click', function () {
+    const ls = current(); if (!ls || SYNC.off == null) return;
+    setOffset(ls, SYNC.off);
+    $('#dlg-sync').close();
+    toast('Sincronia audio: ' + fmtOffset(audioOffset(ls)) + ' su tutta la lezione · ritocca con −0,1 / +0,1 · annulla con ' + undoKeyLabel(), 6000);
+  });
   $('#e-title').addEventListener('change', function () { const ls = current(); if (ls) { ls.title = $('#e-title').value.trim(); touch(ls); } });
   $('#e-fx').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.fx = $('#e-fx').checked; touch(ls); } });
   function lessonVocab(ls) {
@@ -1107,6 +1170,7 @@
     if (rp) {
       // se il seek iniziale non è stato accettato (primo avvio del player YouTube), riprova una volta
       if (rp.start != null && t < rp.start - 1.5 && Date.now() - rp.at < 4000) { if (!rp.retried) { rp.retried = true; S.player.seek(rp.start); S.player.play(); } return; }
+      if (nudgeReplay(rp)) return;
       if (t >= rp.end || S.player.state() === 0) { S.player.pause(); S.editor.replay = null; if (rp.redock && S.editor.previewId) dock('#e-stage', true); return; }
       if (rp.cut && S.player.state() === 1) {
         // giunzione: dentro il taglio si salta subito alla fine; poco prima si programma il salto al millisecondo
@@ -1167,13 +1231,107 @@
     S.player.seek(S.editor.replay.start);
     S.player.play();
   }
-  function playSegment(seg) {
+  /**
+   * SINCRONIA AUDIO. I tempi delle frasi vengono dalla trascrizione di YouTube: le righe dei sottotitoli hanno spesso
+   * un anticipo sistematico sul parlato, e dentro la riga i tempi delle singole parole sono INTERPOLATI. Risultato
+   * segnalato da Edoardo (3/9): "l'audio e' sempre un po' indietro di mezzo secondo rispetto al testo, e quando premo
+   * play vengono dette due o tre parole prima della vera frase". L'errore e' quasi sempre lo STESSO per tutto il video,
+   * quindi si corregge con un solo numero per lezione invece che frase per frase.
+   * L'offset sposta SOLO i tempi che derivano dalla trascrizione (frasi e segnaposti), mai i tagli, che sono stati
+   * regolati a orecchio sui tempi veri del video.
+   */
+  /**
+   * "Riascolta" che a volte non fa niente (segnalato da Edoardo, 3/9): il player di YouTube ignora play() se in quel
+   * momento sta ancora caricando o e' in stato "cued". Il vecchio controllo riprovava solo se il SEEK non era andato
+   * a segno; se il seek riusciva ma la riproduzione non partiva, il tempo restava fermo e non succedeva piu' niente.
+   * Qui si riprova a far partire il video finche' non parte davvero, e se dopo 3 secondi e' ancora fermo lo si dice.
+   */
+  function nudgeReplay(rp) {
+    if (!S.player || rp.done) return false;
+    const st = S.player.state();
+    if (st === 1) { rp.moving = true; return false; }     // sta suonando: tutto a posto
+    if (rp.moving) return false;                          // era partito e ora e' finito/in pausa: se ne occupa il tick
+    const dt = Date.now() - rp.at;
+    if (dt > 3000) { rp.done = true; toast('Il video non riparte: premi ▶ sul video una volta e riprova', 5000); return false; }
+    if (dt > 250 && (rp.tries || 0) < 6) { rp.tries = (rp.tries || 0) + 1; S.player.play(); }
+    return true;   // ancora in attesa: il tick non deve chiudere il riascolto
+  }
+
+  // ---------- lingua della traduzione per lo studente (16 lingue, con bandiera) ----------
+  // Richiesta di Edoardo (3/9): sul pulsante Traduci si deve vedere la bandiera della lingua in cui si traduce,
+  // e le lingue devono essere molte — la piattaforma e' pensata per studenti di provenienze diverse.
+  const TR_LANGS = [
+    ['en', '\uD83C\uDDEC\uD83C\uDDE7', 'Inglese', 'British English'],
+    ['es', '\uD83C\uDDEA\uD83C\uDDF8', 'Spagnolo', 'Spanish'],
+    ['fr', '\uD83C\uDDEB\uD83C\uDDF7', 'Francese', 'French'],
+    ['de', '\uD83C\uDDE9\uD83C\uDDEA', 'Tedesco', 'German'],
+    ['pt', '\uD83C\uDDF5\uD83C\uDDF9', 'Portoghese', 'Portuguese'],
+    ['it', '\uD83C\uDDEE\uD83C\uDDF9', 'Italiano', 'Italian'],
+    ['nl', '\uD83C\uDDF3\uD83C\uDDF1', 'Olandese', 'Dutch'],
+    ['pl', '\uD83C\uDDF5\uD83C\uDDF1', 'Polacco', 'Polish'],
+    ['ro', '\uD83C\uDDF7\uD83C\uDDF4', 'Rumeno', 'Romanian'],
+    ['ru', '\uD83C\uDDF7\uD83C\uDDFA', 'Russo', 'Russian'],
+    ['uk', '\uD83C\uDDFA\uD83C\uDDE6', 'Ucraino', 'Ukrainian'],
+    ['tr', '\uD83C\uDDF9\uD83C\uDDF7', 'Turco', 'Turkish'],
+    ['ar', '\uD83C\uDDF8\uD83C\uDDE6', 'Arabo', 'Arabic'],
+    ['zh', '\uD83C\uDDE8\uD83C\uDDF3', 'Cinese', 'Simplified Chinese'],
+    ['ja', '\uD83C\uDDEF\uD83C\uDDF5', 'Giapponese', 'Japanese'],
+    ['ko', '\uD83C\uDDF0\uD83C\uDDF7', 'Coreano', 'Korean'],
+    ['hi', '\uD83C\uDDEE\uD83C\uDDF3', 'Hindi', 'Hindi'],
+    ['pt-BR', '\uD83C\uDDE7\uD83C\uDDF7', 'Portoghese (Brasile)', 'Brazilian Portuguese']
+  ];
+  function trLang() {
+    const want = S.settings.trLang || '';
+    const found = TR_LANGS.find(function (l) { return l[0] === want; });
+    if (found) return found;
+    // default: la lingua di supporto della lezione se la conosciamo, altrimenti inglese
+    const ls = (S.student && S.student.lesson) || current();
+    const sup = ls ? (vocabState(ls).support || (ls.lang === 'en' ? 'it' : 'en')) : 'en';
+    return TR_LANGS.find(function (l) { return l[0] === sup; }) || TR_LANGS[0];
+  }
+  function setTrLang(code) { S.settings.trLang = code; saveSettings(); }
+  /** Pulsante Traduci con la bandiera; il click lungo (o il ▾) apre l'elenco delle lingue. */
+  function translateButton(onRun) {
+    const wrap = el('span', { class: 'tr-wrap' });
+    const btn = el('button', { class: 'small tr-btn' });
+    const pick = el('button', { class: 'small tr-pick', text: '\u25BE', title: 'Cambia la lingua della traduzione' });
+    const paint = function () {
+      const l = trLang();
+      btn.textContent = l[1] + ' Traduci';
+      btn.title = 'Traduzione in ' + l[2] + ': seleziona alcune parole per tradurre solo quelle, altrimenti tutta la frase (le parole da trovare restano coperte)';
+    };
+    btn.addEventListener('click', function () { onRun(btn, trLang()); });
+    pick.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const old = document.querySelector('.tr-menu'); if (old) { old.remove(); return; }
+      const menu = el('div', { class: 'tr-menu' }, TR_LANGS.map(function (l) {
+        return el('button', { class: 'tr-opt' + (l[0] === trLang()[0] ? ' on' : ''), onclick: function () { setTrLang(l[0]); paint(); menu.remove(); } },
+          el('span', { class: 'fl', text: l[1] }), el('span', { text: l[2] }));
+      }));
+      wrap.appendChild(menu);
+      setTimeout(function () {
+        document.addEventListener('pointerdown', function close(ev) {
+          if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('pointerdown', close, true); }
+        }, true);
+      }, 50);
+    });
+    paint();
+    wrap.appendChild(btn); wrap.appendChild(pick);
+    wrap._paint = paint;
+    return wrap;
+  }
+
+  function audioOffset(ls) { const o = ls && ls.options ? +ls.options.audioOffset : 0; return isFinite(o) ? o : 0; }
+  function playSeg(ls, seg) { const o = audioOffset(ls); return { start: Math.max(0, seg.start + o), end: seg.end + o }; }
+
+  function playSegment(seg, rawTimes) {
     if (!S.player) return;
     const ls = current();
+    const sg = rawTimes ? seg : playSeg(ls, seg);
     const redock = !!S.editor.previewId && !S.withText && $('#e-stage').classList.contains('docked');
-    S.editor.replay = { start: seg.start, end: seg.end, at: Date.now(), retried: false, redock: redock };
+    S.editor.replay = { start: sg.start, end: sg.end, at: Date.now(), retried: false, tries: 0, redock: redock };
     if (redock) dock('#e-stage', false);
-    S.player.seek(seg.start);
+    S.player.seek(sg.start);
     S.player.play();
   }
 
@@ -1228,6 +1386,7 @@
     $('#v-support').value = vb.support || 'en';
     $('#btn-vocab-ai').style.display = S.settings.apiKey ? '' : 'none';
     $('#btn-vocab-translate').style.display = S.settings.apiKey ? '' : 'none';
+    $('#btn-vocab-check').style.display = S.settings.apiKey ? '' : 'none';
     // template visivo delle schede (abbinamento e flashcards): gli stessi 18 delle attività
     const tb = $('#v-theme'); if (tb) { tb.innerHTML = ''; tb.appendChild(themeChips(vb.theme || 'classic', function (id) { vb.theme = id; touch(ls); renderVocabEditor(ls); }, { vocab: ls })); }
     const box = $('#e-vocab'); box.innerHTML = '';
@@ -1285,7 +1444,11 @@
       previewBox.innerHTML = '';
       previewBox.appendChild(el('img', { src: src, alt: '', referrerpolicy: 'no-referrer' }));
       previewBox.appendChild(el('div', { class: 'cap', text: caption || '' }));
+      // via d'uscita sempre visibile: bianca con ombra scura, cosi' si vede su qualunque foto e su qualunque tema.
+      // Non serve se tutto funziona (clic fuori, Esc, riclic) — serve proprio quando qualcosa non funziona.
+      previewBox.appendChild(el('button', { class: 'img-x', text: '\u2715', title: 'Chiudi (Esc)', onclick: function (e) { e.stopPropagation(); hideImgPreview(); } }));
     } else previewBox.querySelector('.cap').textContent = caption || '';
+    if (!previewBox.querySelector('.img-x')) previewBox.appendChild(el('button', { class: 'img-x', text: '\u2715', title: 'Chiudi (Esc)', onclick: function (e) { e.stopPropagation(); hideImgPreview(); } }));
     previewBox.classList.add('show');
     // a destra della miniatura se c'è spazio; altrimenti sotto (o sopra) la riga, mai sopra la riga stessa
     const r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, W = 392, H = 330;
@@ -1295,8 +1458,30 @@
     if (top + H > vh - 8) top = vh - H - 8;
     if (top < 8) top = 8;
     previewBox.style.left = left + 'px'; previewBox.style.top = top + 'px';
+    // chiusura garantita: un clic fuori o Esc. Senza questo l'ingrandimento aperto al clic non si toglierebbe piu'.
+    if (!previewBox._closer) {
+      previewBox._closer = function (e) {
+        if (e.type === 'keydown' && e.key !== 'Escape') return;
+        if (e.type === 'pointerdown' && previewBox.contains(e.target)) return;
+        hideImgPreview();
+      };
+    }
+    document.removeEventListener('pointerdown', previewBox._closer, true);
+    document.removeEventListener('keydown', previewBox._closer, true);
+    setTimeout(function () {
+      document.addEventListener('pointerdown', previewBox._closer, true);
+      document.addEventListener('keydown', previewBox._closer, true);
+    }, 30);
   }
-  function hideImgPreview() { if (previewBox) previewBox.classList.remove('show'); }
+  function hideImgPreview() {
+    if (!previewBox) return;
+    previewBox.classList.remove('show');
+    previewBox._for = null;
+    if (previewBox._closer) {
+      document.removeEventListener('pointerdown', previewBox._closer, true);
+      document.removeEventListener('keydown', previewBox._closer, true);
+    }
+  }
   function isPreviewShown() { return !!(previewBox && previewBox.classList.contains('show')); }
   function imgCaption(w) {
     const c = (w._imgs || [])[w._imgIdx];
@@ -2113,6 +2298,65 @@
   $('#btn-vocab-rules').addEventListener('click', function () { const ls = current(); if (ls) proposeVocabRules(ls); });
   $('#btn-vocab-ai').addEventListener('click', function () { const ls = current(); if (ls) proposeVocabAI(ls); });
   $('#btn-vocab-translate').addEventListener('click', function () { const ls = current(); if (ls) translateMissing(ls); });
+  $('#btn-vocab-check').addEventListener('click', function () { const ls = current(); if (ls) checkVocabTranslations(ls); });
+  /**
+   * Rilegge le parole utili DENTRO le frasi da cui vengono e segnala quelle la cui traduzione, da sola su una scheda,
+   * porterebbe fuori strada ("un conto" = "a bill" invece di "one thing is"). Dove serve propone di allungare
+   * l'espressione. Niente si applica da solo: ogni proposta ha il suo pulsante, ed e' annullabile.
+   */
+  function checkVocabTranslations(ls) {
+    const vb = vocabState(ls);
+    if (!S.settings.apiKey) return toast('Nessuna chiave API: apri "Impostazioni AI"');
+    const words = vb.words.filter(function (w) { return w.word && w.selected !== false; });
+    if (!words.length) return toast('Nessuna parola da controllare');
+    const st = $('#e-vocab-status'); st.textContent = 'Controllo ' + words.length + ' parole nel contesto del video…';
+    // Edoardo sceglie le parole utili GUARDANDO le frasi degli esercizi: e' li' che va giudicata la traduzione,
+    // il resto del video e' solo sfondo (precisazione sua, 3/9).
+    const frasi = ls.exercises.map(function (e) { return e.sentence; }).filter(Boolean);
+    const context = (ls.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 6000);
+    AI.checkVocab({ words: words.map(function (w) { return { word: w.word, translation: w.translation }; }), sentences: frasi, lang: ls.lang, support: vb.support, context: context, apiKey: S.settings.apiKey, model: S.settings.model })
+      .then(function (r) {
+        const dubbi = r.items.filter(function (i) { return i.verdict !== 'ok'; });
+        st.textContent = dubbi.length
+          ? dubbi.length + (dubbi.length === 1 ? ' traduzione da guardare' : ' traduzioni da guardare') + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '')
+          : 'Tutte le traduzioni tengono anche fuori dalla frase' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '');
+        renderVocabWarnings(ls, dubbi);
+      })
+      .catch(function (e) { st.textContent = '⚠ ' + e.message; });
+  }
+  function renderVocabWarnings(ls, dubbi) {
+    const host = $('#e-vocab-warn'); if (!host) return;
+    host.innerHTML = '';
+    if (!dubbi || !dubbi.length) return;
+    const box = el('div', { class: 'notice warn vocab-warn' });
+    box.appendChild(el('div', { class: 'row' },
+      el('b', { class: 'grow', text: '🔎 ' + dubbi.length + (dubbi.length === 1 ? ' traduzione da guardare' : ' traduzioni da guardare') }),
+      el('button', { class: 'small', text: '✕ Chiudi', onclick: function () { host.innerHTML = ''; } })));
+    dubbi.forEach(function (d) {
+      const vb = vocabState(ls);
+      const row = el('div', { class: 'vw-row' },
+        el('div', {}, el('b', { text: d.word }), el('span', { class: 'hint', text: ' = ' + (d.translation || '(senza traduzione)') }),
+          el('span', { class: 'badge ' + (d.verdict === 'sbagliata' ? 'bad' : ''), text: d.verdict })),
+        d.why ? el('div', { class: 'hint', text: d.why }) : null);
+      if (d.suggest && d.suggest.word) {
+        row.appendChild(el('div', { class: 'row' },
+          el('span', { class: 'hint', text: 'Proposta: ' }),
+          el('b', { text: d.suggest.word }),
+          el('span', { class: 'hint', text: ' = ' + (d.suggest.translation || '?') }),
+          el('button', { class: 'small primary', text: '✓ Usa questa', onclick: function () {
+            const w = vb.words.find(function (x) { return L.normalize(x.word) === L.normalize(d.word); });
+            if (!w) return toast('Parola non più nella lista');
+            w.word = d.suggest.word;
+            if (d.suggest.translation) w.translation = d.suggest.translation;
+            touch(ls); renderVocabEditor(ls);
+            row.remove();
+            toast('"' + d.word + '" è diventata "' + d.suggest.word + '" · annulla con ' + undoKeyLabel(), 5000);
+          } })));
+      }
+      box.appendChild(row);
+    });
+    host.appendChild(box);
+  }
   $('#btn-vocab-add').addEventListener('click', function () { const ls = current(); if (!ls) return; vocabState(ls).words.push({ id: uid(), word: '', translation: '', image: '', selected: true, inExercise: false, source: 'manual' }); touch(ls); renderVocabEditor(ls); const rows = $$('#e-vocab .vocab-row'); const last = rows[rows.length - 1]; if (last) last.querySelector('.v-word').focus(); });
   $('#v-matching').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.matching = $('#v-matching').checked; touch(ls); } });
   $('#v-flash').addEventListener('change', function () { const ls = current(); if (ls) { vocabState(ls).cards.flashcards = $('#v-flash').checked; touch(ls); syncVocabCards(); } });
@@ -2897,6 +3141,7 @@
   /** Prossima sezione della lezione. Coda vuota → riepilogo. Play diretto sul video (senza "Inizia"): la coda parte dalle sezioni dopo il video. */
   function advancePhase() {
     const st = S.student; if (!st || !S.player) return;
+    hideImgPreview();   // un ingrandimento aperto non deve seguirti nella sezione successiva (segnalato il 3/9)
     panelTheme(null);   // il template delle schede vale solo per le schede
     if (!st.queue) { const f = lessonFlow(st.lesson); st.queue = f.slice(f.findIndex(function (s) { return s.kind === 'video'; }) + 1); }
     const step = st.queue.shift();
@@ -2959,6 +3204,7 @@
     if (st.replay) {
       const rp = st.replay;
       if (rp.start != null && t < rp.start - 1.5 && Date.now() - rp.at < 4000) { if (!rp.retried) { rp.retried = true; S.player.seek(rp.start); S.player.play(); } return; }
+      if (nudgeReplay(rp)) return;
       if (t >= rp.end || S.player.state() === 0) { S.player.pause(); st.replay = null; if (rp.redock) dock('#s-stage', true); }
       return;
     }
@@ -2975,8 +3221,10 @@
     st.lastT = t; st.lastAt = now;
     const elapsed = prevAt ? (now - prevAt) / 1000 * (S.player.kind === 'mock' ? (S.speed || 1) : 1) : 0;
     const natural = prev != null && t >= prev && t - prev <= elapsed + 1.5;
-    // il video si ferma QUANDO la frase e' finita, mai un attimo prima: meglio due decimi in piu' che l'ultima parola mozzata
-    const next = natural ? ls.exercises.find(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && exerciseReady(e) && t >= e.markerTime && prev < e.markerTime; }) : null;
+    // il video si ferma QUANDO la frase e' finita, mai un attimo prima: meglio due decimi in piu' che l'ultima parola mozzata.
+    // Il segnaposto e' un tempo della trascrizione, quindi segue la sincronia audio scelta per la lezione.
+    const off = audioOffset(ls);
+    const next = natural ? ls.exercises.find(function (e) { return (!st.done.has(e.id) || e.id === st.redo) && exerciseReady(e) && t >= e.markerTime + off && prev < e.markerTime + off; }) : null;
     if (!next && st.lock && S.player.state() === 1) {
       // barra bloccata: se si è andati oltre un esercizio ancora da fare, si torna all'inizio della sua frase
       const passed = ls.exercises.find(function (e) { return !st.done.has(e.id) && t > e.markerTime + 1.5; });
@@ -3018,6 +3266,7 @@
   /** "Parliamone": una domanda alla volta, grande, con le espressioni utili; si parla, non si scrive. Poi la sezione successiva. */
   function renderTalk(qs, before) {
     const st = S.student; const ls = st.lesson;
+    hideImgPreview();
     const p = $('#s-panel'); p.innerHTML = '';
     dock('#s-stage', true);
     $('#s-stage').classList.add('cards');
@@ -3044,15 +3293,14 @@
     const nav = el('div', { class: 'row fc-nav' });
     nav.appendChild(el('button', { class: 'small', text: '◀ Indietro', disabled: i === 0 ? 'disabled' : null, onclick: function () { st.talkIdx = i - 1; renderTalk(qs, before); } }));
     if (S.settings.apiKey) {
-      const trBtn = el('button', { class: 'small', text: '🌐 Traduci', title: 'Traduzione della domanda' });
-      trBtn.addEventListener('click', function () {
+      nav.appendChild(translateButton(function (trBtn, lang) {
+        const etichetta = trBtn.textContent;
         trBtn.disabled = true; trBtn.textContent = '… traduco';
-        AI.translateSentence({ text: q.text, whole: true, sentence: q.text, lang: ls.lang, context: '', apiKey: S.settings.apiKey, model: S.settings.model })
-          .then(function (r) { fb.textContent = r.translation; fb.style.color = 'var(--muted)'; })
+        AI.translateSentence({ text: q.text, whole: true, sentence: q.text, lang: ls.lang, context: '', target: lang[3], apiKey: S.settings.apiKey, model: S.settings.model })
+          .then(function (r) { fb.textContent = lang[1] + ' ' + r.translation; fb.style.color = 'var(--muted)'; })
           .catch(function (e) { toast('AI: ' + e.message, 6000); })
-          .then(function () { trBtn.disabled = false; trBtn.textContent = '🌐 Traduci'; });
-      });
-      nav.appendChild(trBtn);
+          .then(function () { trBtn.disabled = false; trBtn.textContent = etichetta; });
+      }));
     }
     // etichetta dell'ultimo passo: dipende da cosa viene dopo nella struttura (video, altre sezioni o riepilogo)
     const nextStep = (st.queue && st.queue[0]) || null;
@@ -3064,10 +3312,11 @@
   }
   function replaySegment(ex) {
     const st = S.student;
-    st.replay = { start: ex.segment.start, end: ex.segment.end, at: Date.now(), retried: false, redock: false };
+    const sg = playSeg(st.lesson, ex.segment);
+    st.replay = { start: sg.start, end: sg.end, at: Date.now(), retried: false, tries: 0, redock: false };
     // di default durante il riascolto la frase sparisce e il video torna grande: ci si concentra sull'ascolto
     if (!S.withText && $('#s-stage').classList.contains('docked')) { st.replay.redock = true; dock('#s-stage', false); }
-    S.player.seek(ex.segment.start);
+    S.player.seek(sg.start);
     S.player.play();
   }
   function finishExercise(ex, correct) {
@@ -3139,9 +3388,8 @@
       // escono come "___" (1/9, Edoardo: "se clicco su traduci prima che lo studente scrive le parole appare la frase
       // intera e non va bene perché sarebbe un suggerimento"). Nel riordino non c'è niente da mascherare — la risposta è
       // l'ordine di TUTTE le parole — quindi lì prima di risolvere si traduce solo quello che lo studente seleziona.
-      const trBtn = el('button', { class: 'small', text: '🌐 Traduci', title: 'Traduzione in inglese britannico: seleziona alcune parole per tradurre solo quelle, altrimenti tutta la frase (le parole da trovare restano coperte)' });
       const trBox = el('div', { class: 'translation', style: 'display:none' });
-      trBtn.addEventListener('click', function () {
+      const trWrap = translateButton(function (trBtn, lang) {
         const done = solved || !!opts.review || preview;
         const sel = String(window.getSelection ? window.getSelection().toString() : '').trim();
         const partial = sel && sel.length < ex.sentence.length && ex.sentence.toLowerCase().indexOf(sel.toLowerCase().slice(0, 30)) !== -1;
@@ -3152,18 +3400,19 @@
           return;
         }
         const hide = done || partial ? [] : EX.hiddenWords(ex);
+        const etichetta = trBtn.textContent;
         trBtn.disabled = true; trBtn.textContent = '… traduco';
-        AI.translateSentence({ text: partial ? sel : ex.sentence, whole: !partial, sentence: ex.sentence, lang: ls.lang, context: '', hide: hide, literal: !done && (ex.type === 'extra' || ex.type === 'wrong'), apiKey: S.settings.apiKey, model: S.settings.model })
+        AI.translateSentence({ text: partial ? sel : ex.sentence, whole: !partial, sentence: ex.sentence, lang: ls.lang, context: '', hide: hide, target: lang[3], literal: !done && (ex.type === 'extra' || ex.type === 'wrong'), apiKey: S.settings.apiKey, model: S.settings.model })
           .then(function (r) {
             trBox.style.display = ''; trBox.innerHTML = '';
-            trBox.appendChild(el('span', { class: 'hint', text: (partial ? '"' + sel + '" → ' : 'Traduzione: ') }));
+            trBox.appendChild(el('span', { class: 'hint', text: (partial ? '"' + sel + '" → ' : lang[1] + ' ') }));
             trBox.appendChild(el('b', { text: r.translation }));
             if (hide.length) trBox.appendChild(el('div', { class: 'hint', text: '___ = quello che devi trovare tu. Dopo la risposta la traduzione si vede per intero.' }));
           })
           .catch(function (e) { toast('AI: ' + e.message, 6000); })
-          .then(function () { trBtn.disabled = false; trBtn.textContent = '🌐 Traduci'; });
+          .then(function () { trBtn.disabled = false; trBtn.textContent = etichetta; });
       });
-      actions.appendChild(trBtn);
+      actions.appendChild(trWrap);
       actions.appendChild(fb);   // "Giusto!" a destra dei pulsanti, sulla stessa riga: niente righe in più da scorrere
       p.appendChild(actions); p.appendChild(trBox);
     } else { actions.appendChild(fb); p.appendChild(actions); }
@@ -3475,31 +3724,51 @@
       const chips = el('div', { class: 'chips' });
       const corr = el('input', { type: 'text', placeholder: 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', style: 'margin-top:10px;max-width:16em;display:none' });
       corr.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
+      // L'aiuto indica una ZONA, non la parola: due o tre parole attorno a quella da trovare, che lampeggiano.
+      // Indirizza lo sguardo senza rispondere al posto dello studente (richiesta di Edoardo, 3/9: "deve essere un
+      // suggerimento che indirizza ma non suggerisce direttamente la parola"). Prima il vecchio aiuto sbiadiva
+      // qualche parola ma ridisegnava i chip SENZA applicare lo sbiadimento: a schermo non succedeva niente.
+      let zone = null;
       const render = function () {
         chips.innerHTML = '';
         d.shown.forEach(function (w, i) {
-          chips.appendChild(el('span', { class: 'chip' + (i === selected ? ' sel' : ''), text: w, onclick: function () { selected = i; render(); if (ex.type === 'wrong') { corr.style.display = ''; corr.focus(); } } }));
+          const inZone = zone && i >= zone.from && i <= zone.to;
+          chips.appendChild(el('span', { class: 'chip' + (i === selected ? ' sel' : '') + (inZone ? ' zone' : ''), text: w, onclick: function () { selected = i; render(); if (ex.type === 'wrong') { corr.style.display = ''; corr.focus(); } } }));
+        });
+      };
+      const flashZone = function () {
+        $$('.chip.zone', chips).forEach(function (c) {
+          c.classList.remove('zone-flash');
+          void c.offsetWidth;   // riavvia l'animazione anche al secondo aiuto
+          c.classList.add('zone-flash');
         });
       };
       render();
       body.appendChild(chips);
       if (ex.type === 'wrong') body.appendChild(corr);
       getAnswer = function () { return ex.type === 'extra' ? selected : { index: selected, correction: corr.value }; };
-      const dimmed = new Set();
       giveHint = function () {
         const target = ex.type === 'extra' ? d.extraIndex : d.wrongIndex;
         if (ex.type === 'wrong' && selected === target) return sameWord(corr.value, d.answer) ? false : revealLetter(corr, d.answer);
-        // si sbiadiscono alcune parole sicuramente giuste (un terzo alla volta); l'ultimo aiuto lascia solo quella da trovare
-        const rest = d.shown.map(function (w, i) { return i; }).filter(function (i) { return i !== target && !dimmed.has(i); });
-        if (!rest.length) { if (ex.type === 'wrong') { selected = target; render(); corr.style.display = ''; corr.focus(); return true; } return false; }
-        const n = Math.max(1, Math.ceil(d.shown.length / 3));
-        EX.shuffle(rest, L.rng(Date.now() % 7919)).slice(0, n).forEach(function (i) { dimmed.add(i); });
+        const n = d.shown.length;
+        // la parola cercata NON sta sempre in mezzo alla zona, altrimenti la si indovina dalla posizione
+        const makeZone = function (size, lo, hi) {
+          size = Math.min(size, n);
+          const off = Math.floor(Math.random() * size);
+          let from = target - off;
+          from = Math.max(lo, Math.min(hi - size + 1, from));
+          from = Math.max(0, Math.min(n - size, from));
+          return { from: from, to: from + size - 1 };
+        };
+        if (!zone) zone = makeZone(5, 0, n - 1);
+        else if (zone.to - zone.from + 1 > 3) zone = makeZone(3, zone.from, zone.to);
+        else if (ex.type === 'wrong') { selected = target; render(); corr.style.display = ''; corr.focus(); return true; }
+        else return false;
         render();
+        flashZone();
+        toast('La parola in più è fra quelle segnate', 2500);
         return true;
       };
-      const renderBase2 = render;
-      const renderDim = function () { renderBase2(); $$('.chip', chips).forEach(function (c, i) { if (dimmed.has(i)) c.classList.add('dim'); }); };
-      chips.innerHTML = ''; renderDim();
       markResult = function (res) {
         const all = $$('.chip', chips);
         const c = all[selected];
@@ -4260,9 +4529,17 @@
       img.addEventListener('error', textBack);
       d.appendChild(img);
       if (!big) {
-        // scheda abbinamento: al passaggio del mouse la foto si vede grande (senza didascalia: la parola è da indovinare)
-        d.addEventListener('mouseenter', function () { showImgPreview(d, w.image, ''); });
-        d.addEventListener('mouseleave', hideImgPreview);
+        // Scheda abbinamento: la foto si ingrandisce al CLIC, non al passaggio del mouse. Con l'hover capitava che
+        // l'ingrandimento restasse aperto e coprisse le altre parole (segnalato da Edoardo, 3/9) — e su tablet
+        // il passaggio del mouse non esiste proprio. Si chiude cliccando di nuovo, altrove o con Esc.
+        d.classList.add('zoomable');
+        d.appendChild(el('span', { class: 'zoom-hint', text: '⤢ ingrandisci' }));
+        d.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (previewBox && previewBox.classList.contains('show') && previewBox._for === w.image) return hideImgPreview();
+          showImgPreview(d, w.image, '');
+          if (previewBox) previewBox._for = w.image;
+        });
       }
     } else textBack();
     return d;
@@ -4296,6 +4573,7 @@
   }
   function renderVocabCard() {
     const st = S.student; const ls = st.lesson;
+    hideImgPreview();
     const p = $('#s-panel'); p.innerHTML = '';
     const kind = st.cards[st.cardIdx];
     // le schede prendono il template scelto per le Parole utili; il contenuto sta in un wrapper così le decorazioni restano tra un round e l'altro
@@ -4592,6 +4870,6 @@
     }
     renderHome();
   }
-  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk };
+  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings };
   init();
 })();
