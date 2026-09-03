@@ -43,28 +43,48 @@
     const skip = new Set(VOCAB_SKIP[o.lang] || VOCAB_SKIP.it);
     const support = o.support || (o.lang === 'en' ? 'it' : 'en');
     const advanced = /^(B1|B2|C1|C2)$/i.test(String(o.level || 'B1'));
+    const strip = function (w) { return String(w || '').replace(/^(?:l|un|d|dell|all|nell|sull|dall|quell|c|s|n|m|t|v|gl|degl|agl|negl|sugl)['’]/i, ''); };
+    // Nomi propri (James, Epstein, Stati Uniti): maiuscola in mezzo alla frase e mai minuscola altrove → non sono lessico.
+    // Con i sottotitoli automatici (tutto minuscolo) non si possono riconoscere: lì decide solo il modello.
+    const cap = {}, low = {};
+    const seeCase = function (core, sentenceStart) {
+      const k = L.normalize(strip(core)); if (!k) return;
+      if (/^\p{Lu}/u.test(strip(core))) { if (!sentenceStart) cap[k] = (cap[k] || 0) + 1; }
+      else low[k] = (low[k] || 0) + 1;
+    };
     const inEx = {};
     (exercises || []).forEach(function (ex) {
-      L.tokenize(ex.sentence || '').forEach(function (t) { const k = L.normalize(String(t.core || '').replace(/^(?:l|un|d|dell|all|nell|sull|dall|quell|c|s|n|m|t|v|gl|degl|agl|negl|sugl)['’]/i, '')); if (k) inEx[k] = (inEx[k] || 0) + 1; });
+      L.tokenize(ex.sentence || '').forEach(function (t, i, arr) {
+        const k = L.normalize(strip(t.core)); if (k) inEx[k] = (inEx[k] || 0) + 1;
+        seeCase(t.core, i === 0 || /[.!?…]$/.test(arr[i - 1].post || ''));
+      });
     });
     const f = {}, orig = {};
-    const strip = function (w) { return String(w || '').replace(/^(?:l|un|d|dell|all|nell|sull|dall|quell|c|s|n|m|t|v|gl|degl|agl|negl|sugl)['’]/i, ''); };
-    for (const c of chunks || []) for (const t of c.tokens || []) {
-      const core = strip(t.core), norm = L.normalize(core);
-      if (!norm || core.length < 4 || !L.isContent(core, o.lang) || /\d/.test(core) || skip.has(norm)) continue;
-      f[norm] = (f[norm] || 0) + 1;
-      if (!orig[norm]) orig[norm] = core.toLowerCase();
+    for (const c of chunks || []) {
+      const toks = c.tokens || [];
+      toks.forEach(function (t, i) {
+        seeCase(t.core, i === 0 || /[.!?…]$/.test((toks[i - 1] && toks[i - 1].post) || ''));
+        const core = strip(t.core), norm = L.normalize(core);
+        if (!norm || core.length < 4 || !L.isContent(core, o.lang) || /\d/.test(core) || skip.has(norm)) return;
+        f[norm] = (f[norm] || 0) + 1;
+        if (!orig[norm]) orig[norm] = core.toLowerCase();
+      });
     }
     Object.keys(inEx).forEach(function (k) { if (!f[k] && k.length >= 4 && L.isContent(k, o.lang) && !/\d/.test(k) && !skip.has(k)) { f[k] = 1; orig[k] = k; } });
     const list = Object.keys(f).map(function (k) {
       const len = orig[k].length;
-      let score = (inEx[k] ? 10 : 0) + Math.min(f[k], 6) * 0.8 + Math.min(len, 12) * 0.35;
-      // parole trasparenti per chi parla la lingua d'appoggio (globale/global) e parole di base (casa, mangiare) non sono "utili" a un B1
-      const cognate = L.isCognate(orig[k], o.lang, support), basic = advanced && L.isBasic(orig[k], o.lang);
+      // Stare in un esercizio rende la parola PERTINENTE, non utile: prima valeva +10 e batteva tutto il resto,
+      // così "abbiamo" e "quattro" finivano in cima solo perché stavano in una frase scelta (segnalato il 3/9).
+      let score = (inEx[k] ? 3 : 0) + Math.min(f[k], 6) * 0.8 + Math.min(len, 12) * 0.35;
+      const cognate = L.isCognate(orig[k], o.lang, support), basic = L.isBasic(orig[k], o.lang), proper = !!cap[k] && !low[k];
       if (cognate) score *= 0.3;
       if (basic) score *= 0.2;
-      return { word: orig[k], inExercises: !!inEx[k], freq: f[k], score: Math.round(score * 100) / 100, cognate: cognate, basic: basic };
-    }).filter(function (x) { return !(x.cognate && x.basic); });
+      return { word: orig[k], inExercises: !!inEx[k], freq: f[k], score: Math.round(score * 100) / 100, cognate: cognate, basic: basic, proper: proper };
+    }).filter(function (x) {
+      if (x.proper) return false;                 // nomi propri: mai
+      if (advanced && x.basic) return false;      // da B1 in su le parole di base non sono "utili": si scartano, non si penalizzano
+      return !(x.cognate && x.basic);
+    });
     list.sort(function (a, b) { return b.score - a.score || a.word.localeCompare(b.word); });
     return list.slice(0, o.n);
   }

@@ -1286,10 +1286,14 @@
     // avviato, 5 = caricato ma fermo. In questi stati il player STA lavorando (rete lenta, primo avvio, annuncio che
     // non ha ancora dichiarato la sua durata): dire 'premi tu' dopo 3 secondi è un falso allarme, e chi preme fa
     // ripartire il video da capo peggiorando l'attesa. Qui si aspetta fino a 30 s, dicendo che sta caricando.
-    const loading = st === 3 || st === -1 || st === 5 || inAd(ls);
+    const ad = inAd(ls);
+    const loading = st === 3 || st === -1 || st === 5 || ad;
     if (loading && dt > 1500 && !rp.waitSaid) { rp.waitSaid = true; toast('Il video sta caricando… aspetta, riparte da solo', 3000); }
     if (dt > (loading ? 30000 : 6000)) { rp.done = rp.give = true; toast('Il video non riparte: premi ▶ sul video una volta e riprova', 5000); return false; }
-    if (dt > 250 && Date.now() - (rp.lastTry || 0) > 600 && (rp.tries || 0) < 40) { rp.tries = (rp.tries || 0) + 1; rp.lastTry = Date.now(); S.player.play(); }
+    // si insiste con play() SOLO se il player e' fermo (in pausa o caricato e basta): mentre sta caricando (3) o
+    // durante uno spot un altro play() non serve e rischia di far ripartire il caricamento da capo
+    const idle = st === 2 || st === 5 || (st === -1 && dt > 2500);
+    if (idle && !ad && dt > 250 && Date.now() - (rp.lastTry || 0) > 800 && (rp.tries || 0) < 12) { rp.tries = (rp.tries || 0) + 1; rp.lastTry = Date.now(); S.player.play(); }
     return true;   // ancora in attesa: il tick non deve chiudere il riascolto
   }
 

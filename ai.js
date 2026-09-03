@@ -93,7 +93,9 @@
     }
     const j = await res.json();
     const text = (j.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
-    return { text: text, usage: j.usage || null, model: j.model || o.model };
+    // Risposta tagliata dal limite di token: il JSON e' incompleto e non si puo' usare. Meglio dirlo che 'Nessun JSON'.
+    if (j.stop_reason === 'max_tokens') throw new Error('Risposta del modello troncata (limite di ' + (o.maxTokens || 6000) + ' token): riduci il numero di esercizi o la durata e riprova');
+    return { text: text, usage: j.usage || null, model: j.model || o.model, stop: j.stop_reason || null };
   }
 
   function estimateCost(usage, model) {
@@ -106,7 +108,9 @@
     let t = String(text || '').trim();
     t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
     const a = t.indexOf('{'), b = t.lastIndexOf('}');
-    if (a === -1 || b === -1 || b < a) throw new Error('Nessun JSON nella risposta del modello');
+    // Senza JSON il modello ha scritto prosa (un rifiuto, una domanda, una spiegazione): si mostra COSA ha scritto,
+    // altrimenti l'insegnante vede solo 'AI non usata' e non puo' capire se e' il tema del video o un guasto (3/9).
+    if (a === -1 || b === -1 || b < a) throw new Error('Nessun JSON nella risposta del modello' + (t ? ' — ha scritto: «' + t.slice(0, 220).replace(/\s+/g, ' ') + (t.length > 220 ? '…' : '') + '»' : ' (risposta vuota)'));
     t = t.slice(a, b + 1);
     try { return JSON.parse(t); }
     catch (e) {
@@ -282,13 +286,17 @@
 
     return {
       exercises: exercises, cuts: cuts, title: plan.title || '', notes: plan.notes || '', warnings: warnings,
-      vocab: cleanVocab(plan.vocab),
+      vocab: cleanVocab(plan.vocab, { lang: lang, level: ctx.level }),
       stats: { duration: D, target: target, effective: effective, removed: D - effective, n: exercises.length }
     };
   }
 
   /** Normalizza la lista di parole utili restituita dal modello: [{word, translation, inExercise}], senza doppioni. */
-  function cleanVocab(list) {
+  function cleanVocab(list, o) {
+    o = o || {};
+    // rete di sicurezza sotto il prompt: da B1 in su una parola di base (abbiamo, quattro) non e' mai "utile", anche se il
+    // modello la propone; le espressioni di piu' parole ("un conto e'") passano sempre
+    const advanced = /^(B1|B2|C1|C2)$/i.test(String(o.level || 'B1'));
     const out = [], seen = {};
     (Array.isArray(list) ? list : []).forEach(function (v) {
       if (!v || typeof v !== 'object') return;
@@ -296,6 +304,7 @@
       if (!word || word.length > 40) return;
       const k = L.normalize(word);
       if (!k || seen[k]) return;
+      if (advanced && !/\s/.test(word) && L.isBasic(word, o.lang || 'it')) return;
       seen[k] = 1;
       out.push({ word: word, translation: String(v.translation || '').trim(), inExercise: !!v.inExercise });
     });
@@ -316,7 +325,7 @@
       'EXERCISE SENTENCES:', sentences || '(none)', '', 'VIDEO TEXT:', text].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    return { vocab: cleanVocab(plan.vocab), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+    return { vocab: cleanVocab(plan.vocab, { lang: params.lang, level: params.level }), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /**
@@ -714,7 +723,7 @@
       'WORDS: ' + words.join(', '), '', 'CONTEXT:', String(params.context || '').slice(0, 6000)].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1200, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    const list = cleanVocab(plan.vocab);
+    const list = cleanVocab(plan.vocab, { level: 'A1' });   // qui si TRADUCE una lista scelta dall'insegnante: non si scarta niente
     const map = {};
     list.forEach(function (v) { if (v.translation) wordKeys(v.word).forEach(function (k) { if (!(k in map)) map[k] = v.translation; }); });
     const translations = {};
@@ -739,7 +748,7 @@
     const msgs = buildMessages({ chunks: chunks, n: params.n, auto: params.auto, types: params.types, lang: lang, level: params.level, focus: params.focus, duration: duration, target: target, range: params.range, support: params.support, nVocab: params.nVocab, tricky: params.tricky });
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: msgs.system, user: msgs.user, maxTokens: params.maxTokens, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    const applied = applyPlan(plan, { chunks: chunks, lang: lang, duration: duration, target: target, n: params.n, types: params.types, auto: params.auto });
+    const applied = applyPlan(plan, { chunks: chunks, lang: lang, duration: duration, target: target, n: params.n, types: params.types, auto: params.auto, level: params.level });
     applied.chunks = chunks;
     applied.ai = { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL), raw: res.text };
     return applied;
