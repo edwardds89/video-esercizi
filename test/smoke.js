@@ -1483,23 +1483,51 @@ async function noOverflow(page, where) {
   const altezze = await page.$$eval('#s-panel .match .col .mchip', function (c) { return c.map(function (x) { return Math.round(x.getBoundingClientRect().height); }); });
   assert.ok(Math.max.apply(null, altezze) - Math.min.apply(null, altezze) <= 2, 'blocchi proporzionati: ' + JSON.stringify(altezze));
   assert.ok(await page.$('#s-panel .back .zoom-hint'), 'sulla foto c\'e\' scritto come ingrandirla');
+  // la foto sta DENTRO il rettangolo arrotondato: niente pixel fuori dal bordo del blocco (v61)
+  const fuori = await page.$$eval('#s-panel .match .col .mchip', function (cs) {
+    return cs.map(function (c) {
+      const im = c.querySelector('img'); if (!im) return 0;
+      const a = c.getBoundingClientRect(), b = im.getBoundingClientRect();
+      return Math.round(Math.max(0, a.top - b.top, b.bottom - a.bottom, a.left - b.left, b.right - a.right));
+    });
+  });
+  assert.ok(Math.max.apply(null, fuori.concat([0])) === 0, 'la foto non esce dal blocco: ' + JSON.stringify(fuori));
   const aperto = function () { return page.evaluate(function () { const p = document.querySelector('.img-preview'); return !!(p && p.classList.contains('show')); }); };
   // il passaggio del mouse NON deve aprire niente (prima restava aperto e copriva le parole)
   await page.hover('#s-panel .back.zoomable');
   await page.waitForTimeout(400);
   assert.ok(!(await aperto()), 'il passaggio del mouse non apre l\'ingrandimento');
-  await page.click('#s-panel .back.zoomable');
+  // IL CLIC SULLA FOTO E' L'ABBINAMENTO, non lo zoom (v61: 'non mi fa fare il matching, se clicco con la parola
+  // giusta da abbinare mi si apre ogni volta il pop-up'). Lo zoom sta solo sul pulsantino.
+  await page.click('#s-panel .match .col .mchip:not(.target)');              // prima la parola
+  await page.waitForTimeout(150);
+  await page.click('#s-panel .back.zoomable');                              // poi una foto
+  await page.waitForTimeout(350);
+  assert.ok(!(await aperto()), 'il clic sulla foto NON apre l\'ingrandimento');
+  const scelto = await page.evaluate(function () {
+    return { coppie: document.querySelectorAll('#s-panel .match-done .mpair').length,
+             sbagliato: !!document.querySelector('#s-panel .mchip.wrongpick'),
+             sel: document.querySelectorAll('#s-panel .mchip.sel').length };
+  });
+  assert.ok(scelto.coppie + (scelto.sbagliato ? 1 : 0) > 0, 'il clic sulla foto conta come abbinamento (giusto o sbagliato), non come zoom');
+  await page.waitForTimeout(800);
+  // il pulsantino apre e chiude
+  await page.click('#s-panel .back .zoom-hint');
   await page.waitForTimeout(300);
-  assert.ok(await aperto(), 'il clic lo apre');
+  assert.ok(await aperto(), 'il pulsantino "ingrandisci" lo apre');
   assert.ok(await page.$('.img-preview .img-x'), 'e c\'e\' sempre la ✕ per chiuderlo');
+  await page.click('#s-panel .back .zoom-hint');
+  await page.waitForTimeout(300);
+  assert.ok(!(await aperto()), 'e ricliccandolo si chiude (non si riapre da solo)');
+  await page.click('#s-panel .back .zoom-hint'); await page.waitForTimeout(300);
   await page.click('.img-preview .img-x');
   await page.waitForTimeout(300);
   assert.ok(!(await aperto()), 'la ✕ chiude');
-  await page.click('#s-panel .back.zoomable'); await page.waitForTimeout(250);
+  await page.click('#s-panel .back .zoom-hint'); await page.waitForTimeout(250);
   await page.keyboard.press('Escape'); await page.waitForTimeout(250);
   assert.ok(!(await aperto()), 'Esc chiude');
   // e non deve seguirti nella sezione successiva
-  await page.click('#s-panel .back.zoomable'); await page.waitForTimeout(250);
+  await page.click('#s-panel .back .zoom-hint'); await page.waitForTimeout(250);
   assert.ok(await aperto(), 'riaperto per la prova');
   await page.click('#s-panel .actions button.link');   // "Salta le schede"
   await page.waitForTimeout(600);
@@ -1533,6 +1561,83 @@ async function noOverflow(page, where) {
   const z2 = await zona();
   assert.strictEqual(z2.n, 3, 'il secondo aiuto stringe a tre');
   assert.ok(z2.testi.indexOf(info.parola) !== -1, 'e la parola c\'e\' ancora');
+
+  console.log('22. taglio "fino alla fine del video" e annuncio YouTube che non manda in tilt la lezione');
+  await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForFunction(function () { return document.querySelectorAll('#e-cuts .cut-row').length > 0; });
+  await page.waitForTimeout(500);
+  await page.click('#e-cuts .cut-row:first-child button:has-text("Fino alla fine")');
+  await page.waitForTimeout(400);
+  const fineTaglio = await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    return { max: ls.cuts.map(function (c) { return c.end; }).sort(function (a, b) { return b - a; })[0], durata: ls.duration };
+  });
+  assert.ok(Math.abs(fineTaglio.max - fineTaglio.durata) < 0.11, 'il taglio arriva alla fine del video (' + fineTaglio.max + ' vs ' + fineTaglio.durata + ')');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(300);
+
+  // durante un annuncio il player restituisce i tempi DELLO SPOT: niente esercizi, niente riascolti chiusi a vuoto
+  const ad = await page.evaluate(function () {
+    const S = window.VLApp.S, ls = S.lessons[S.currentId];
+    const vera = S.player.duration;
+    S.player.duration = function () { return 15; };          // durata tipica di un annuncio
+    const inAdOra = ls.duration > 20;
+    S.player.duration = vera;
+    return { durataVideo: ls.duration, riconoscibile: inAdOra };
+  });
+  assert.ok(ad.riconoscibile, 'il video di prova è abbastanza lungo da distinguere uno spot');
+  const durante = await page.evaluate(function () {
+    const S = window.VLApp.S, ls = S.lessons[S.currentId];
+    const vera = S.player.duration;
+    S.player.duration = function () { return 15; };
+    const esito = { inAd: window.VLApp.inAd(ls) };
+    S.player.duration = vera;
+    esito.fuoriAd = window.VLApp.inAd(ls);
+    return esito;
+  });
+  assert.strictEqual(durante.inAd, true, 'con la durata dello spot l\'app capisce che c\'è un annuncio');
+  assert.strictEqual(durante.fuoriAd, false, 'e con la durata vera no');
+
+  // ASPETTARE NON E' ESSERE BLOCCATI (v62, 'ci ha messo 20 secondi per partire'): un player che sta caricando
+  // (stato 3) per 8 secondi NON deve far dire 'Il video non riparte: premi ▶'; deve dire che sta caricando,
+  // e non deve tempestarlo di play(). Un player davvero fermo (stato 2, che ignora play) viene riprovato e poi,
+  // se non parte, il riascolto viene CHIUSO (prima restava un riascolto morto e l'editor non tornava normale).
+  const toastSeen = function () { return page.evaluate(function () { const t = document.querySelector('#toast'); return t && t.classList.contains('show') ? t.textContent : ''; }); };
+  await page.evaluate(function () {
+    const S = window.VLApp.S, p = S.player;
+    p._realPlay = p.play; p._realState = p.state; p._plays = 0;
+    p.play = function () { p._plays++; };                 // sordo
+    p.state = function () { return 3; };                  // "sta caricando"
+  });
+  await page.click('#e-exercises .ex-card:first-child button.play:has-text("▶")');
+  await page.waitForTimeout(2200);
+  let tst = await toastSeen();
+  assert.ok(/caricando/.test(tst), 'dopo 2 s dice che sta caricando (era: "' + tst + '")');
+  await page.waitForTimeout(6000);
+  const durante8 = await page.evaluate(function () { const S = window.VLApp.S; return { replay: !!S.editor.replay, plays: S.player._plays, done: !!(S.editor.replay && S.editor.replay.done) }; });
+  assert.ok(durante8.replay && !durante8.done, 'dopo 8 s di caricamento il riascolto e\' ancora in attesa, non abbandonato');
+  assert.ok(durante8.plays <= 3, 'mentre carica non si insiste con play() (chiamate: ' + durante8.plays + ')');
+  tst = await toastSeen();
+  assert.ok(!/non riparte/.test(tst), 'niente falso allarme "non riparte" mentre carica');
+  // ora il player e' FERMO (in pausa) e ignora play(): si riprova, poi si molla e si chiude il riascolto
+  await page.evaluate(function () {
+    const S = window.VLApp.S, p = S.player;
+    p.state = function () { return 2; }; p._plays = 0;
+    S.editor.replay.at = Date.now(); S.editor.replay.waitSaid = false; S.editor.replay.tries = 0;
+  });
+  await page.waitForTimeout(7000);
+  const fermo = await page.evaluate(function () { const S = window.VLApp.S; return { replay: !!S.editor.replay, plays: S.player._plays }; });
+  assert.ok(fermo.plays >= 3, 'con il player fermo si riprova play() piu\' volte (chiamate: ' + fermo.plays + ')');
+  assert.ok(!fermo.replay, 'quando si rinuncia il riascolto viene chiuso, non lasciato appeso');
+  tst = await toastSeen();
+  assert.ok(/non riparte/.test(tst), 'e solo allora si avvisa (era: "' + tst + '")');
+  await page.evaluate(function () { const p = window.VLApp.S.player; p.play = p._realPlay; p.state = p._realState; });
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');

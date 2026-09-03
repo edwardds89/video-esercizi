@@ -295,6 +295,29 @@ test('vocabCandidates: parole piene, priorità a quelle degli esercizi, niente a
   const inEx = v.filter(function (x) { return x.inExercises; }).length;
   assert.ok(inEx >= 6, 'la maggior parte viene dalle frasi degli esercizi: ' + inEx);
 });
+test('vocabCandidates a B1: niente forme di base (abbiamo, sappiamo, quattro, alcuni), niente nomi propri (James Epstein, Stati Uniti)', function () {
+  // 3/9: 'per livello B1 "abbiamo" "quattro" "sappiamo" che significa? sono parole troppo facili!'
+  ['abbiamo', 'sappiamo', 'quattro', 'alcuni', 'realtà', 'isola', 'esistono', 'parliamo', 'finiscono', 'amiche', 'città', 'chiaramente', 'bellissimo', 'dormivano'].forEach(function (w) {
+    assert.ok(L.isBasic(w, 'it'), 'di base: ' + w);
+  });
+  ['finanziere', 'edificio', 'acquisto', 'clonazione', 'prelevare', 'campione', 'farmaci', 'tessuto', 'limiti'].forEach(function (w) {
+    assert.ok(!L.isBasic(w, 'it'), 'NON di base: ' + w);
+  });
+  const txt = 'Esistono paesi in cui invece questi limiti etici non ci sono, come gli Stati Uniti, dove la clonazione per fini domestici è una pratica diffusa. Il finanziere James Epstein aveva comprato l\'isola nel 1998. Sappiamo che alcuni ospiti arrivavano con l\'aereo privato. Abbiamo quattro edifici e in realtà l\'acquisto del terreno era stato fatto da una società. I farmaci per prelevare una cellula costano molto.';
+  const sents = txt.split(/(?<=[.!?])\s+/);
+  const lines = sents.map(function (t, i) { return { start: i * 5, end: i * 5 + 5, text: t }; });
+  const chunks = G.annotate(G.buildChunks(lines, { duration: sents.length * 5, lang: 'it' }), { lang: 'it', duration: sents.length * 5 });
+  const exs = [{ sentence: sents[0] }, { sentence: sents[3] }];
+  const b1 = G.vocabCandidates(chunks, exs, { lang: 'it', n: 14, support: 'en', level: 'B1' }).map(function (x) { return x.word; });
+  ['abbiamo', 'sappiamo', 'quattro', 'alcuni', 'realtà', 'isola', 'james', 'epstein', 'stati', 'uniti'].forEach(function (w) {
+    assert.ok(b1.indexOf(w) === -1, 'a B1 non deve proporre "' + w + '": ' + b1.join(' '));
+  });
+  ['finanziere', 'acquisto', 'prelevare', 'farmaci'].forEach(function (w) { assert.ok(b1.indexOf(w) !== -1, 'a B1 deve proporre "' + w + '": ' + b1.join(' ')); });
+  // stare in un esercizio non basta più a vincere su tutto: una parola di base in un esercizio resta fuori
+  const a2 = G.vocabCandidates(chunks, exs, { lang: 'it', n: 40, support: 'en', level: 'A2' });
+  assert.ok(a2.some(function (x) { return x.basic; }), 'ad A2 le parole di base restano (penalizzate, non escluse)');
+  assert.ok(!a2.some(function (x) { return x.word === 'epstein' || x.word === 'james'; }), 'i nomi propri stanno fuori a qualunque livello');
+});
 test('modalità automatica: circa un esercizio ogni 40 s, distanza minima, solo frasi complete se la trascrizione ha la punteggiatura', function () {
   const fs = require('fs');
   const txt = fs.readFileSync(__dirname + '/fixture-neuralink.txt', 'utf8');
