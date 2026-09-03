@@ -1151,6 +1151,34 @@
   });
 
   /** Se il player conosce la durata vera e la lezione ne aveva una stimata più corta, allinea (e allunga i tagli finali). */
+  /**
+   * ANNUNCIO DI YOUTUBE IN CORSO. Durante un annuncio il player continua a rispondere, ma il tempo e la durata che
+   * restituisce sono quelli DELL'ANNUNCIO, non del video: un riascolto che finisce a 0:15 si chiudeva subito perche'
+   * l'annuncio era gia' arrivato a 0:15, e "play" sembrava non funzionare perche' stava caricando la pubblicita'
+   * (segnalato da Edoardo il 3/9: "mi caricava ma non partiva e poi e' partita una pubblicita'").
+   * L'iframe API non dice "sto mostrando un annuncio": lo si capisce dalla durata, che diventa quella dello spot.
+   */
+  function inAd(ls) {
+    // La prova e' la DURATA: durante uno spot il player risponde con la durata dello spot (pochi secondi), non
+    // quella del video. Niente controllo su `kind`: il player finto restituisce sempre la durata vera della lezione,
+    // quindi non puo' far scattare un falso positivo, e senza quel controllo il caso e' verificabile nello smoke.
+    if (!S.player || !ls || !(ls.duration > 0)) return false;
+    const d = S.player.duration();
+    return d > 0 && d < ls.duration - 5;
+  }
+  let adNoticeAt = 0, adSaidWhy = false;
+  function adNotice() {
+    if (Date.now() - adNoticeAt < 8000) return;
+    adNoticeAt = Date.now();
+    toast('YouTube sta mostrando un annuncio: l\'esercizio riprende appena finisce', 5000);
+    // Perche' compaiono annunci anche con Premium: l'abbonamento arriva al player incorporato solo attraverso i
+    // cookie di terze parti di youtube.com, che Chrome sta limitando. Lo si dice una volta sola per sessione.
+    if (!adSaidWhy) {
+      adSaidWhy = true;
+      setTimeout(function () { toast('Hai Premium e vedi annunci lo stesso? Nel player incorporato l\'abbonamento passa dai cookie di terze parti di youtube.com: vanno permessi nelle impostazioni di Chrome', 9000); }, 5200);
+    }
+  }
+
   function syncDuration(ls) {
     if (!S.player || S.player.kind !== 'yt') return;
     const d = S.player.duration();
@@ -1163,6 +1191,8 @@
   }
   function editorTick() {
     const ls = current(); if (!ls || !S.player) return;
+    if (inAd(ls)) { adNotice(); if (S.editor.replay) { S.editor.replay.at = Date.now(); S.editor.replay.moving = false; S.editor.replay.adSeen = true; } return; }
+    if (S.editor.replay && S.editor.replay.adSeen) { const rp = S.editor.replay; rp.adSeen = false; rp.tries = 0; S.player.seek(rp.start); S.player.play(); return; }
     syncDuration(ls);
     const t = S.player.time();
     drawCursor($('#e-timeline'), t, ls.duration);
@@ -1170,8 +1200,8 @@
     if (rp) {
       // se il seek iniziale non è stato accettato (primo avvio del player YouTube), riprova una volta
       if (rp.start != null && t < rp.start - 1.5 && Date.now() - rp.at < 4000) { if (!rp.retried) { rp.retried = true; S.player.seek(rp.start); S.player.play(); } return; }
-      if (nudgeReplay(rp)) return;
-      if (t >= rp.end || S.player.state() === 0) { S.player.pause(); S.editor.replay = null; if (rp.redock && S.editor.previewId) dock('#e-stage', true); return; }
+      if (nudgeReplay(rp, ls)) return;
+      if (t >= rp.end || rp.give || S.player.state() === 0) { S.player.pause(); S.editor.replay = null; if (rp.redock && S.editor.previewId) dock('#e-stage', true); return; }
       if (rp.cut && S.player.state() === 1) {
         // giunzione: dentro il taglio si salta subito alla fine; poco prima si programma il salto al millisecondo
         if (t >= rp.cut.start - 0.05 && t < rp.cut.end) S.player.seek(rp.cut.end + 0.05);
@@ -1246,14 +1276,20 @@
    * a segno; se il seek riusciva ma la riproduzione non partiva, il tempo restava fermo e non succedeva piu' niente.
    * Qui si riprova a far partire il video finche' non parte davvero, e se dopo 3 secondi e' ancora fermo lo si dice.
    */
-  function nudgeReplay(rp) {
+  function nudgeReplay(rp, ls) {
     if (!S.player || rp.done) return false;
     const st = S.player.state();
     if (st === 1) { rp.moving = true; return false; }     // sta suonando: tutto a posto
     if (rp.moving) return false;                          // era partito e ora e' finito/in pausa: se ne occupa il tick
     const dt = Date.now() - rp.at;
-    if (dt > 3000) { rp.done = true; toast('Il video non riparte: premi ▶ sul video una volta e riprova', 5000); return false; }
-    if (dt > 250 && (rp.tries || 0) < 6) { rp.tries = (rp.tries || 0) + 1; S.player.play(); }
+    // ASPETTARE NON È ESSERE BLOCCATI (v61, 'ci ha messo 20 secondi per partire'): 3 = buffering, -1 = non ancora
+    // avviato, 5 = caricato ma fermo. In questi stati il player STA lavorando (rete lenta, primo avvio, annuncio che
+    // non ha ancora dichiarato la sua durata): dire 'premi tu' dopo 3 secondi è un falso allarme, e chi preme fa
+    // ripartire il video da capo peggiorando l'attesa. Qui si aspetta fino a 30 s, dicendo che sta caricando.
+    const loading = st === 3 || st === -1 || st === 5 || inAd(ls);
+    if (loading && dt > 1500 && !rp.waitSaid) { rp.waitSaid = true; toast('Il video sta caricando… aspetta, riparte da solo', 3000); }
+    if (dt > (loading ? 30000 : 6000)) { rp.done = rp.give = true; toast('Il video non riparte: premi ▶ sul video una volta e riprova', 5000); return false; }
+    if (dt > 250 && Date.now() - (rp.lastTry || 0) > 600 && (rp.tries || 0) < 40) { rp.tries = (rp.tries || 0) + 1; rp.lastTry = Date.now(); S.player.play(); }
     return true;   // ancora in attesa: il tick non deve chiudere il riascolto
   }
 
@@ -1413,6 +1449,7 @@
         if (w.image) {
           const im = el('img', { src: w.image, alt: '', title: 'Passa col mouse per vederla grande', referrerpolicy: 'no-referrer' });
           im.addEventListener('error', function () { im.replaceWith(el('span', { class: 'notice bad', style: 'padding:2px 6px;font-size:12px', text: 'non caricabile', title: w.image })); });
+          im.setAttribute('data-zoom', '1');
           im.addEventListener('click', function () { if (isPreviewShown()) hideImgPreview(); else showImgPreview(img, w.image, imgCaption(w)); });   // touch: un tocco apre, un altro chiude
           img.appendChild(im);
           if (hovering) showImgPreview(img, w.image, imgCaption(w));
@@ -1463,6 +1500,9 @@
       previewBox._closer = function (e) {
         if (e.type === 'keydown' && e.key !== 'Escape') return;
         if (e.type === 'pointerdown' && previewBox.contains(e.target)) return;
+        // il pulsante che apre l'ingrandimento fa da sé (apre/chiude): se chiudessimo qui, il click subito dopo
+        // riaprirebbe e l'ingrandimento sembrerebbe "bloccato" (v61, 'si è bloccato di nuovo!')
+        if (e.type === 'pointerdown' && e.target.closest && e.target.closest('[data-zoom]')) return;
         hideImgPreview();
       };
     }
@@ -2914,6 +2954,14 @@
       el('span', { class: 'hint', text: fmtMin(c.end - c.start) + ' · ' + (c.reason || '') + (c.source === 'ai' ? ' (AI)' : '') }),
       el('div', { class: 'cut-btns' },
         el('button', { class: 'small', text: '▶ Giunzione', title: 'Ascolta il punto di giunzione: 3 secondi prima del taglio, salto, 3 secondi dopo', onclick: function () { previewCut(ls, c); } }),
+        // taglio "da qui alla fine": la coda del video (saluti, iscriviti al canale) si toglie senza cercare il secondo esatto
+        el('button', { class: 'small', text: '⇥ Fino alla fine', title: 'Porta la fine di questo taglio alla fine del video', onclick: function () {
+          if (!(ls.duration > 0)) return toast('Durata del video non ancora nota');
+          if (Math.abs(c.end - ls.duration) < 0.05) return toast('Questo taglio arriva già alla fine del video');
+          c.end = Math.round(ls.duration * 10) / 10;
+          touch(ls); renderEditorBody();
+          toast('Taglio fino alla fine: da ' + fmt(c.start) + ' a ' + fmt(c.end) + ' · annulla con ' + undoKeyLabel(), 4500);
+        } }),
         el('button', { class: 'small', text: '⇤⇥ Frasi intere', title: 'Allinea inizio e fine del taglio ai confini delle frasi della trascrizione', onclick: function () {
           const sn = ls.chunks && ls.chunks.length ? G.snapCutToSentences(c, ls.chunks, { tol: 1.5, min: 2, duration: ls.duration }) : null;
           if (!sn) return toast('Nessuna frase intera dentro questo taglio');
@@ -3198,14 +3246,21 @@
   function studentTick() {
     const st = S.student; if (!st || !S.player) return;
     const ls = st.lesson;
+    if (inAd(ls)) {
+      adNotice();
+      st.lastT = null;   // i tempi dell'annuncio non devono far scattare niente
+      if (st.replay) { st.replay.at = Date.now(); st.replay.moving = false; st.replay.adSeen = true; }
+      return;
+    }
+    if (st.replay && st.replay.adSeen) { const rp = st.replay; rp.adSeen = false; rp.tries = 0; S.player.seek(rp.start); S.player.play(); return; }
     if (!st.started) syncDuration(ls);
     const t = S.player.time();
     drawCursor($('#s-timeline'), t, ls.duration);
     if (st.replay) {
       const rp = st.replay;
       if (rp.start != null && t < rp.start - 1.5 && Date.now() - rp.at < 4000) { if (!rp.retried) { rp.retried = true; S.player.seek(rp.start); S.player.play(); } return; }
-      if (nudgeReplay(rp)) return;
-      if (t >= rp.end || S.player.state() === 0) { S.player.pause(); st.replay = null; if (rp.redock) dock('#s-stage', true); }
+      if (nudgeReplay(rp, ls)) return;
+      if (t >= rp.end || rp.give || S.player.state() === 0) { S.player.pause(); st.replay = null; if (rp.redock) dock('#s-stage', true); }
       return;
     }
     if (st.blocked) { st.lastT = null; return; }
@@ -4529,17 +4584,21 @@
       img.addEventListener('error', textBack);
       d.appendChild(img);
       if (!big) {
-        // Scheda abbinamento: la foto si ingrandisce al CLIC, non al passaggio del mouse. Con l'hover capitava che
-        // l'ingrandimento restasse aperto e coprisse le altre parole (segnalato da Edoardo, 3/9) — e su tablet
-        // il passaggio del mouse non esiste proprio. Si chiude cliccando di nuovo, altrove o con Esc.
+        // Scheda abbinamento: la foto si ingrandisce SOLO dal pulsantino "⤢ ingrandisci", mai cliccando la foto.
+        // Il clic sulla foto DEVE restare l'abbinamento (v61, 'non mi fa fare il matching, se clicco con la parola
+        // giusta da abbinare mi si apre ogni volta il pop-up'): in v60 il listener stava sul .back con
+        // stopPropagation() e si mangiava il clic del .mchip.
         d.classList.add('zoomable');
-        d.appendChild(el('span', { class: 'zoom-hint', text: '⤢ ingrandisci' }));
-        d.addEventListener('click', function (e) {
-          e.stopPropagation();
-          if (previewBox && previewBox.classList.contains('show') && previewBox._for === w.image) return hideImgPreview();
+        const zb = el('button', { class: 'zoom-hint', 'data-zoom': '1', type: 'button', title: 'Ingrandisci la foto' },
+          [document.createTextNode('⤢'), el('span', { class: 'lbl', text: ' ingrandisci' })]);
+        zb.addEventListener('click', function (e) {
+          e.stopPropagation();   // il pulsante ingrandisce e basta: non conta come scelta della coppia
+          e.preventDefault();
+          if (isPreviewShown() && previewBox._for === w.image) return hideImgPreview();
           showImgPreview(d, w.image, '');
           if (previewBox) previewBox._for = w.image;
         });
+        d.appendChild(zb);
       }
     } else textBack();
     return d;
@@ -4689,6 +4748,7 @@
         const avail = availNow();
         const rowh = Math.max(40, Math.min(150, Math.floor(avail / words.length) - 6));
         host.style.setProperty('--rowh', rowh + 'px');
+        host.classList.toggle('rowh-tiny', rowh < 76);   // righe basse: "⤢ ingrandisci" coprirebbe la foto, resta la sola icona
         requestAnimationFrame(function () {
           if (!host.isConnected) return;
           const over = host.scrollHeight - host.clientHeight;
@@ -4870,6 +4930,6 @@
     }
     renderHome();
   }
-  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings };
+  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd };
   init();
 })();

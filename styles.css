@@ -313,7 +313,11 @@ button.star.on { color: #e0a800; }
 .mchip.target { justify-content: center; }
 .back { display: flex; align-items: center; gap: 8px; justify-content: center; }
 .mchip.target .back { width: 100%; }
-.back img { max-height: calc(var(--rowh, 56px) - 12px); min-height: 44px; max-width: 100%; border-radius: 6px; object-fit: cover; cursor: zoom-in; }
+.back img { max-height: calc(var(--rowh, 56px) - 22px); min-height: 0; max-width: 100%; border-radius: 6px; object-fit: cover; }
+/* la foto non deve MAI uscire dal rettangolo arrotondato (v61): il vecchio min-height:44px la faceva sforare
+   appena le righe scendevano sotto i 56 px, e -12px non teneva conto di bordo (2+2) e padding (6+6). */
+.mchip { overflow: hidden; }
+.mchip .back { min-height: 0; max-width: 100%; overflow: hidden; }
 .back .tr { font-size: 18px; }
 .back.big { flex-direction: column; }
 .back.big img { max-height: calc(var(--cardh, 250px) - 80px); max-width: 100%; }
@@ -987,7 +991,13 @@ button.small.ok { background: #e6f6ea; border-color: #7fc99a; color: #17663a; fo
 /* Foto delle schede: si ingrandisce al CLIC (l'hover restava aperto e copriva le parole).
    I blocchi con la foto e quelli con la parola hanno la stessa altezza: la riga e' una griglia. */
 .back.zoomable { position: relative; cursor: zoom-in; }
-.back .zoom-hint { position: absolute; right: 6px; bottom: 4px; font-size: 10px; line-height: 1; color: #33475b; background: rgba(255,255,255,.85); border-radius: 999px; padding: 3px 7px; pointer-events: none; white-space: nowrap; }
+.back .zoom-hint { position: absolute; right: 4px; bottom: 3px; font-size: 10px; line-height: 1; color: #33475b; background: rgba(255,255,255,.88);
+  border: 1px solid rgba(0,0,0,.12); border-radius: 999px; padding: 4px 8px; white-space: nowrap; cursor: zoom-in; pointer-events: auto; z-index: 2;
+  font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.back .zoom-hint:hover { background: #fff; color: #0b1b2b; }
+.rowh-tiny .back .zoom-hint { padding: 2px 5px; font-size: 11px; }
+.rowh-tiny .back .zoom-hint .lbl { display: none; }
+.mpair .mchip .zoom-hint { pointer-events: auto; }   /* la coppia è chiusa, ma la foto si può ancora guardare */
 /* i blocchi con la foto e quelli con la parola hanno la stessa altezza */
 .match .col .mchip { height: var(--rowh, 56px); box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
 /* la ✕ dell'ingrandimento: bianca con ombra scura, leggibile su qualunque foto e su qualunque tema */
