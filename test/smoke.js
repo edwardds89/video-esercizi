@@ -1393,6 +1393,147 @@ async function noOverflow(page, where) {
   });
   assert.notStrictEqual(inStorage, frasePrima, 'le modifiche finiscono in localStorage da sole, senza premere Salva');
 
+  console.log('20. sincronia audio, spazi fra le parole, banca che si svuota, Traduci con la bandiera');
+  await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    S.settings.apiKey = 'sk-test';
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  await page.waitForTimeout(700);
+  // la sincronia audio si regola e sposta davvero la riproduzione
+  await page.click('#e-sync-plus'); await page.click('#e-sync-plus');
+  await page.waitForTimeout(250);
+  const sync = await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    const ex = ls.exercises[0];
+    let seekTo = null;
+    const orig = window.VLApp.S.player.seek;
+    window.VLApp.S.player.seek = function (t) { seekTo = t; return orig.call(this, t); };
+    document.querySelector('#e-exercises .ex-card button.play').click();
+    window.VLApp.S.player.seek = orig;
+    return { offset: ls.options.audioOffset, chiesto: seekTo, inizio: ex.segment.start, mostrato: document.querySelector('#e-sync-val').textContent };
+  });
+  assert.ok(Math.abs(sync.offset - 0.2) < 0.001, 'la sincronia si regola a passi di un decimo');
+  assert.ok(/0,2/.test(sync.mostrato), 'ed e\' scritta in chiaro: ' + sync.mostrato);
+  assert.ok(Math.abs(sync.chiesto - (sync.inizio + sync.offset)) < 0.01, 'il video parte spostato dell\'offset');
+  await page.click('#e-sync-zero'); await page.waitForTimeout(200);
+  assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].options.audioOffset; }), 0, 'e si azzera');
+  // il controllo delle traduzioni: l'avviso propone, non applica da solo
+  await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    ls.vocab.words.unshift({ id: 'wtest', word: 'un conto', translation: 'a bill', selected: true });
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForTimeout(600);
+  await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    window.VLApp.renderVocabWarnings(ls, [{ word: 'un conto', translation: 'a bill', verdict: 'ambigua', why: 'Qui introduce un paragone.', suggest: { word: 'un conto è', translation: 'one thing is' } }]);
+  });
+  await page.waitForSelector('#e-vocab-warn .vw-row');
+  assert.strictEqual(await page.evaluate(function () {
+    return window.VLApp.S.lessons[window.VLApp.S.currentId].vocab.words[0].word;
+  }), 'un conto', 'finche\' non clicchi, niente cambia');
+  await page.click('#e-vocab-warn button:has-text("Usa questa")');
+  await page.waitForTimeout(500);
+  const vv = await page.evaluate(function () {
+    const w = window.VLApp.S.lessons[window.VLApp.S.currentId].vocab.words.find(function (x) { return /un conto/.test(x.word); });
+    return w ? { word: w.word, tr: w.translation } : null;
+  });
+  assert.strictEqual(vv.word, 'un conto è', 'la proposta si applica solo su richiesta');
+  assert.strictEqual(vv.tr, 'one thing is', 'con la sua traduzione');
+  // Traduci con la bandiera + elenco delle lingue
+  await page.click('#e-exercises .ex-card:first-child button:has-text("Anteprima")');
+  await page.waitForSelector('.tr-wrap .tr-btn');
+  await page.waitForTimeout(300);
+  const bandiera = await page.$eval('.tr-wrap .tr-btn', function (b) { return b.textContent; });
+  assert.ok(/Traduci/.test(bandiera) && bandiera.length > 8, 'il pulsante mostra una bandiera: ' + JSON.stringify(bandiera));
+  await page.click('.tr-wrap .tr-pick');
+  await page.waitForSelector('.tr-menu .tr-opt');
+  const nLingue = await page.$$eval('.tr-menu .tr-opt', function (o) { return o.length; });
+  assert.ok(nLingue >= 16, 'almeno sedici lingue fra cui scegliere (sono ' + nLingue + ')');
+  await page.evaluate(function () { [].slice.call(document.querySelectorAll('.tr-opt')).filter(function (o) { return /Spagnolo/.test(o.textContent); })[0].click(); });
+  await page.waitForTimeout(250);
+  assert.notStrictEqual(await page.$eval('.tr-wrap .tr-btn', function (b) { return b.textContent; }), bandiera, 'scegliendo un\'altra lingua la bandiera cambia');
+
+  console.log('21. foto delle schede: si ingrandisce al clic e si chiude sempre; aiuto "parola in più" a zona');
+  const fotoSvg = function (t) { return 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#8fb8de"/><text x="200" y="160" font-size="30" text-anchor="middle">' + t + '</text></svg>').toString('base64'); };
+  await page.evaluate(function (imgs) {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    ls.vocab = ls.vocab || {};
+    ls.vocab.support = 'en';
+    ls.vocab.cards = { matching: true, flashcards: false, write: false };
+    ls.vocab.words = [
+      { id: 'z1', word: 'i farmaci', translation: 'drugs', image: imgs[0], selected: true },
+      { id: 'z2', word: 'prelevare una cellula', translation: 'to harvest a cell', image: '', selected: true },
+      { id: 'z3', word: 'un campione', translation: 'a sample', image: imgs[1], selected: true }
+    ];
+    window.VLApp.openStudent(ls.id);
+  }, [fotoSvg('A'), fotoSvg('B')]);
+  await page.waitForSelector('#view-student.active');
+  await page.click('#btn-start');
+  await page.waitForSelector('#s-panel .match .mchip');
+  await page.waitForTimeout(700);
+  // i blocchi con la foto e quelli con la parola hanno la stessa altezza
+  const altezze = await page.$$eval('#s-panel .match .col .mchip', function (c) { return c.map(function (x) { return Math.round(x.getBoundingClientRect().height); }); });
+  assert.ok(Math.max.apply(null, altezze) - Math.min.apply(null, altezze) <= 2, 'blocchi proporzionati: ' + JSON.stringify(altezze));
+  assert.ok(await page.$('#s-panel .back .zoom-hint'), 'sulla foto c\'e\' scritto come ingrandirla');
+  const aperto = function () { return page.evaluate(function () { const p = document.querySelector('.img-preview'); return !!(p && p.classList.contains('show')); }); };
+  // il passaggio del mouse NON deve aprire niente (prima restava aperto e copriva le parole)
+  await page.hover('#s-panel .back.zoomable');
+  await page.waitForTimeout(400);
+  assert.ok(!(await aperto()), 'il passaggio del mouse non apre l\'ingrandimento');
+  await page.click('#s-panel .back.zoomable');
+  await page.waitForTimeout(300);
+  assert.ok(await aperto(), 'il clic lo apre');
+  assert.ok(await page.$('.img-preview .img-x'), 'e c\'e\' sempre la ✕ per chiuderlo');
+  await page.click('.img-preview .img-x');
+  await page.waitForTimeout(300);
+  assert.ok(!(await aperto()), 'la ✕ chiude');
+  await page.click('#s-panel .back.zoomable'); await page.waitForTimeout(250);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(250);
+  assert.ok(!(await aperto()), 'Esc chiude');
+  // e non deve seguirti nella sezione successiva
+  await page.click('#s-panel .back.zoomable'); await page.waitForTimeout(250);
+  assert.ok(await aperto(), 'riaperto per la prova');
+  await page.click('#s-panel .actions button.link');   // "Salta le schede"
+  await page.waitForTimeout(600);
+  assert.ok(!(await aperto()), 'cambiando sezione l\'ingrandimento si chiude');
+
+  // aiuto di "parola in più": segna una zona che lampeggia, non la parola
+  const info = await page.evaluate(function () {
+    const S = window.VLApp.S, EX = window.VLEx;
+    const ls = S.lessons[S.currentId];
+    const f = 'È un dataset incredibile, certo limitato al dato superficiale dell\'acqua, ma a livello globale.';
+    const nb = EX.buildExercise('extra', f, { lang: 'it', seed: 9 });
+    const ex = ls.exercises[0];
+    ex.type = 'extra'; ex.sentence = f; ex.data = nb.data;
+    window.VLApp.openEditor(ls.id);
+    return { parola: nb.data.extraWord };
+  });
+  await page.waitForTimeout(800);
+  await page.click('#e-exercises .ex-card:first-child button:has-text("Anteprima")');
+  await page.waitForSelector('#e-stage .chips .chip, .pop .chips .chip, #e-panel .chips .chip');
+  await page.waitForTimeout(300);
+  const zona = function () { return page.evaluate(function () { const z = [].slice.call(document.querySelectorAll('.chip.zone')); return { n: z.length, testi: z.map(function (c) { return c.textContent; }), lampeggia: z.filter(function (c) { return c.classList.contains('zone-flash'); }).length }; }); };
+  assert.strictEqual((await zona()).n, 0, 'prima dell\'aiuto non c\'e\' nessuna zona');
+  await page.click('button.hint-btn');
+  await page.waitForTimeout(400);
+  const z1 = await zona();
+  assert.strictEqual(z1.n, 5, 'il primo aiuto segna cinque parole (erano ' + z1.n + ')');
+  assert.ok(z1.testi.indexOf(info.parola) !== -1, 'la parola in più è dentro la zona');
+  assert.strictEqual(z1.lampeggia, 5, 'e la zona lampeggia');
+  await page.click('button.hint-btn');
+  await page.waitForTimeout(400);
+  const z2 = await zona();
+  assert.strictEqual(z2.n, 3, 'il secondo aiuto stringe a tre');
+  assert.ok(z2.testi.indexOf(info.parola) !== -1, 'e la parola c\'e\' ancora');
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();

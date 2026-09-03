@@ -287,6 +287,49 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(err && /401/.test(err.message));
   });
 
+  console.log('Controllo delle traduzioni nel contesto');
+  const cvFetch = function (items, calls) {
+    return async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      if (calls) calls.push(body);
+      return { ok: true, status: 200, json: async function () { return { model: 'm', usage: { input_tokens: 900, output_tokens: 300 }, content: [{ type: 'text', text: JSON.stringify({ items: items }) }] }; }, text: async function () { return ''; } };
+    };
+  };
+  await test('il modello giudica la glossa come la vede lo studente sulla scheda', async function () {
+    const calls = [];
+    await AI.checkVocab({ words: [{ word: 'un conto', translation: 'a bill' }], lang: 'it', support: 'en', sentences: ['Un conto è clonare una cellula.'], apiKey: 'sk', fetchImpl: cvFetch([{ word: 'un conto', verdict: 'ambigua', why: '...', suggest: null }], calls) });
+    const u = calls[0].messages[0].content;
+    assert.ok(/AS IT WILL BE SHOWN TO STUDENTS/.test(u), 'il giudizio è su come appare sulla scheda, non in astratto');
+    assert.ok(/un conto/.test(u) && /a bill/.test(u), 'parola e glossa arrivano al modello');
+    assert.ok(/EXERCISE SENTENCES \(what the students will work on\)/.test(u), 'le frasi degli esercizi sono il contesto che conta');
+    assert.ok(/those are the sentences the students actually work on/.test(u), 'e il modello lo sa');
+  });
+  await test('il caso di Edoardo: "un conto" con la proposta di allungare l\'espressione', async function () {
+    const r = await AI.checkVocab({ words: [{ word: 'un conto', translation: 'a bill' }, { word: 'cellula', translation: 'cell' }], lang: 'it', support: 'en', apiKey: 'sk', fetchImpl: cvFetch([
+      { word: 'un conto', verdict: 'ambigua', why: 'Qui introduce un paragone.', suggest: { word: 'un conto è', translation: 'one thing is' } },
+      { word: 'cellula', verdict: 'ok', why: '', suggest: null }
+    ]) });
+    assert.strictEqual(r.items[0].verdict, 'ambigua');
+    assert.deepStrictEqual(r.items[0].suggest, { word: 'un conto è', translation: 'one thing is' });
+    assert.strictEqual(r.items[1].verdict, 'ok');
+    assert.strictEqual(r.items[1].suggest, null, 'per le voci a posto non si propone niente');
+    assert.strictEqual(r.items[1].why, '', 'e non si scrive niente');
+  });
+  await test('un verdetto sconosciuto vale come "ok": nel dubbio non si allarma l\'insegnante', async function () {
+    const r = await AI.checkVocab({ words: [{ word: 'cellula', translation: 'cell' }], lang: 'it', support: 'en', apiKey: 'sk', fetchImpl: cvFetch([{ word: 'cellula', verdict: 'boh?', why: 'x' }]) });
+    assert.strictEqual(r.items[0].verdict, 'ok');
+  });
+  await test('il riaggancio regge anche se il modello toglie l\'articolo o cambia ordine', async function () {
+    const r = await AI.checkVocab({ words: [{ word: 'i farmaci', translation: 'drugs' }], lang: 'it', support: 'en', apiKey: 'sk', fetchImpl: cvFetch([{ word: 'farmaci', verdict: 'sbagliata', why: 'no', suggest: null }]) });
+    assert.strictEqual(r.items[0].verdict, 'sbagliata', 'la voce si ritrova lo stesso');
+    assert.strictEqual(r.items[0].word, 'i farmaci', 'e resta scritta com\'era nella lista');
+  });
+  await test('la traduzione può essere chiesta in una lingua qualsiasi', async function () {
+    const calls = [];
+    await AI.translateSentence({ text: 'I pesci scappano', whole: true, lang: 'it', target: 'Simplified Chinese', apiKey: 'sk', fetchImpl: async function (url, opts) { calls.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async function () { return { model: 'm', usage: { input_tokens: 10, output_tokens: 10 }, content: [{ type: 'text', text: '{"translation":"…"}' }] }; }, text: async function () { return ''; } }; } });
+    assert.ok(/into natural, idiomatic Simplified Chinese/.test(calls[0].messages[0].content), 'la lingua scelta arriva al modello');
+  });
+
   console.log('Traduzione delle parole utili');
   const twFetch = function (vocab, calls) {
     return async function (url, opts) {
