@@ -1639,6 +1639,57 @@ async function noOverflow(page, where) {
   assert.ok(/non riparte/.test(tst), 'e solo allora si avvisa (era: "' + tst + '")');
   await page.evaluate(function () { const p = window.VLApp.S.player; p.play = p._realPlay; p.state = p._realState; });
 
+  console.log('23. lo spot passa in muto durante le schede: riquadro visibile, poi audio riacceso e video pulito');
+  // il warm parte solo con un player YouTube: si traveste il player finto (kind, mute/unmute veri del mock)
+  await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    ls.vocab.cards = { matching: true, flashcards: false, write: false };
+    ls.vocab.words = [
+      { id: 'w1', word: 'sonno', translation: 'sleep', selected: true },
+      { id: 'w2', word: 'cervello', translation: 'brain', selected: true },
+      { id: 'w3', word: 'sogno', translation: 'dream', selected: true }
+    ];
+    window.VLApp.openStudent(ls.id);
+  });
+  await page.waitForSelector('#view-student.active');
+  await page.waitForTimeout(400);
+  await page.evaluate(function () {
+    const p = window.VLApp.S.player;
+    p.kind = 'yt';
+    p._dur = p.duration; p.duration = function () { return 15; };   // c'e' uno spot: il player dichiara la durata dello spot
+  });
+  await page.click('#btn-start');
+  await page.waitForTimeout(900);
+  const warm1 = await page.evaluate(function () {
+    const S = window.VLApp.S, st = S.student;
+    return { warm: !!(st && st.warmAd), visto: !!(st && st.warmAd && st.warmAd.seen), muto: !!S.player.muted,
+             riquadro: document.querySelector('#s-stage').classList.contains('warmad'),
+             tag: !!document.querySelector('#warmad-tag'),
+             schede: !!document.querySelector('#s-panel .match .mchip') };
+  });
+  assert.ok(warm1.warm, 'il warm e\' attivo dopo "Inizia"');
+  assert.ok(warm1.visto, 'lo spot e\' stato riconosciuto (durata corta)');
+  assert.ok(warm1.muto, 'il player e\' in muto');
+  assert.ok(warm1.riquadro, 'il riquadro del player e\' visibile (mai un player nascosto che suona)');
+  assert.ok(warm1.tag, 'l\'etichetta "spot in corso" c\'e\'');
+  assert.ok(warm1.schede, 'intanto lo studente e\' sulle schede delle parole');
+  // lo spot finisce: la durata torna quella vera, il contenuto parte (il mock sta gia' suonando) -> chiusura pulita
+  await page.evaluate(function () { const p = window.VLApp.S.player; p.duration = p._dur; });
+  await page.waitForTimeout(1200);
+  const warm2 = await page.evaluate(function () {
+    const S = window.VLApp.S, st = S.student;
+    return { warm: !!(st && st.warmAd), muto: !!S.player.muted, riquadro: document.querySelector('#s-stage').classList.contains('warmad'),
+             tag: !!document.querySelector('#warmad-tag'), fermo: S.player.state() !== 1, tempo: S.player.time() };
+  });
+  assert.ok(!warm2.warm, 'finito lo spot il warm si chiude da solo');
+  assert.ok(!warm2.muto, 'l\'audio e\' riacceso');
+  assert.ok(!warm2.riquadro && !warm2.tag, 'riquadro ed etichetta spariscono');
+  assert.ok(warm2.fermo, 'il video e\' in pausa, pronto');
+  assert.ok(warm2.tempo < 1, 'ed e\' tornato all\'inizio (t=' + warm2.tempo + ')');
+  await page.evaluate(function () { const p = window.VLApp.S.player; p.kind = 'mock'; });
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
