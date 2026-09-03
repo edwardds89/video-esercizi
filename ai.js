@@ -647,20 +647,42 @@
   }
 
   /** Traduzioni per una lista di parole (nel contesto del video). params: { words:[...], lang, support, context, apiKey, model, fetchImpl } → { translations: {word: translation} } */
+  /** Chiavi con cui riconoscere la stessa voce: com'e' scritta e senza l'articolo/il "to" davanti
+   *  ("i farmaci" e "farmaci", "to clone" e "clone"). Serve perche' il modello riporta spesso la forma del dizionario. */
+  function wordKeys(word) {
+    const k = L.normalize(word);
+    const out = [k];
+    const parts = k.split(' ');
+    if (parts.length > 1 && (parts[0].length <= 3 || /'$/.test(parts[0]) || parts[0] === 'to')) out.push(parts.slice(1).join(' '));
+    return out;
+  }
   async function translateWords(params) {
     const lang = params.lang || 'it', sup = params.support || (lang === 'en' ? 'it' : 'en');
     const words = (params.words || []).map(function (w) { return String(w).trim(); }).filter(Boolean);
     if (!words.length) return { translations: {}, ai: null };
     const system = 'You are a bilingual dictionary for language teachers. Output ONLY a JSON object, no prose, no markdown fences.';
-    const user = ['Translate each ' + lang + ' word into ' + sup + ' with the meaning it has in this context (one or two words each; keep the dictionary form).',
+    // "word" deve tornare IDENTICA a com'e' stata mandata, altrimenti la traduzione non si riaggancia alla voce giusta:
+    // chiedendo "la forma del dizionario" il modello rispondeva "farmaci" per "i farmaci" e la traduzione andava persa
+    // (segnalato da Edoardo il 2/9: "scrive 'traduco 1 parola' ma poi rimane senza traduzione").
+    const user = ['Translate each ' + lang + ' word or expression into ' + sup + ' with the meaning it has in this context (one or two words each).',
+      'In "word" copy the item EXACTLY as it appears in WORDS below, character for character — keep the article, the plural and any spacing. Put the ' + sup + ' meaning in "translation". Return one entry per item, in the same order.',
       'SCHEMA: {"vocab":[{"word":"...","translation":"..."}]}', '',
       'WORDS: ' + words.join(', '), '', 'CONTEXT:', String(params.context || '').slice(0, 6000)].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1200, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
+    const list = cleanVocab(plan.vocab);
     const map = {};
-    cleanVocab(plan.vocab).forEach(function (v) { map[L.normalize(v.word)] = v.translation; });
+    list.forEach(function (v) { if (v.translation) wordKeys(v.word).forEach(function (k) { if (!(k in map)) map[k] = v.translation; }); });
     const translations = {};
-    words.forEach(function (w) { const k = L.normalize(w); if (map[k]) translations[w] = map[k]; });
+    const missing = [];
+    words.forEach(function (w, i) {
+      const hit = wordKeys(w).map(function (k) { return map[k]; }).filter(Boolean)[0];
+      if (hit) translations[w] = hit; else missing.push(i);
+    });
+    // ultima rete: se il modello ha risposto una voce per parola, vale l'ordine
+    if (missing.length && list.length === words.length) {
+      missing.forEach(function (i) { if (list[i] && list[i].translation) translations[words[i]] = list[i].translation; });
+    }
     return { translations: translations, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 

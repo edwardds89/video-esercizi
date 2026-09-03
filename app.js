@@ -2178,6 +2178,19 @@
     return out;
   }
   /**
+   * Testo e tempi "combaciano"? Non si puo' pretendere che coincidano parola per parola: i tempi salvati tengono
+   * 0,2 s prima e 0,35 s dopo (per non mozzare l'audio) e quel margine puo' tirare dentro la parolina accanto.
+   * Quindi combaciano se il piu' corto e' un pezzo contiguo del piu' lungo e ballano al massimo due parole:
+   * cosi' i due pulsanti restano spenti dopo un aggiornamento, e si accendono quando i tempi cambiano davvero.
+   */
+  function wordsAligned(a, b) {
+    if (a.join(' ') === b.join(' ')) return true;
+    const lungo = a.length >= b.length ? a : b, corto = a.length >= b.length ? b : a;
+    if (!corto.length || lungo.length - corto.length > 2) return false;
+    return lungo.join(' ').indexOf(corto.join(' ')) !== -1;
+  }
+
+  /**
    * Il contrario di retimeSentence: dati due tempi, che cosa si sente davvero in mezzo.
    * Si tiene una parola se il suo centro cade dentro l'intervallo — i tempi delle parole sono interpolati
    * dentro la riga dei sottotitoli, quindi al bordo si sbaglia di poco e il centro e' il criterio piu' stabile.
@@ -2236,12 +2249,13 @@
   function rebuildExercise(ls, ex, type, choices, seed) {
     const built = EX.buildExercise(type, ex.sentence, { lang: ls.lang, seed: seed || (Date.now() % 100000), choices: choices || null, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 });
     if (!built) return false;
+    delete ex.reviewed;   // il contenuto e' cambiato: il "controllato" va rimesso guardandolo
     ex.type = built.type; ex.data = built.data;
     return true;
   }
 
   function renderExerciseCard(ls, ex, i) {
-    const card = el('div', { class: 'ex-card ' + (ex.source || 'rules'), id: 'ex-' + ex.id });
+    const card = el('div', { class: 'ex-card ' + (ex.source || 'rules') + (ex.reviewed ? ' reviewed' : ''), id: 'ex-' + ex.id });
     const typeSel = el('select', { style: 'width:auto', title: 'Tipo di esercizio' });
     G.ALL_TYPES.forEach(function (t) { typeSel.appendChild(el('option', { value: t, text: EX.LABELS[t], selected: t === ex.type ? 'selected' : null })); });
     typeSel.addEventListener('change', function () {
@@ -2295,7 +2309,21 @@
     // "Aggiorna testo": riscrive la frase con quello che si sente tra i due tempi. Si accende (arancione) quando
     // il testo scritto non e' piu' quello dell'intervallo, cioe' esattamente dopo che si sono spostati i secondi.
     const rangeTxt = textForRange(ls, ex.segment);
-    const stale = !!rangeTxt && L.words(rangeTxt).join(' ') !== L.words(ex.sentence).join(' ');
+    const stale = !!rangeTxt && !wordsAligned(L.words(rangeTxt), L.words(ex.sentence));
+    const updTimesBtn = el('button', {
+      class: 'small' + (stale ? ' warn' : ''),
+      text: '⟳ Aggiorna tempi',
+      title: stale ? 'Il testo non è quello di questi secondi: clicca per spostare i tempi sulle parole che hai scritto' : 'Cerca la frase scritta qui sotto nella trascrizione e sposta "frase da" e "a" sulle sue parole',
+      onclick: function () {
+        const rt = retimeSentence(ls, ex);
+        if (!rt) return toast('Questa frase non si ritrova nella trascrizione: i tempi restano come sono', 5000);
+        const prima = fmt(ex.segment.start) + ' → ' + fmt(ex.segment.end);
+        ex.segment = { start: Math.max(0, Math.round((rt.start - 0.2) * 10) / 10), end: Math.round((rt.end + 0.35) * 10) / 10 };
+        sortExercises(ls); touch(ls); renderEditorBody();
+        toast('Tempi spostati sulle parole: ' + prima + ' diventa ' + fmt(ex.segment.start) + ' → ' + fmt(ex.segment.end)
+          + (rt.partial ? ' (ritrovate solo la prima e l\'ultima parola)' : '') + ' · annulla con ' + undoKeyLabel(), 5500);
+      }
+    });
     const updBtn = el('button', {
       class: 'small' + (stale ? ' warn' : ''),
       text: '⟳ Aggiorna testo',
@@ -2325,6 +2353,7 @@
       el('button', { class: 'small play', text: '▶', title: 'Ascolta esattamente da inizio a fine: parte da "frase da" e si ferma da solo ad "a" — è anche il punto in cui il video si ferma per lo studente', onclick: function () { playSegment(ex.segment); } }),
       el('button', { class: 'small play', text: '▶ -3s', title: 'Ascolta solo gli ultimi 3 secondi: per controllare dove finisce il taglio', onclick: function () { playSegment({ start: Math.max(ex.segment.start, ex.segment.end - 3), end: ex.segment.end }); } }),
       updBtn,
+      updTimesBtn,
       el('button', { class: 'small', text: 'Inizio = ora', title: 'Usa il tempo corrente del player come inizio della frase', onclick: function () { if (S.player) { ex.segment.start = Math.round(S.player.time() * 10) / 10; touch(ls); renderEditorBody(); } } }),
       el('button', { class: 'small', text: 'Fine = ora', title: 'Usa il tempo corrente del player come fine della frase', onclick: function () { if (S.player) { ex.segment.end = Math.round(S.player.time() * 10) / 10; sortExercises(ls); touch(ls); renderEditorBody(); } } })
     );
@@ -2338,25 +2367,29 @@
       el('button', { class: 'small', text: '⟳ Rigenera', onclick: function () { rebuildExercise(ls, ex, ex.type); touch(ls); renderEditorBody(); } }),
       el('span', { class: 'badge ' + (ex.source === 'ai' ? 'ai' : ''), text: ex.source === 'ai' ? 'AI' : 'regole' }),
       typeCountBadge(ls, ex),
-      el('button', { class: 'small right', text: '💾 Salva', title: 'Salva subito le modifiche di questo esercizio', onclick: function (e) { saveLessons(); e.target.textContent = '✓ Salvato'; setTimeout(function () { e.target.textContent = '💾 Salva'; }, 1500); } }),
+      // Le modifiche si salvano DA SOLE (0,4 s dopo ogni cambio, e comunque alla chiusura della pagina): questo
+      // pulsante serve a segnare l'esercizio come passato in rassegna, cosi' si vede a colpo d'occhio quali sono
+      // ancora quelli proposti dall'AI e quali hai gia' guardato tu (richiesta di Edoardo, 2/9).
+      el('button', {
+        class: 'small right' + (ex.reviewed ? ' ok' : ''),
+        text: ex.reviewed ? '✓ Controllato' : '💾 Salva e segna come controllato',
+        title: ex.reviewed ? 'Controllato da te: clicca per togliere il segno verde' : 'Il salvataggio è automatico: questo pulsante segna l\'esercizio come controllato (sfondo verde)',
+        onclick: function () {
+          if (ex.reviewed) delete ex.reviewed; else ex.reviewed = true;
+          saveLessons(); touch(ls); renderEditorBody();
+        }
+      }),
       el('button', { class: 'small danger', text: 'Elimina', onclick: function () { ls.exercises = ls.exercises.filter(function (x) { return x !== ex; }); touch(ls); renderEditorBody(); undoBarFor('esercizio ' + (i + 1) + ' (' + (EX.LABELS[ex.type] || ex.type) + ')'); } })
     );
     card.appendChild(head);
     card.appendChild(el('div', { class: 'row', style: 'margin-top:6px' }, el('span', { class: 'hint', text: 'Helper:' }), helperSel));
     if (ex.note) card.appendChild(el('div', { class: 'hint', text: 'Perché: ' + ex.note }));
-    const ta = el('textarea', { class: 'sentence-edit', style: 'min-height:56px;margin-top:8px', title: 'Se togli o aggiungi parole all\'inizio o alla fine, inizio e fine vengono ricalcolati sulle parole' }); ta.value = ex.sentence;
+    // I tempi NON si ricalcolano da soli quando cambia il testo: lo decide l'insegnante col pulsante "⟳ Aggiorna tempi"
+    // (richiesta di Edoardo, 2/9: "devo io essere quello che chiede di ricalcolarlo"). Vale anche al contrario:
+    // spostando i secondi il testo non si riscrive da solo. Quando le due cose non combaciano, i due pulsanti si accendono.
+    const ta = el('textarea', { class: 'sentence-edit', style: 'min-height:56px;margin-top:8px', title: 'Cambia la frase liberamente: i tempi restano come sono finché non premi "⟳ Aggiorna tempi"' }); ta.value = ex.sentence;
     ta.addEventListener('change', function () {
-      const oldWords = L.words(ex.sentence).join(' ');
       ex.sentence = ta.value.trim();
-      if (L.words(ex.sentence).join(' ') !== oldWords) {
-        // parole cambiate: inizio e fine si ricalcolano sulle parole ritrovate nella trascrizione (se solo la punteggiatura cambia, i tempi restano)
-        const rt = retimeSentence(ls, ex);
-        if (rt) {
-          ex.segment = { start: Math.max(0, Math.round((rt.start - 0.2) * 10) / 10), end: Math.round((rt.end + 0.35) * 10) / 10 };
-          sortExercises(ls);
-          toast('Tempi ricalcolati sulle parole: ' + fmt(ex.segment.start) + ' → ' + fmt(ex.segment.end) + (rt.partial ? ' (solo prima e ultima parola ritrovate)' : ''), 3500);
-        } else toast('Frase non ritrovata nella trascrizione: tempi lasciati com\'erano', 3500);
-      }
       if (!rebuildExercise(ls, ex, ex.type, ex.type === 'mc' ? ex.data : null)) toast('Frase troppo corta per questo tipo');
       touch(ls); renderEditorBody();
     });

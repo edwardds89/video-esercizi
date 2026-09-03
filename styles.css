@@ -953,3 +953,10 @@ button.small.ai { background: #f3e8ff; border-color: #c99cf5; }
 }
 .cp-page.cp-tight { outline: 2px dashed #d94a4a; }
 button.small.warn { background: #fff1c2; border-color: #f5c400; color: #7a5a00; font-weight: 600; }
+
+/* Esercizio "controllato": il salvataggio e' automatico, il verde dice che ci hai messo le mani tu.
+   Si spegne da solo se il contenuto cambia (Rigenera, Altra frase, testo riscritto): va rimesso guardandolo. */
+.ex-card.reviewed { background: #f4fbf6; border-color: #b7e4c7; }
+.ex-card.rules.reviewed, .ex-card.ai.reviewed { border-left-color: #57b47e; }
+.ex-card.reviewed .num { background: #2e9e5b; }
+button.small.ok { background: #e6f6ea; border-color: #7fc99a; color: #17663a; font-weight: 600; }
