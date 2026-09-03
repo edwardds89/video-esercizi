@@ -497,6 +497,8 @@
   MockPlayer.prototype.pause = function () { this.playing = false; };
   MockPlayer.prototype.state = function () { return this.ended ? 0 : this.playing ? 1 : 2; };
   MockPlayer.prototype.destroy = function () { clearInterval(this.timer); };
+MockPlayer.prototype.mute = function () { this.muted = true; };
+MockPlayer.prototype.unmute = function () { this.muted = false; };
   MockPlayer.prototype.kind = 'mock';
 
   function wrapYT(p) {
@@ -508,6 +510,8 @@
       play: function () { try { p.playVideo(); } catch (e) { /* ignore */ } },
       pause: function () { try { p.pauseVideo(); } catch (e) { /* ignore */ } },
       state: function () { try { return p.getPlayerState(); } catch (e) { return -1; } },
+      mute: function () { try { p.mute(); } catch (e) { /* ignore */ } },
+      unmute: function () { try { p.unMute(); } catch (e) { /* ignore */ } },
       destroy: function () { try { p.destroy(); } catch (e) { /* ignore */ } }
     };
   }
@@ -1058,6 +1062,7 @@
     $('#e-strict').checked = !!ls.options.strict;
     $('#e-fx').checked = ls.options.fx !== false;
     $('#e-lock').checked = !!ls.options.lock;
+    $('#e-eatad').checked = ls.options.eatAd !== false;
     $('#e-cover').checked = !!coverState(ls).on;
     showSync(ls);
   }
@@ -1131,6 +1136,7 @@
   }
   $('#e-strict').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.strict = $('#e-strict').checked; touch(ls); } });
   $('#e-lock').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.lock = $('#e-lock').checked; touch(ls); } });
+  $('#e-eatad').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.eatAd = $('#e-eatad').checked; touch(ls); } });
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
   $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
@@ -3185,10 +3191,40 @@
   }
   $('#btn-start').addEventListener('click', beginLesson);
   /** "Inizia": segue la struttura della lezione (ls.flow): schede, video con esercizi e "Parliamone" nell'ordine scelto dall'insegnante. */
+  /**
+   * SPOT CONSUMATO DURANTE LE SCHEDE (v64, 'io voglio che funzioni anche per le persone che non hanno youtube premium').
+   * L'app non puo' bloccare gli annunci (termini YouTube); puo' pero' scegliere QUANDO farli passare: all'avvio del
+   * percorso, se prima del video ci sono schede/Parliamone/attivita', il video parte in MUTO in un riquadro piccolo
+   * ma visibile (il player non si copre e non si nasconde mentre suona: policy) — un eventuale pre-roll gira li'.
+   * Quando parte il contenuto vero: pausa, torna a 0, audio riacceso, riquadro via. Cosi' il primo esercizio non
+   * viene interrotto. Il tick durante il warm non disegna ne' fa scattare niente (i tempi dello spot non sono tempi).
+   */
+  function warmupAd(ls, st) {
+    if (!S.player || S.player.kind !== 'yt') return;
+    if (ls.options && ls.options.eatAd === false) return;
+    if (st.phase !== 'cards' && st.phase !== 'talk' && st.phase !== 'act') return;   // il video e' la prima sezione: parte comunque adesso
+    st.warmAd = { at: Date.now(), seen: false };
+    $('#s-stage').classList.add('warmad');
+    S.player.mute();
+    S.player.seek(0);
+    S.player.play();
+  }
+  function endWarmAd(st) {
+    const w = st.warmAd; if (!w) return;
+    st.warmAd = null;
+    const tag = $('#warmad-tag'); if (tag) tag.remove();
+    const stg = $('#s-stage'); if (stg) stg.classList.remove('warmad');
+    if (!S.player) return;
+    S.player.pause();
+    S.player.seek(0);
+    S.player.unmute();
+    if (w.seen) toast('Spot passato: il video partir\u00e0 senza interruzioni', 3500);
+  }
   function beginLesson() {
     const st = S.student; if (!st || !S.player) return;
     st.queue = lessonFlow(st.lesson).slice();
     advancePhase();
+    warmupAd(st.lesson, st);   // dopo advancePhase: quel ramo mette il player in pausa, il warm lo riaccende in muto
   }
   /** Prossima sezione della lezione. Coda vuota → riepilogo. Play diretto sul video (senza "Inizia"): la coda parte dalle sezioni dopo il video. */
   function advancePhase() {
@@ -3197,14 +3233,14 @@
     panelTheme(null);   // il template delle schede vale solo per le schede
     if (!st.queue) { const f = lessonFlow(st.lesson); st.queue = f.slice(f.findIndex(function (s) { return s.kind === 'video'; }) + 1); }
     const step = st.queue.shift();
-    if (!step) return renderSummary();
-    if (step.kind === 'video') { if (st.ended) return advancePhase(); return startPlayback(); }
+    if (!step) { endWarmAd(st); return renderSummary(); }
+    if (step.kind === 'video') { endWarmAd(st); if (st.ended) return advancePhase(); return startPlayback(); }
     if (step.kind === 'vocab') {
       const cards = cardsFor(st.lesson);
       if (!cards.length) return advancePhase();
       st.phase = 'cards'; st.cardIdx = 0; st.cards = cards;
       $('#btn-start').style.display = 'none';
-      S.player.pause();
+      if (!st.warmAd) S.player.pause();
       dock('#s-stage', true);
       $('#s-stage').classList.add('cards');
       renderVocabCard();
@@ -3216,7 +3252,7 @@
       if (!act || ACT.validate(act).length) return advancePhase();
       st.phase = 'act';
       $('#btn-start').style.display = 'none';
-      if (S.player) S.player.pause();
+      if (S.player && !st.warmAd) S.player.pause();
       dock('#s-stage', true);
       $('#s-stage').classList.add('cards');
       const p = $('#s-panel'); p.innerHTML = '';
@@ -3250,6 +3286,21 @@
   function studentTick() {
     const st = S.student; if (!st || !S.player) return;
     const ls = st.lesson;
+    if (st.warmAd) {
+      // spot in corso (o in arrivo) durante le schede: gira in muto, niente cursore e niente esercizi
+      const w = st.warmAd;
+      if (inAd(ls)) {
+        if (!w.seen) {
+          w.seen = true;
+          toast('C\u2019\u00e8 uno spot di YouTube: lo faccio passare adesso, in muto', 4000);
+          if (!$('#warmad-tag')) (document.fullscreenElement || document.body).appendChild(el('div', { id: 'warmad-tag', text: '\ud83c\udf7f spot in corso (muto)\u2026' }));
+        }
+        return;
+      }
+      if (S.player.state() === 1 && S.player.time() > 0.4) { endWarmAd(st); return; }   // contenuto vero partito: basta cosi'
+      if (Date.now() - w.at > 45000) { endWarmAd(st); return; }                          // niente in 45 s: lascia stare
+      return;
+    }
     if (inAd(ls)) {
       adNotice();
       st.lastT = null;   // i tempi dell'annuncio non devono far scattare niente
