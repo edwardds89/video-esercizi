@@ -287,6 +287,39 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(err && /401/.test(err.message));
   });
 
+  console.log('Traduzione delle parole utili');
+  const twFetch = function (vocab, calls) {
+    return async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      if (calls) calls.push(body);
+      return { ok: true, status: 200, json: async function () { return { model: 'm', usage: { input_tokens: 400, output_tokens: 120 }, content: [{ type: 'text', text: JSON.stringify({ vocab: vocab }) }] }; }, text: async function () { return ''; } };
+    };
+  };
+  await test('il modello deve ricopiare la parola esattamente com\'e\' stata mandata', async function () {
+    const calls = [];
+    await AI.translateWords({ words: ['i farmaci'], lang: 'it', support: 'en', apiKey: 'sk', fetchImpl: twFetch([{ word: 'i farmaci', translation: 'drugs' }], calls) });
+    const u = calls[0].messages[0].content;
+    assert.ok(/EXACTLY as it appears in WORDS/.test(u), 'glielo si chiede esplicitamente');
+    assert.ok(!/dictionary form/.test(u), 'e non gli si chiede piu\' la forma del dizionario, che gli faceva togliere l\'articolo');
+  });
+  await test('la traduzione si aggancia anche se il modello toglie l\'articolo', async function () {
+    // il caso segnalato: "i farmaci" chiesto, "farmaci" risposto -> prima si perdeva
+    const r = await AI.translateWords({ words: ['i farmaci', 'il patrimonio'], lang: 'it', support: 'en', apiKey: 'sk', fetchImpl: twFetch([{ word: 'farmaci', translation: 'drugs' }, { word: 'patrimonio', translation: 'heritage' }]) });
+    assert.deepStrictEqual(r.translations, { 'i farmaci': 'drugs', 'il patrimonio': 'heritage' });
+  });
+  await test('vale anche col "to" degli infiniti inglesi', async function () {
+    const r = await AI.translateWords({ words: ['to clone'], lang: 'en', support: 'it', apiKey: 'sk', fetchImpl: twFetch([{ word: 'clone', translation: 'clonare' }]) });
+    assert.deepStrictEqual(r.translations, { 'to clone': 'clonare' });
+  });
+  await test('se i nomi non combaciano affatto, vale l\'ordine delle risposte', async function () {
+    const r = await AI.translateWords({ words: ['gli avanzi', 'lo spreco'], lang: 'it', support: 'en', apiKey: 'sk', fetchImpl: twFetch([{ word: 'leftover food', translation: 'leftovers' }, { word: 'wastefulness', translation: 'waste' }]) });
+    assert.deepStrictEqual(r.translations, { 'gli avanzi': 'leftovers', 'lo spreco': 'waste' });
+  });
+  await test('se il modello risponde a meta\' e i nomi non combaciano, non si inventa niente', async function () {
+    const r = await AI.translateWords({ words: ['gli avanzi', 'lo spreco'], lang: 'it', support: 'en', apiKey: 'sk', fetchImpl: twFetch([{ word: 'qualcosa di diverso', translation: 'something' }]) });
+    assert.deepStrictEqual(r.translations, {}, 'meglio nessuna traduzione che una traduzione sbagliata');
+  });
+
   console.log('Parliamone: i suggerimenti non contengono la risposta');
   const helpFetch = function (calls, help) {
     return async function (url, opts) {

@@ -84,15 +84,21 @@ async function noOverflow(page, where) {
   await page.waitForTimeout(200);
   const seg1 = await page.evaluate(function (s) { const e = Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.sentence === s; }); return e ? { start: e.segment.start, end: e.segment.end, marker: e.markerTime } : null; }, ws.slice(3).join(' '));
   assert.ok(seg1, 'frase modificata salvata');
-  assert.ok(seg1.start > seg0.start + 0.3 && seg1.start < seg0.end, 'inizio spostato in avanti sulle parole: ' + seg0.start + ' → ' + seg1.start);
-  assert.ok(Math.abs(seg1.end - seg0.end) < 0.6, 'fine invariata: ' + seg0.end + ' → ' + seg1.end);
-  assert.ok(/Tempi ricalcolati/.test(await page.$eval('#toast', function (t) { return t.textContent; })), 'avviso tempi ricalcolati');
+  // v56: i tempi NON si ricalcolano da soli; lo fa "⟳ Aggiorna tempi" quando lo chiede l'insegnante
+  assert.ok(Math.abs(seg1.start - seg0.start) < 0.001 && Math.abs(seg1.end - seg0.end) < 0.001, 'i tempi restano dove sono: ' + seg0.start + ' → ' + seg1.start);
+  const cardMod = '#ex-' + await page.evaluate(function (s2) { return Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.sentence === s2; }).id; }, ws.slice(3).join(' '));
+  await page.click(cardMod + ' button:has-text("Aggiorna tempi")');
+  await page.waitForTimeout(300);
+  const seg1b = await page.evaluate(function (s2) { const e = Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.sentence === s2; }); return { start: e.segment.start, end: e.segment.end, marker: e.markerTime }; }, ws.slice(3).join(' '));
+  assert.ok(seg1b.start > seg0.start + 0.3 && seg1b.start < seg0.end, 'chiesto a mano, l\'inizio si sposta sulle parole: ' + seg0.start + ' → ' + seg1b.start);
+  assert.ok(Math.abs(seg1b.end - seg0.end) < 0.6, 'fine invariata: ' + seg0.end + ' → ' + seg1b.end);
+  assert.ok(/Tempi spostati sulle parole/.test(await page.$eval('#toast', function (t) { return t.textContent; })), 'e lo dice');
   const cardEdited = '#ex-' + await page.evaluate(function (s) { return Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.sentence === s; }).id; }, ws.slice(3).join(' '));
   await page.fill(cardEdited + ' textarea.sentence-edit', ws.slice(3).join(' ') + '!');
   await page.dispatchEvent(cardEdited + ' textarea.sentence-edit', 'change');
   await page.waitForTimeout(200);
   const seg2 = await page.evaluate(function (id) { const e = Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.id === id; }); return { start: e.segment.start, end: e.segment.end }; }, cardEdited.slice(4));
-  assert.strictEqual(seg2.start, seg1.start, 'solo punteggiatura: tempi invariati');
+  assert.strictEqual(seg2.start, seg1b.start, 'solo punteggiatura: tempi invariati');
   const cutsBefore = await page.$$eval('#e-cuts .cut-row', function (els) { return els.length; });
   await page.click('#btn-add-cut');
   await page.waitForTimeout(100);
@@ -125,11 +131,14 @@ async function noOverflow(page, where) {
   const last3 = await page.evaluate(function () { const s = window.VLApp.S; const e = Object.values(s.lessons)[0].exercises[1]; return { start: s.editor.replay && s.editor.replay.start, segEnd: e.segment.end }; });
   assert.ok(last3.start != null && Math.abs(last3.segEnd - last3.start - 3) < 0.2, 'ultimi 3 secondi: ' + JSON.stringify(last3));
   await page.waitForFunction(function () { return !window.VLApp.S.editor.replay; }, null, { timeout: 20000 });
-  // contatore di tipologia e salva per esercizio
+  // contatore di tipologia e "segna come controllato" per esercizio (v57: il salvataggio e' automatico, il pulsante marca)
   assert.ok(/tipologia presente \d+ volt/.test(await page.$eval('#e-exercises .ex-card:nth-child(2) .badge.count', function (b) { return b.textContent; })), 'contatore tipologia');
-  await page.click('#e-exercises .ex-card:nth-child(2) button:has-text("Salva")');
-  await page.waitForTimeout(100);
-  assert.ok(/Salvato/.test(await page.$eval('#e-exercises .ex-card:nth-child(2) button:has-text("Salvato")', function (b) { return b.textContent; })), 'salva per esercizio');
+  await page.click('#e-exercises .ex-card:nth-child(2) button.right');
+  await page.waitForTimeout(200);
+  assert.ok(await page.$('#e-exercises .ex-card:nth-child(2).reviewed'), 'la card si segna come controllata');
+  await page.click('#e-exercises .ex-card:nth-child(2) button.right');
+  await page.waitForTimeout(200);
+  assert.ok(!(await page.$('#e-exercises .ex-card:nth-child(2).reviewed')), 'e si puo\' togliere');
   // frecce sul campo tempo: +0,1 s e il fuoco resta sul campo
   const startInp = '#e-exercises .ex-card:nth-child(2) input[data-key$=":start"]';
   const v0 = await page.$eval(startInp, function (i) { return i.value; });
@@ -145,18 +154,16 @@ async function noOverflow(page, where) {
   await page.click('#e-pop button:has-text("Chiudi anteprima")');
   await page.waitForTimeout(200);
   assert.ok(!(await page.$('#e-stage.docked')), 'anteprima chiusa');
-  // pulsante Anteprima nella scheda + "= fine frase"
+  // pulsante Anteprima nella scheda + i due soli tempi (v55: il terzo, "il video si ferma a", non esiste piu')
   await page.click('#e-exercises .ex-card:first-child button:has-text("Anteprima")');
   await page.waitForTimeout(300);
   await page.waitForFunction(function () { return !window.VLApp.S.editor.replay; }, null, { timeout: 20000 });
   await page.waitForTimeout(150);
   assert.ok(await page.$('#e-stage.docked'), 'anteprima dalla scheda');
   const mk = await page.$$eval('#e-exercises .ex-card:first-child .head input.short', function (is) { return is.map(function (i) { return i.value; }); });
-  assert.strictEqual(mk.length, 3, 'tre tempi: inizio, fine, stop');
-  await page.click('#e-exercises .ex-card:first-child button:has-text("= fine frase")');
-  await page.waitForTimeout(200);
+  assert.strictEqual(mk.length, 2, 'due tempi: inizio e fine della frase');
   const ex0 = await page.evaluate(function () { const ls = Object.values(window.VLApp.S.lessons)[0]; const e = ls.exercises[0]; return { m: e.markerTime, end: e.segment.end }; });
-  assert.ok(Math.abs(ex0.m - ex0.end - 0.1) < 0.06, 'marker allineato a fine frase');
+  assert.strictEqual(ex0.m, ex0.end, 'il video si ferma esattamente alla fine della frase');
   // parole utili: proposte dalle regole alla generazione; traduzioni scritte a mano → pronte per le schede
   const nWords = await page.$$eval('#e-vocab .vocab-row', function (els) { return els.length; });
   assert.ok(nWords >= 8, 'parole proposte: ' + nWords);
@@ -1259,6 +1266,132 @@ async function noOverflow(page, where) {
   assert.ok(dopo[2].indexOf('Nel mio paese') !== -1, 'le domande di opinione non si toccano');
   assert.ok(await page.$('#undo-bar.show'), 'e si può annullare');
   assert.strictEqual(await page.locator('.talk-card button', { hasText: 'Togli le risposte' }).count(), 0, 'il pulsante sparisce quando non serve più');
+
+  console.log('18. due soli tempi per esercizio, e "Aggiorna testo" riscrive la frase su quei secondi');
+  await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  await page.waitForTimeout(700);
+  const tempi = await page.evaluate(function () {
+    const card = document.querySelector('#e-exercises .ex-card');
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    return {
+      campi: card.querySelectorAll('.head input').length,
+      riga: card.querySelector('.head').textContent,
+      disallineati: ls.exercises.filter(function (e) { return e.markerTime !== e.segment.end; }).length
+    };
+  });
+  // il terzo tempo ("il video si ferma a") non esiste piu': il segnaposto E' la fine della frase
+  assert.strictEqual(tempi.campi, 2, 'nella riga dei tempi ci sono due soli numeri (erano ' + tempi.campi + ')');
+  assert.ok(!/si ferma a/.test(tempi.riga), 'e non si parla piu\' di un terzo tempo');
+  assert.strictEqual(tempi.disallineati, 0, 'in ogni esercizio il segnaposto coincide con la fine della frase');
+
+  const primaFrase2 = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[0].sentence; });
+  await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    const ex = ls.exercises[0];
+    ex.segment = { start: Math.round((ex.segment.start + 12) * 10) / 10, end: Math.round((ex.segment.end + 16) * 10) / 10 };
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForTimeout(700);
+  const agg = page.locator('#e-exercises .ex-card button', { hasText: 'Aggiorna testo' }).first();
+  assert.strictEqual(await agg.count(), 1, 'il pulsante "Aggiorna testo" c\'e\'');
+  assert.ok(await agg.evaluate(function (b) { return b.classList.contains('warn'); }), 'ed e\' acceso: il testo non corrisponde piu\' ai tempi');
+  await agg.click();
+  await page.waitForTimeout(700);
+  const dopo2 = await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    const ex = ls.exercises.slice().sort(function (a, b) { return a.segment.end - b.segment.end; })[0];
+    return { frase: ex.sentence, allineato: ex.markerTime === ex.segment.end };
+  });
+  assert.notStrictEqual(dopo2.frase, primaFrase2, 'la frase e\' stata riscritta su quei secondi');
+  assert.ok(dopo2.frase.length > 10, 'e non e\' vuota');
+  assert.ok(dopo2.allineato, 'il segnaposto resta la fine della frase anche dopo');
+
+  // Nessuno dei due lati si muove da solo: cambiando il TESTO i tempi restano dove sono
+  // finche' non si preme "⟳ Aggiorna tempi" ("devo io essere quello che chiede di ricalcolarlo").
+  const t0 = await page.evaluate(function () {
+    const ex = window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[0];
+    return { s: ex.segment.start, e: ex.segment.end, frase: ex.sentence };
+  });
+  const accorciata = t0.frase.split(/\s+/).slice(3).join(' ');
+  const ta2 = page.locator('#e-exercises .ex-card textarea.sentence-edit').first();
+  await ta2.fill(accorciata);
+  await ta2.dispatchEvent('change');
+  await page.waitForTimeout(600);
+  const t1 = await page.evaluate(function () {
+    const ex = window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[0];
+    return { s: ex.segment.start, e: ex.segment.end };
+  });
+  assert.ok(Math.abs(t1.s - t0.s) < 0.001 && Math.abs(t1.e - t0.e) < 0.001, 'i tempi non si spostano da soli quando cambia il testo');
+  const bTempi = page.locator('#e-exercises .ex-card button', { hasText: 'Aggiorna tempi' }).first();
+  assert.strictEqual(await bTempi.count(), 1, 'c\'e\' il pulsante "Aggiorna tempi"');
+  assert.ok(await bTempi.evaluate(function (x) { return x.classList.contains('warn'); }), 'ed e\' acceso: testo e tempi non combaciano');
+  await bTempi.click();
+  await page.waitForTimeout(700);
+  const t2 = await page.evaluate(function () {
+    const ex = window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[0];
+    return { s: ex.segment.start, e: ex.segment.end, m: ex.markerTime };
+  });
+  assert.ok(t2.s > t0.s + 0.2, 'chiesto a mano, l\'inizio si sposta sulle parole rimaste');
+  assert.strictEqual(t2.m, t2.e, 'e il segnaposto resta la fine della frase');
+  assert.ok(!(await page.locator('#e-exercises .ex-card button', { hasText: 'Aggiorna tempi' }).first().evaluate(function (x) { return x.classList.contains('warn'); })), 'i pulsanti si spengono quando testo e tempi combaciano');
+
+  console.log('19. esercizio "controllato": sfondo verde, e il salvataggio resta automatico');
+  await page.evaluate(function () {
+    const S = window.VLApp.S;
+    const ls = Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (x) { return Array.isArray(x.exercises) && x.exercises.length; })[0];
+    window.VLApp.openEditor(ls.id);
+  });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  await page.waitForTimeout(700);
+  const rev = function () {
+    return page.evaluate(function () {
+      const c = document.querySelector('#e-exercises .ex-card');
+      return { verde: c.classList.contains('reviewed'), sfondo: getComputedStyle(c).backgroundColor, pulsante: c.querySelector('button.right').textContent.trim() };
+    });
+  };
+  const r0 = await rev();
+  assert.ok(!r0.verde && r0.sfondo === 'rgb(255, 255, 255)', 'gli esercizi proposti partono bianchi');
+  await page.locator('#e-exercises .ex-card button.right').first().click();
+  await page.waitForTimeout(500);
+  const r1 = await rev();
+  assert.ok(r1.verde && r1.sfondo !== 'rgb(255, 255, 255)', 'dopo "segna come controllato" la card diventa verde');
+  assert.ok(/Controllato/.test(r1.pulsante), 'e il pulsante lo dice');
+  assert.strictEqual(await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('vle.lessons'))[window.VLApp.S.currentId].exercises[0].reviewed;
+  }), true, 'il segno e\' salvato nella lezione, non solo a schermo');
+  // se il contenuto cambia, il "controllato" non vale piu': va rimesso guardandolo
+  await page.locator('#e-exercises .ex-card button', { hasText: 'Rigenera' }).first().click();
+  await page.waitForTimeout(600);
+  assert.ok(!(await rev()).verde, 'rigenerando l\'esercizio il verde si spegne');
+  await page.locator('#e-exercises .ex-card button.right').first().click();
+  await page.waitForTimeout(400);
+  assert.ok((await rev()).verde, 'e si puo\' rimettere');
+  await page.locator('#e-exercises .ex-card button.right').first().click();
+  await page.waitForTimeout(400);
+  assert.ok(!(await rev()).verde, 'e togliere');
+  // il salvataggio automatico c'e' comunque: una modifica qualsiasi finisce in localStorage senza premere niente
+  const frasePrima = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[1].sentence; });
+  await page.evaluate(function () {
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    ls.exercises[1].sentence = 'Frase cambiata senza premere nessun pulsante di salvataggio.';
+    window.VLApp.S.__t = ls;
+  });
+  await page.evaluate(function () { window.VLApp.S.lessons[window.VLApp.S.currentId].updatedAt = new Date().toISOString(); });
+  await page.locator('#e-exercises .ex-card textarea.sentence-edit').first().dispatchEvent('change');
+  await page.waitForTimeout(900);
+  const inStorage = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('vle.lessons'))[window.VLApp.S.currentId].exercises[1].sentence;
+  });
+  assert.notStrictEqual(inStorage, frasePrima, 'le modifiche finiscono in localStorage da sole, senza premere Salva');
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
