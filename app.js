@@ -3218,6 +3218,7 @@
     if (ex.type === 'gap' || ex.type === 'gapbank') {
       const sent = el('div', { class: 'sentence' });
       const inputs = [];
+      let active = null;   // la casella su cui sta lavorando lo studente: la parola cliccata va LI'
       // parole nascoste adiacenti = un unico spazio (lo studente scrive tutta l'espressione)
       const runs = EX.gapRuns(d);
       const runStart = {}; runs.forEach(function (r, k) { runStart[r.indices[0]] = k; });
@@ -3234,16 +3235,45 @@
         const width = Math.min(11 * run.indices.length, 34);
         const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', style: 'width:' + width + 'ch', 'data-words': String(run.indices.length) });
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
+        inp.addEventListener('focus', function () { active = inp; });
+        inp.addEventListener('click', function () { active = inp; });
         inputs.push(inp); sent.appendChild(inp);
         sent.appendChild(document.createTextNode((lastTok.post || '') + ' '));
       });
       body.appendChild(sent);
       if (ex.type === 'gapbank' && d.wordBank && d.wordBank.length) {
-        body.appendChild(el('div', { class: 'chips' }, d.wordBank.map(function (w) { return el('span', { class: 'chip', text: w, onclick: function () {
-          // riempie il primo spazio non completo (uno spazio unito accoglie più parole)
-          const target = inputs.find(function (inp) { return inp.value.trim().split(/\s+/).filter(Boolean).length < parseInt(inp.getAttribute('data-words'), 10); });
-          if (target) { target.value = (target.value.trim() + ' ' + w).trim(); target.focus(); }
-        } }); })));
+        // La parola cliccata va nella casella SU CUI SEI (se ne hai scelta una), non sempre nella prima libera;
+        // e sparisce dalla lista, perche' una parola gia' usata non si usa due volte. Cancellandola dalla casella
+        // torna disponibile. Richieste di Edoardo, 3/9.
+        const manca = function (inp) { return inp.value.trim().split(/\s+/).filter(Boolean).length < parseInt(inp.getAttribute('data-words'), 10); };
+        const bank = [];
+        const refreshBank = function () {
+          const usate = {};
+          inputs.forEach(function (i) { L.words(i.value).forEach(function (x) { usate[x] = (usate[x] || 0) + 1; }); });
+          const viste = {};
+          bank.forEach(function (b) {
+            const k = L.normalize(b.w);
+            viste[k] = (viste[k] || 0) + 1;
+            b.el.hidden = viste[k] <= (usate[k] || 0);
+          });
+        };
+        inputs.forEach(function (i) { i.addEventListener('input', refreshBank); });
+        const row = el('div', { class: 'chips' });
+        d.wordBank.forEach(function (w) {
+          const c = el('span', { class: 'chip', text: w, onclick: function () {
+            const target = (active && manca(active)) ? active : inputs.find(manca);
+            if (!target) return;
+            target.value = (target.value.trim() + ' ' + w).trim();
+            refreshBank();
+            const prossimo = manca(target) ? target : inputs.find(manca);
+            active = prossimo || target;
+            active.focus();
+          } });
+          bank.push({ w: w, el: c });
+          row.appendChild(c);
+        });
+        body.appendChild(row);
+        refreshBank();
       }
       getAnswer = function () { return inputs.map(function (i) { return i.value; }); };
       giveHint = function () {
@@ -3360,7 +3390,14 @@
         sl.addEventListener('click', function (e) { if (e.target === inp) return; e.stopPropagation(); choose(k); });
         return sl;
       };
-      visible.forEach(function (t, k) { const sl = makeSlot(k); slots.push(sl); sdiv.appendChild(sl); sdiv.appendChild(starSpan(ls, t)); });
+      // Uno spazio VERO tra una parola e l'altra: prima lo faceva lo slot, largo 0,4em, e portandolo a zero (v55, per
+      // allineare le righe) le parole si sono attaccate tutte — la frase era illeggibile. Lo spazio non deve dipendere
+      // da un elemento che serve ad altro.
+      visible.forEach(function (t, k) {
+        const sl = makeSlot(k); slots.push(sl);
+        if (k) sdiv.appendChild(document.createTextNode(' '));
+        sdiv.appendChild(sl); sdiv.appendChild(starSpan(ls, t));
+      });
       const lastSlot = makeSlot(visible.length); slots.push(lastSlot); sdiv.appendChild(lastSlot);
       // lo spazio si apre dove sta il mouse: lo slot più vicino al puntatore, sulla stessa riga
       const nearest = function (x, y) {
