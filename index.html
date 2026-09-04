@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Video Esercizi</title>
-<link rel="icon" type="image/svg+xml" href="logo.svg?v=2">
+<title>Proflandia · giochi, video-lezioni e sfide per la tua classe</title>
+<link rel="icon" type="image/svg+xml" href="plogo.svg?v=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260903-64">
+<link rel="stylesheet" href="styles.css?v=20260903-65">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img src="logo.svg?v=2" alt="" width="26" height="26" style="vertical-align:-6px;margin-right:6px">Video Esercizi</div>
+  <div class="brand"><img src="plogo.svg?v=1" alt="" width="26" height="26" style="vertical-align:-6px;margin-right:6px">Proflandia<span class="branddot">.</span></div>
   <nav id="nav">
     <button data-view="home">Portfolio</button>
     <button data-view="new" class="primary">Nuova lezione</button>
@@ -24,13 +24,41 @@
 <main>
   <!-- HOME -->
   <section id="view-home" class="view">
-    <h1>Il mio portfolio</h1>
+    <div class="home-hero">
+      <h1>Cosa prepariamo oggi?</h1>
+      <p class="hero-sub">Lezioni da video YouTube, giochi per la classe e conversazione: tutto in un posto.</p>
+      <div class="services">
+        <div class="svc svc-video" data-view="new" role="button" tabindex="0">
+          <div class="ico">🎬</div><h3>Lezione da video</h3>
+          <p>Incolli un video YouTube: si ferma da solo e compaiono gli esercizi. Tagli, parole utili, Parliamone.</p>
+          <div class="go">+ Nuova lezione</div>
+        </div>
+        <div class="svc svc-act" id="btn-new-act" role="button" tabindex="0">
+          <div class="ico">🎲</div><h3>Giochi e attività</h3>
+          <p>Memory, quiz, anagramma, ruota della fortuna. 18 template visivi, da soli o dentro la lezione.</p>
+          <div class="go">+ Nuova attività</div>
+        </div>
+        <div class="svc svc-conv" id="btn-new-conv" role="button" tabindex="0">
+          <div class="ico">💬</div><h3>Conversazione</h3>
+          <p>Unità di sola conversazione senza video, col foglio A4 da stampare: lessico, domande, role-play.</p>
+          <div class="go">+ Nuova conversazione</div>
+        </div>
+        <div class="svc svc-qr" id="svc-qr" role="button" tabindex="0">
+          <span class="soon">IN ARRIVO</span>
+          <div class="ico">📱</div><h3>Sfida in classe</h3>
+          <p>Gli studenti scannerizzano un QR col telefono, nickname e via: classifica in diretta, senza account.</p>
+          <div class="go">Gioca in classe</div>
+        </div>
+      </div>
+    </div>
     <div class="card">
+      <div class="row port-head">
+        <h2 style="margin:0">Il tuo portfolio</h2>
+        <div id="home-filter" class="fchips"></div>
+        <input id="home-search" type="search" placeholder="🔍 Cerca per titolo…" autocomplete="off">
+      </div>
       <div id="lesson-list" class="lesson-grid"></div>
       <div class="row" style="margin-top:12px">
-        <button data-view="new" class="primary">+ Nuova lezione</button>
-        <button id="btn-new-act">🎲 Nuova attività</button>
-        <button id="btn-new-conv">💬 Nuova conversazione</button>
         <label for="import-file" class="chip" style="margin:0">Importa JSON…</label>
         <input id="import-file" type="file" accept="application/json,.json" class="sr">
         <button id="btn-demo">Crea lezione demo (player finto)</button>
@@ -40,10 +68,10 @@
     </div>
     <div class="card" id="bookmarklet-card">
       <h2>Pulsante per il browser: dal video alla bozza senza copia-incolla</h2>
-      <p>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla; funziona in Chrome, Safari, Opera, Firefox, Edge): <a id="bookmarklet-link" class="chip" href="#" style="font-weight:600">▶ Video Esercizi</a></p>
+      <p>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla; funziona in Chrome, Safari, Opera, Firefox, Edge): <a id="bookmarklet-link" class="chip" href="#" style="font-weight:600">▶ Proflandia</a></p>
       <p class="hint">Poi, su un video di YouTube, cliccalo: legge titolo, durata e trascrizione dal pannello di YouTube e apre qui la nuova lezione già compilata. Se il video non ha la trascrizione ti avvisa che non è utilizzabile (a meno di incollarla a mano). È l'unica via senza copia-incolla: la trascrizione si può leggere solo dentro la pagina di YouTube.</p>
       <details><summary class="hint">Non riesci a trascinarlo? Crea un preferito a mano</summary>
-        <p class="hint">Aggiungi un preferito qualsiasi, poi modificalo: nome "Video Esercizi", indirizzo = il codice qui sotto.</p>
+        <p class="hint">Aggiungi un preferito qualsiasi, poi modificalo: nome "Proflandia", indirizzo = il codice qui sotto.</p>
         <div id="bookmarklet-code" class="linkbox"></div>
         <div class="row" style="margin-top:6px"><button id="bookmarklet-copy" class="small">Copia il codice</button></div>
       </details>
@@ -59,7 +87,7 @@
           <label>Link del video YouTube</label>
           <input id="f-url" type="url" placeholder="https://www.youtube.com/watch?v=…">
           <div id="f-video-status" class="hint">Incolla il link: controllo che il video esista e che si possa incorporare.</div>
-          <div id="f-yt-go" class="row" style="display:none;margin-top:6px"><button id="btn-yt-go" class="small primary" type="button">▶ Apri su YouTube e prendi la trascrizione</button><span class="hint">si apre il video: lì premi il preferito <b>▶ Video Esercizi</b> e torni qui con la lezione compilata</span></div>
+          <div id="f-yt-go" class="row" style="display:none;margin-top:6px"><button id="btn-yt-go" class="small primary" type="button">▶ Apri su YouTube e prendi la trascrizione</button><span class="hint">si apre il video: lì premi il preferito <b>▶ Proflandia</b> e torni qui con la lezione compilata</span></div>
           <label>Titolo</label>
           <input id="f-title" type="text" placeholder="Es. Come funziona Neuralink">
           <div class="grid2">
@@ -487,14 +515,14 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260903-64"></script>
-<script src="exercises.js?v=20260903-64"></script>
-<script src="generator.js?v=20260903-64"></script>
-<script src="activities.js?v=20260903-64"></script>
-<script src="ai.js?v=20260903-64"></script>
-<script src="demo-data.js?v=20260903-64"></script>
-<script src="bookmarklet.js?v=20260903-64"></script>
-<script src="sync.js?v=20260903-64"></script>
-<script src="app.js?v=20260903-64"></script>
+<script src="lang.js?v=20260903-65"></script>
+<script src="exercises.js?v=20260903-65"></script>
+<script src="generator.js?v=20260903-65"></script>
+<script src="activities.js?v=20260903-65"></script>
+<script src="ai.js?v=20260903-65"></script>
+<script src="demo-data.js?v=20260903-65"></script>
+<script src="bookmarklet.js?v=20260903-65"></script>
+<script src="sync.js?v=20260903-65"></script>
+<script src="app.js?v=20260903-65"></script>
 </body>
 </html>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Segnaposto PROVVISORIO del marchio Proflandia: una p col punto arancione, in attesa del logo disegnato da Edoardo -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#1f6feb"/>
+  <text x="27" y="47" font-family="Nunito, Arial, Helvetica, sans-serif" font-size="44" font-weight="800" fill="#ffffff" text-anchor="middle">p</text>
+  <circle cx="47" cy="43.5" r="5" fill="#ff8a00"/>
+</svg>

@@ -682,13 +682,37 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#bookmarklet-code').textContent = url;
     $('#bookmarklet-copy').onclick = function () { copyText(url); };
   }
+  /** Tipo di una voce del portfolio: lezione video, attività standalone o conversazione. */
+  function homeKind(ls) {
+    if (ls.activity && !Array.isArray(ls.exercises)) return 'act';
+    if (ls.conv && !Array.isArray(ls.exercises)) return 'conv';
+    return 'video';
+  }
   function renderHome() {
     show('home');
     renderBookmarklet();
     const list = $('#lesson-list');
     list.innerHTML = '';
-    const items = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
-    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con "Nuova lezione" (o con il pulsante per il browser) oppure prova la demo.' })); return; }
+    const all = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
+    // chip dei filtri con i conteggi veri + ricerca per titolo (v65, home Proflandia)
+    const counts = { all: all.length, video: 0, act: 0, conv: 0 };
+    all.forEach(function (ls) { counts[homeKind(ls)]++; });
+    const fbox = $('#home-filter');
+    if (fbox) {
+      fbox.innerHTML = '';
+      [['all', 'Tutte'], ['video', '\ud83c\udfac Lezioni'], ['act', '\ud83c\udfb2 Attivit\u00e0'], ['conv', '\ud83d\udcac Conversazioni']].forEach(function (f) {
+        const b = el('button', { class: 'fchip' + ((S.homeFilter || 'all') === f[0] ? ' on' : ''), text: f[1] + ' (' + counts[f[0]] + ')', onclick: function () { S.homeFilter = f[0]; renderHome(); } });
+        fbox.appendChild(b);
+      });
+    }
+    const q = L.normalize(S.homeSearch || '');
+    const items = all.filter(function (ls) {
+      if ((S.homeFilter || 'all') !== 'all' && homeKind(ls) !== (S.homeFilter || 'all')) return false;
+      if (q && L.normalize(ls.title || '').indexOf(q) === -1) return false;
+      return true;
+    });
+    if (!all.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con una delle card qui sopra, oppure prova la demo.' })); return; }
+    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Niente che corrisponda al filtro o alla ricerca.' })); return; }
     items.forEach(function (ls) {
       // attività standalone: card con l'emoji del tipo, Apri = gioca
       if (ls.activity && !Array.isArray(ls.exercises)) {
@@ -772,6 +796,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     e.target.value = '';
   });
   $('#btn-new-act').addEventListener('click', function () { openActNew(newActivity); });
+  $('#home-search').addEventListener('input', function () { S.homeSearch = this.value; renderHome(); });
+  $('#svc-qr').addEventListener('click', function () { toast('La sfida in classe arriva presto: QR dal telefono, nickname senza account e classifica in diretta. La stiamo costruendo.', 5000); });
   $('#btn-demo').addEventListener('click', function () {
     if (!window.VL_DEMO) return toast('Dati demo non trovati');
     const parsed = G.parseTranscript(window.VL_DEMO.transcript);
@@ -916,7 +942,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (v === 'custom') { const t = L.parseTime($('#f-target').value.trim()); return isNaN(t) || t <= 0 ? NaN : Math.min(t, duration); }
     return Math.min(parseInt(v, 10), duration);
   }
-  $('#btn-yt-go').addEventListener('click', function () { const id = extractVideoId($('#f-url').value); if (!id) return toast('Prima incolla il link del video'); window.open('https://www.youtube.com/watch?v=' + id, '_blank'); toast('Sul video premi il preferito ▶ Video Esercizi: la lezione arriva qui da sola', 5000); });
+  $('#btn-yt-go').addEventListener('click', function () { const id = extractVideoId($('#f-url').value); if (!id) return toast('Prima incolla il link del video'); window.open('https://www.youtube.com/watch?v=' + id, '_blank'); toast('Sul video premi il preferito ▶ Proflandia: la lezione arriva qui da sola', 5000); });
   $('#f-url').addEventListener('change', checkVideo);
   $('#f-url').addEventListener('paste', function () { setTimeout(checkVideo, 50); });
   function checkVideo() {
