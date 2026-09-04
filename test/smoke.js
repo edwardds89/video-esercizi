@@ -41,6 +41,12 @@ async function noOverflow(page, where) {
   await page.goto(BASE + '?mock=1&speed=8');
   await page.evaluate(function () { localStorage.clear(); });
   await page.goto(BASE + '?mock=1&speed=8');
+  // home Proflandia (v65): 4 card servizio, brand nuovo, sfida "in arrivo" che spiega senza rompere
+  assert.strictEqual(await page.$$eval('.services .svc', function (e) { return e.length; }), 4, 'quattro card servizio');
+  assert.ok((await page.textContent('.brand')).indexOf('Proflandia') !== -1, 'il brand dice Proflandia');
+  await page.click('#svc-qr');
+  await page.waitForTimeout(300);
+  assert.ok((await page.textContent('#toast')).indexOf('sfida in classe') !== -1 || (await page.textContent('#toast')).indexOf('Sfida') !== -1 || (await page.textContent('#toast')).indexOf('QR') !== -1, 'la card in arrivo spiega cosa arriva');
   await page.click('#btn-demo');
   await page.waitForSelector('#view-editor.active', { timeout: 15000 });
   await page.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
@@ -829,6 +835,16 @@ async function noOverflow(page, where) {
   await page.click('#at-close');
   await page.click('#a-save');
   await page.waitForSelector('#view-home.active');
+  // filtri del portfolio (v65): "Attività" mostra solo l'attività, "Lezioni" la nasconde, la ricerca trova per titolo
+  await page.click('.fchip:has-text("Attività")');
+  await page.waitForTimeout(200);
+  assert.ok(await page.$('#lesson-list .lesson-card:has(.act-thumb)'), 'col filtro Attività la card c\'è');
+  assert.ok(!(await page.$('#lesson-list .lesson-card:not(:has(.act-thumb))')), 'e le lezioni video spariscono');
+  await page.click('.fchip:has-text("Lezioni")');
+  await page.waitForTimeout(200);
+  assert.ok(!(await page.$('#lesson-list .lesson-card:has(.act-thumb)')), 'col filtro Lezioni l\'attività sparisce');
+  await page.click('.fchip:has-text("Tutte")');
+  await page.waitForTimeout(200);
   const actCard = await page.$('#lesson-list .lesson-card:has(.act-thumb)');
   assert.ok(actCard, 'card dell\'attività nel portfolio');
   assert.ok(/Quiz gioco · 2 elementi · tema Natale/.test(await actCard.$eval('.meta', function (m) { return m.textContent; })), 'meta della card');
