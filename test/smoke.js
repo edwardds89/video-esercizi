@@ -379,6 +379,7 @@ async function noOverflow(page, where) {
   const sampler = setInterval(async function () {
     try { const smp = await page.evaluate(function () { const p = window.VLApp.S.player; return p ? { t: p.time(), st: p.state(), blocked: window.VLApp.S.student.blocked, replay: !!window.VLApp.S.student.replay } : null; }); samples.push(smp); if (process.env.SMOKE_TRACE && smp && samples.length % 10 === 0) console.log('   trace', ((Date.now() - tStart) / 1000).toFixed(1) + 's', 't=' + smp.t.toFixed(1), 'st=' + smp.st, 'blocked=' + smp.blocked, 'replay=' + smp.replay); } catch (e) { /* ignore */ }
   }, 150);
+  let filledStarTested = false;
   for (let k = 0; k < lesson.exercises.length; k++) {
     try { await page.waitForSelector('#s-panel button:has-text("Controlla")', { timeout: 60000 }); }
     catch (e) {
@@ -431,6 +432,16 @@ async function noOverflow(page, where) {
       assert.ok(fixed.saved.indexOf(oldWord + 'X') !== -1, 'lezione salvata');
       assert.ok(!(await page.$('#s-panel .w.starred')) || true);
       ex.sentence = fixed.sentence; ex.data = await page.evaluate(function () { return JSON.parse(JSON.stringify(window.VLApp.S.student.lesson.exercises[0].data)); });
+    }
+    if (ex.type === 'gapbank') {
+      // v66: la consegna dice IN GRASSETTO quante parole della lista sono in piu' (0 = niente frase)
+      const binfo = await page.evaluate(function (id) {
+        const e = window.VLApp.S.student.lesson.exercises.find(function (x) { return x.id === id; });
+        const b = document.querySelector('#s-panel .instr b');
+        return { nd: (e.data.distractors || []).length, bold: b ? b.textContent : '' };
+      }, ex.id);
+      if (binfo.nd > 0) assert.ok(new RegExp(binfo.nd + ' parol[ae] in più').test(binfo.bold), 'consegna gapbank: numero in grassetto (' + JSON.stringify(binfo) + ')');
+      else assert.strictEqual(binfo.bold, '', 'gapbank senza parole in piu\': niente grassetto');
     }
     if (ex.type === 'gap' || ex.type === 'gapbank') {
       const inputs = await page.$$('#s-panel input.gap');
@@ -489,6 +500,29 @@ async function noOverflow(page, where) {
     await page.click('#s-panel button:has-text("Controlla")');
     const fb = await page.$eval('#s-panel .feedback', function (f) { return f.textContent; });
     assert.ok(/Giusto/.test(fb), 'esercizio ' + (k + 1) + ' (' + ex.type + '): ' + fb);
+    if ((ex.type === 'gap' || ex.type === 'gapbank') && !filledStarTested) {
+      // v66: le parole degli ex-gap (avvolte in .filled a risposta giusta) non sono piu' isole per la stella —
+      // cliccando la parola dentro il gap e le vicine fuori, la sequenza diventa UNA voce ('un essere vivente che...')
+      filledStarTested = true;
+      await page.waitForTimeout(200);
+      const fseq = await page.evaluate(function () {
+        const sent = document.querySelector('#s-panel .sentence');
+        const all = [].slice.call(sent.querySelectorAll('.w'));
+        const iIn = all.findIndex(function (w) { return w.closest('.filled'); });
+        if (iIn === -1) return null;
+        let iEnd = iIn;
+        while (iEnd + 1 < all.length && all[iEnd + 1].closest('.filled') === all[iIn].closest('.filled')) iEnd++;
+        return { iPrev: iIn > 0 ? iIn - 1 : -1, iIn: iIn, iEnd: iEnd, iNext: iEnd + 1 < all.length ? iEnd + 1 : -1,
+          norms: all.map(function (w) { return w.getAttribute('data-w'); }), starred: all.map(function (w) { return w.classList.contains('starred'); }) };
+      });
+      assert.ok(fseq && (fseq.iPrev !== -1 || fseq.iNext !== -1), 'l\'esercizio ' + ex.type + ' risolto ha un gap riempito con una parola vicina');
+      await page.locator('#s-panel .sentence .w').nth(fseq.iIn).click(); await page.waitForTimeout(100);
+      if (fseq.iPrev !== -1 && !fseq.starred[fseq.iPrev]) { await page.locator('#s-panel .sentence .w').nth(fseq.iPrev).click(); await page.waitForTimeout(100); }
+      if (fseq.iNext !== -1 && !fseq.starred[fseq.iNext]) { await page.locator('#s-panel .sentence .w').nth(fseq.iNext).click(); await page.waitForTimeout(100); }
+      const expected = fseq.norms.slice(fseq.iPrev !== -1 ? fseq.iPrev : fseq.iIn, (fseq.iNext !== -1 ? fseq.iNext : fseq.iEnd) + 1).join(' ');
+      const fkeys = await page.evaluate(function () { return Object.keys(window.VLApp.S.student.stars); });
+      assert.ok(fkeys.some(function (kk) { return (' ' + kk + ' ').indexOf(' ' + expected + ' ') !== -1; }), 'sequenza attraverso il gap = una voce ("' + expected + '" dentro ' + JSON.stringify(fkeys) + ')');
+    }
     assert.ok(await page.$('#s-panel .actions .feedback'), '"Giusto!" sulla riga dei pulsanti');
     await page.waitForTimeout(400);   // fitStage (transizione .3s)
     const fit = await page.evaluate(function () { const pop = document.querySelector('#s-panel'), pb = document.querySelector('#s-player'); return { scroll: pop.scrollHeight, client: pop.clientHeight, ph: pb.getBoundingClientRect().height }; });
@@ -1577,6 +1611,17 @@ async function noOverflow(page, where) {
   const z2 = await zona();
   assert.strictEqual(z2.n, 3, 'il secondo aiuto stringe a tre');
   assert.ok(z2.testi.indexOf(info.parola) !== -1, 'e la parola c\'e\' ancora');
+  // v66: il chip CLICCATO dentro la zona deve vedersi selezionato (prima il giallo della zona copriva la selezione)
+  await page.evaluate(function () { document.querySelectorAll('.chip.zone')[0].click(); });
+  await page.waitForTimeout(200);
+  const selInfo = await page.evaluate(function () {
+    const sel = document.querySelector('.chip.sel');
+    const other = [].slice.call(document.querySelectorAll('.chip.zone')).filter(function (c) { return !c.classList.contains('sel'); })[0];
+    const bg = function (x) { return x ? getComputedStyle(x).backgroundColor : null; };
+    return { hasSel: !!sel, inZone: !!(sel && sel.classList.contains('zone')), selBg: bg(sel), zoneBg: bg(other) };
+  });
+  assert.ok(selInfo.hasSel && selInfo.inZone, 'il chip cliccato nella zona e\' selezionato: ' + JSON.stringify(selInfo));
+  assert.ok(selInfo.selBg !== selInfo.zoneBg, 'e la selezione si distingue dal giallo della zona: ' + JSON.stringify(selInfo));
 
   console.log('22. taglio "fino alla fine del video" e annuncio YouTube che non manda in tilt la lezione');
   await page.evaluate(function () {
