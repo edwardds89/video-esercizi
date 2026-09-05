@@ -119,4 +119,116 @@ ok('protocollo sul bus finto: host + 2 studenti, quiz, punteggi, fine', function
   assert.strictEqual(st.players.s2.score, 0);
 });
 
+// ---------- set multi-tipo e teacher-paced (v69) ----------
+
+const FRASE = 'Il mare si sta riscaldando molto in fretta e questo preoccupa gli scienziati del clima.';
+
+ok('buildItem costruisce i tipi delle lezioni e il match', function () {
+  const gap = C.buildItem('gap', FRASE, { lang: 'it', seed: 3 });
+  assert.strictEqual(gap.kind, 'gap');
+  assert.ok(gap.data.answers.length >= 2);
+  const mc = C.buildItem('mc', { q: 'Capitale?', options: ['Roma', 'Milano', 'Bari', 'Pisa'], correct: 0 });
+  assert.strictEqual(mc.kind, 'mc');
+  assert.strictEqual(mc.data.correct, 0);
+  const ma = C.buildItem('match', [{ a: 'mare', b: 'sea' }, { a: 'cane', b: 'dog' }, { a: 'pane', b: 'bread' }]);
+  assert.strictEqual(ma.pairs.length, 3);
+  assert.strictEqual(C.buildItem('match', [{ a: 'solo', b: '' }]), null);
+});
+
+ok('pubItem via canale (wire) non fa MAI viaggiare le risposte', function () {
+  const gap = C.buildItem('gap', FRASE, { lang: 'it', seed: 3 });
+  const answers = gap.data.answers.map(function (a) { return a.toLowerCase(); });
+  const pubGap = JSON.stringify(C.wire(C.pubItem(gap, { showQ: true }))).toLowerCase();
+  answers.forEach(function (a) { assert.ok(pubGap.indexOf('"' + a + '"') === -1, 'risposta "' + a + '" trapelata: ' + pubGap); });
+  assert.ok(pubGap.indexOf('_____') !== -1, 'con showQ c\'e\' la frase bucata');
+  const senza = C.wire(C.pubItem(gap, { showQ: false }));
+  assert.ok(!senza.sentence, 'senza showQ niente frase');
+  assert.strictEqual(senza.runs.length, gap.data.answers.length ? C.pubItem(gap, {}).runs.length : 0);
+  const mc = C.buildItem('mc', { q: 'Capitale?', options: ['Roma', 'Milano', 'Bari', 'Pisa'], correct: 0 });
+  const pubMc = C.wire(C.pubItem(mc, { showQ: false }));
+  assert.strictEqual(pubMc.options, undefined);
+  assert.strictEqual(pubMc.q, undefined);
+  assert.strictEqual(pubMc.n, 4);
+  assert.strictEqual(JSON.stringify(pubMc).indexOf('correct'), -1);
+  const ma = C.buildItem('match', [{ a: 'mare', b: 'sea' }, { a: 'cane', b: 'dog' }, { a: 'pane', b: 'bread' }]);
+  const pubMa = C.pubItem(ma, { rand: function () { return 0.4; } });
+  assert.ok(pubMa._map, 'il mapping resta all\'host');
+  const wired = C.wire(pubMa);
+  assert.strictEqual(wired._map, undefined, 'wire toglie il mapping: la soluzione non parte');
+  assert.deepStrictEqual(wired.left, ['mare', 'cane', 'pane']);
+});
+
+ok('checkItem valuta lato host: gap, mc, extra, missing, wrong', function () {
+  const gap = C.buildItem('gap', FRASE, { lang: 'it', seed: 3 });
+  const runs = require('../exercises.js').gapRuns(gap.data);
+  assert.ok(C.checkItem(gap, runs.map(function (r) { return r.answer; })).correct);
+  assert.ok(!C.checkItem(gap, runs.map(function () { return 'zzz'; })).correct);
+  const mc = C.buildItem('mc', { q: 'Capitale?', options: ['Roma', 'Milano', 'Bari', 'Pisa'], correct: 2 });
+  assert.ok(C.checkItem(mc, 2).correct);
+  assert.ok(!C.checkItem(mc, 0).correct);
+  const ex2 = C.buildItem('extra', FRASE, { lang: 'it', seed: 5 });
+  assert.ok(C.checkItem(ex2, ex2.data.extraIndex).correct);
+  const mi = C.buildItem('missing', FRASE, { lang: 'it', seed: 5 });
+  assert.ok(C.checkItem(mi, { index: mi.data.missingIndex, word: mi.data.answer }).correct);
+  assert.ok(!C.checkItem(mi, { index: 0, word: mi.data.answer }).correct);
+  const wr = C.buildItem('wrong', FRASE, { lang: 'it', seed: 5 });
+  assert.ok(C.checkItem(wr, { index: wr.data.wrongIndex, correction: wr.data.answer }).correct);
+});
+
+ok('match: coppie parziali = frazione, tutte giuste = correct', function () {
+  const ma = C.buildItem('match', [{ a: 'mare', b: 'sea' }, { a: 'cane', b: 'dog' }, { a: 'pane', b: 'bread' }]);
+  const pub = C.pubItem(ma, { rand: function () { return 0; } });
+  // risposta perfetta: per ogni riga k trovo dove sta la sua b nella colonna destra pubblica
+  const perfetta = ma.pairs.map(function (p, k) { return pub._map.indexOf(k); });
+  const full = C.checkItem(ma, perfetta, pub);
+  assert.ok(full.correct && full.frac === 1);
+  const unaGiusta = perfetta.map(function (v, k) { return k === 0 ? v : (v + 1) % 3 === v ? v + 1 : (v + 1) % 3; });
+  const parz = C.checkItem(ma, [perfetta[0], -1, -1], pub);
+  assert.ok(!parz.correct && Math.abs(parz.frac - 1 / 3) < 0.001, 'frazione: ' + parz.frac + ' (una su tre)');
+  void unaGiusta;
+});
+
+ok('teacher-paced: apertura, una risposta a testa, punti con la serie, reveal', function () {
+  const mc = C.buildItem('mc', { q: '2+2?', options: ['3', '4', '5', '6'], correct: 1 });
+  const pub = C.pubItem(mc, {});
+  const st = C.tpNew();
+  C.tpJoin(st, { id: 'a', nick: 'Anna' });
+  C.tpJoin(st, { id: 'b', nick: 'Bruno' });
+  C.tpOpen(st, 0, 1000);
+  const r1 = C.tpAnswer(st, { id: 'a', nick: 'Anna', i: 0, value: 1, ms: 2000 }, mc, 'streak', pub);
+  assert.ok(r1.ok && r1.pts === 100, 'prima giusta di Anna: 100 (serie 0): ' + JSON.stringify(r1));
+  assert.strictEqual(C.tpAnswer(st, { id: 'a', nick: 'Anna', i: 0, value: 0, ms: 100 }, mc, 'streak', pub), null, 'seconda risposta della stessa persona ignorata');
+  assert.strictEqual(C.tpAnswer(st, { id: 'b', nick: 'Bruno', i: 9, value: 1, ms: 100 }, mc, 'streak', pub), null, 'risposta a una domanda diversa ignorata');
+  assert.ok(!C.tpAllAnswered(st), 'manca Bruno');
+  const r2 = C.tpAnswer(st, { id: 'b', nick: 'Bruno', i: 0, value: 0, ms: 500 }, mc, 'streak', pub);
+  assert.ok(!r2.ok && r2.pts === 0);
+  assert.ok(C.tpAllAnswered(st), 'tutti hanno risposto');
+  const rev = C.tpReveal(st);
+  assert.strictEqual(st.phase, 'reveal');
+  assert.strictEqual(rev.perPlayer.a.pts, 100);
+  assert.strictEqual(rev.top[0].nick, 'Anna');
+  // seconda domanda: la serie di Anna vale il bonus
+  C.tpOpen(st, 1, 2000);
+  const r3 = C.tpAnswer(st, { id: 'a', nick: 'Anna', i: 1, value: 1, ms: 800 }, mc, 'streak', pub);
+  assert.strictEqual(r3.pts, 120, 'serie 1 = 120: ' + JSON.stringify(r3));
+  assert.strictEqual(st.players.a.score, 220);
+  // risposta fuori fase (dopo il reveal) ignorata
+  C.tpReveal(st);
+  assert.strictEqual(C.tpAnswer(st, { id: 'b', nick: 'Bruno', i: 1, value: 1, ms: 100 }, mc, 'streak', pub), null);
+});
+
+ok('match parziale in teacher-paced: punti proporzionali, la serie si spezza', function () {
+  const ma = C.buildItem('match', [{ a: 'mare', b: 'sea' }, { a: 'cane', b: 'dog' }, { a: 'pane', b: 'bread' }, { a: 'vino', b: 'wine' }]);
+  const pub = C.pubItem(ma, { rand: function () { return 0; } });
+  const st = C.tpNew();
+  C.tpJoin(st, { id: 'a', nick: 'Anna' });
+  st.players.a.streak = 3;
+  C.tpOpen(st, 0, 0);
+  const perfetta = ma.pairs.map(function (p, k) { return pub._map.indexOf(k); });
+  const meta = perfetta.map(function (v, k) { return k < 2 ? v : -1; });
+  const r = C.tpAnswer(st, { id: 'a', nick: 'Anna', i: 0, value: meta, ms: 100 }, ma, 'streak', pub);
+  assert.strictEqual(r.pts, 50, 'due coppie su quattro = 50: ' + JSON.stringify(r));
+  assert.strictEqual(st.players.a.streak, 0, 'serie azzerata senza il pieno');
+});
+
 console.log('\n' + n + ' test superati');

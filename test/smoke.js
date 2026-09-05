@@ -1789,55 +1789,78 @@ async function noOverflow(page, where) {
   assert.ok(warm2.tempo < 1, 'ed e\' tornato all\'inizio (t=' + warm2.tempo + ')');
   await page.evaluate(function () { const p = window.VLApp.S.player; p.kind = 'mock'; });
 
-  console.log('24. sfida in classe: QR e PIN dal prof, nickname dal telefono, classifica in diretta e podio');
+  console.log('24. sfida in classe v69: set multi-tipo, modalita\u0300 Kahoot con reveal, telefono che risponde');
   const ctxC = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const hostP = await ctxC.newPage();
   const studP = await ctxC.newPage();
   await hostP.goto(BASE + '?mock=1');
-  await hostP.evaluate(function () {
-    const S = window.VLApp.S;
-    S.lessons['chalquiz'] = { id: 'chalquiz', title: 'Quiz sfida', updatedAt: new Date().toISOString(), activity: { type: 'quiz', title: 'Quiz sfida', theme: 'classic', data: { questions: [
-      { q: 'Qual è la capitale d\'Italia?', options: ['Roma', 'Milano', 'Parigi', 'Madrid'], correct: 0 },
-      { q: 'Quanto fa 2 + 2?', options: ['3', '4', '5', '22'], correct: 1 }
-    ] } } };
-    window.VLApp.renderHome();
-  });
+  // card senza set: il dialog invita a crearne uno; da li' si apre l'editor
   await hostP.click('#svc-qr');
   await hostP.waitForSelector('#dlg-chal-new[open]');
-  assert.ok((await hostP.$eval('#ch-quiz', function (s) { return s.textContent; })).indexOf('Quiz sfida') !== -1, 'il quiz compare nella scelta');
-  await hostP.check('#dlg-chal-new input[name=chmode][value=right]');   // 100 punti secchi: punteggio deterministico
+  await hostP.click('#ch-new-set');
+  await hostP.waitForSelector('#view-chalset.active');
+  await hostP.fill('#cs-title', 'Ripasso di prova');
+  // il set: una scelta multipla + un fill the gaps, costruiti col motore vero
+  const setInfo = await hostP.evaluate(function () {
+    const S = window.VLApp.S, C = window.VLChal;
+    const ls = S.lessons[S.currentId];
+    const mc = C.buildItem('mc', { q: 'Qual e\u0300 la capitale d\u2019Italia?', options: ['Roma', 'Milano', 'Parigi', 'Madrid'], correct: 0 });
+    const gap = C.buildItem('gap', 'Il mare si sta riscaldando molto in fretta e questo preoccupa gli scienziati del clima.', { lang: 'it', seed: 3 });
+    ls.chal.items = [mc, gap];
+    ls.title = 'Ripasso di prova';
+    window.VLApp.renderHome();
+    const runs = window.VLEx.gapRuns(gap.data).map(function (r) { return r.answer; });
+    return { gapRuns: runs };
+  });
+  // lancio: modalita' Kahoot (default), punti secchi, nessun timer (chiusura quando tutti rispondono)
+  await hostP.evaluate(function () { window.VLApp.renderHome(); });
+  await hostP.click('#svc-qr');
+  await hostP.waitForSelector('#dlg-chal-new[open]');
+  assert.ok((await hostP.$eval('#ch-set', function (s) { return s.textContent; })).indexOf('Ripasso di prova') !== -1, 'il set compare nella scelta');
+  await hostP.check('#dlg-chal-new input[name=chmode][value=right]');
+  await hostP.selectOption('#ch-secs', '0');
   await hostP.click('#ch-go');
   await hostP.waitForSelector('#view-chal.active', { timeout: 8000 });
   const pin = (await hostP.$eval('#chal-pin', function (x) { return x.textContent; })).trim();
-  assert.ok(/^[A-HJ-KM-NP-Z2-9]{6}$/.test(pin), 'PIN leggibile di 6 caratteri: ' + pin);
-  assert.ok(await hostP.$('#chal-qr svg'), 'il QR è disegnato');
-  assert.ok(/#c=/.test(await hostP.$eval('#chal-url', function (x) { return x.textContent; })), 'sotto il QR c\'è il link con il PIN');
-  // lo studente entra dal telefono (stessa origine: il canale finto passa da localStorage fra le due tab)
+  assert.ok(/^[A-HJ-KM-NP-Z2-9]{6}$/.test(pin), 'PIN leggibile: ' + pin);
+  assert.ok(await hostP.$('#chal-qr svg'), 'QR disegnato');
+  assert.ok(await hostP.$eval('#chal-start', function (b) { return b.style.display !== 'none'; }), 'in modalita\u0300 Kahoot c\u2019e\u0300 "Prima domanda"');
+  // lo studente entra
   await studP.goto(BASE + '?mock=1#c=' + pin);
   await studP.waitForSelector('#chp-nick');
   await studP.fill('#chp-nick', 'Anna');
   await studP.click('#view-chalplay button:has-text("Entra nella sfida")');
-  await studP.waitForSelector('#view-chalplay .quiz-opt', { timeout: 9000 });
-  assert.ok((await hostP.waitForFunction(function () { return /Anna/.test(document.querySelector('#chal-board').textContent); }, null, { timeout: 6000 })), 'il prof vede Anna collegata');
-  for (let stp = 0; stp < 2; stp++) {   // le domande sono mescolate: si legge quella mostrata e si risponde giusto
-    await studP.waitForSelector('#view-chalplay .quiz-opt:not(.picked)');
-    const qtxt = await studP.$eval('#view-chalplay .quiz-q', function (x) { return x.textContent; });
-    const giusta = /capitale/.test(qtxt) ? 'Roma' : '4';
-    await studP.click('#view-chalplay .quiz-opt .txt:text-is("' + giusta + '")');
-    await studP.waitForTimeout(1150);   // avanzamento automatico dopo la risposta giusta
-  }
-  await hostP.waitForFunction(function () {
-    const r = document.querySelector('#chal-board .chal-row');
-    return r && /Anna/.test(r.textContent) && /200 pt/.test(r.textContent) && /✓/.test(r.textContent);
-  }, null, { timeout: 8000 });
-  // fine sfida: doppio click esplicito (niente confirm), podio dal prof e classifica sul telefono
-  await hostP.click('#chal-end');
-  await hostP.click('#chal-end');
+  await hostP.waitForFunction(function () { return /Anna/.test(document.querySelector('#chal-board').textContent); }, null, { timeout: 6000 });
+  // prima domanda: la scelta multipla sta sullo SCHERMO, sul telefono i tasti colorati SENZA i testi
+  await hostP.click('#chal-start');
+  await hostP.waitForSelector('#chal-stagebox .chal-mcgrid');
+  assert.ok(/capitale/.test(await hostP.$eval('#chal-qbox', function (x) { return x.textContent; })), 'la domanda e\u0300 proiettata');
+  await studP.waitForSelector('.chp-mc', { timeout: 6000 });
+  const mcTxt = await studP.$eval('.chp-item', function (x) { return x.textContent; });
+  assert.ok(mcTxt.indexOf('Roma') === -1 && mcTxt.indexOf('capitale') === -1, 'sul telefono NIENTE domanda ne\u0301 risposte (Kahoot puro): ' + mcTxt.slice(0, 60));
+  await studP.click('.chp-mc.o0');
+  await studP.click('.chp-item button:has-text("Invia")');
+  // tutti hanno risposto (c'e' solo Anna): reveal automatico
+  await hostP.waitForSelector('#chal-qbox .chal-sol', { timeout: 6000 });
+  assert.ok(/Roma/.test(await hostP.$eval('#chal-qbox', function (x) { return x.textContent; })), 'reveal con la risposta sullo schermo');
+  await studP.waitForSelector('.chp-reveal.ok', { timeout: 6000 });
+  assert.ok(/\+100/.test(await studP.$eval('.chp-reveal', function (x) { return x.textContent; })), 'sul telefono +100 (punti secchi)');
+  // seconda domanda: fill the gaps, campi sul telefono, risposta giusta
+  await hostP.click('#chal-stage-actions button:has-text("Avanti")');
+  await studP.waitForSelector('.chp-gap', { timeout: 6000 });
+  const gapsN = await studP.$$eval('.chp-gap', function (x) { return x.length; });
+  assert.strictEqual(gapsN, setInfo.gapRuns.length, 'un campo per spazio (' + gapsN + ')');
+  for (let g = 0; g < setInfo.gapRuns.length; g++) await studP.fill('.chp-gap >> nth=' + g, setInfo.gapRuns[g]);
+  await studP.click('.chp-item button:has-text("Invia")');
+  await hostP.waitForSelector('#chal-qbox .chal-sol', { timeout: 6000 });
+  // ultima domanda fatta: classifica finale per tutti
+  await hostP.click('#chal-stage-actions button:has-text("Classifica finale")');
   await hostP.waitForSelector('#chal-board .chal-row.final', { timeout: 5000 });
-  assert.ok(/🥇/.test(await hostP.$eval('#chal-board', function (x) { return x.textContent; })), 'podio dal prof');
+  assert.ok(/\ud83e\udd47/.test(await hostP.$eval('#chal-board', function (x) { return x.textContent; })), 'podio dal prof');
+  assert.ok(/200 pt/.test(await hostP.$eval('#chal-board', function (x) { return x.textContent; })), 'due giuste secche = 200');
   await studP.waitForSelector('.chp-final', { timeout: 6000 });
   const fin = await studP.$eval('.chp-final', function (x) { return x.textContent; });
-  assert.ok(/Anna \(tu\)/.test(fin) && /🥇/.test(fin) && /Hai vinto/.test(fin), 'classifica finale sul telefono con la propria riga: ' + fin.slice(0, 80));
+  assert.ok(/Anna \(tu\)/.test(fin) && /Hai vinto/.test(fin), 'classifica finale sul telefono: ' + fin.slice(0, 80));
   await ctxC.close();
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
