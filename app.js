@@ -2026,6 +2026,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       const r = el('div', { class: 'row', style: 'margin-top:10px' });
       r.appendChild(el('button', { class: 'small', text: '+ Coppia', onclick: function () { d.pairs.push({ a: '', b: '', image: '' }); changed(); redraw(); } }));
+      r.appendChild(el('button', { class: 'small', text: '\ud83d\udcf7 Da immagine (AI)', title: 'Coppie generate da una foto o screenshot', onclick: function () { openImgGen({ kinds: ['match'], onAccept: function (items) { let n = 0; items.forEach(function (it) { (it.pairs || []).forEach(function (p) { if (d.pairs.length < 12) { d.pairs.push({ a: p.a, b: p.b, image: '' }); n++; } }); }); changed(); redraw(); toast(n + ' coppie aggiunte dall\u2019immagine'); } }); } }));
       if (ctx.lesson) r.appendChild(el('button', { class: 'small', text: '🃏 Usa le Parole utili', title: 'Importa le parole selezionate con traduzione o foto', onclick: function () {
         const have = new Set(d.pairs.map(function (p) { return L.normalize(p.a || ''); }));
         let n = 0;
@@ -2095,6 +2096,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       const r = el('div', { class: 'row', style: 'margin-top:10px' });
       r.appendChild(el('button', { class: 'small', text: '+ Domanda', onclick: function () { d.questions.push({ q: '', options: ['', '', '', ''], correct: 0 }); changed(); redraw(); } }));
+      r.appendChild(el('button', { class: 'small', text: '\ud83d\udcf7 Da immagine (AI)', title: 'Domande generate da una foto o screenshot', onclick: function () { openImgGen({ kinds: ['mc'], onAccept: function (items) { let n = 0; items.forEach(function (it) { if (it.type === 'mc') { const o4 = it.options.slice(0, 4); while (o4.length < 4) o4.push(''); d.questions.push({ q: it.q, options: o4, correct: Math.min(it.correct, o4.length - 1) }); n++; } }); changed(); redraw(); toast(n + ' domande aggiunte dall\u2019immagine'); } }); } }));
       const aiBtn = el('button', { class: 'small', text: '✨ Proponi con l\'AI' });
       if (!S.settings.apiKey) aiBtn.style.display = 'none';
       const st = el('span', { class: 'hint' });
@@ -2130,6 +2132,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       const r = el('div', { class: 'row', style: 'margin-top:10px' });
       r.appendChild(el('button', { class: 'small', text: '+ Parola', onclick: function () { d.words.push({ word: '', hint: '' }); changed(); redraw(); } }));
+      r.appendChild(el('button', { class: 'small', text: '\ud83d\udcf7 Da immagine (AI)', title: 'Parole generate da una foto o screenshot', onclick: function () { openImgGen({ kinds: ['match'], onAccept: function (items) { let n = 0; items.forEach(function (it) { (it.pairs || []).forEach(function (p) { d.words.push({ word: p.a, hint: p.b }); n++; }); }); changed(); redraw(); toast(n + ' parole aggiunte dall\u2019immagine'); } }); } }));
       if (ctx.lesson) r.appendChild(el('button', { class: 'small', text: '🃏 Usa le Parole utili', onclick: function () {
         const have = new Set(d.words.map(function (w) { return L.normalize(w.word || ''); }));
         let n = 0;
@@ -2149,6 +2152,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       const r = el('div', { class: 'row', style: 'margin-top:10px' });
       r.appendChild(el('button', { class: 'small', text: '+ Voce', onclick: function () { d.items.push({ text: '' }); changed(); redraw(); } }));
+      r.appendChild(el('button', { class: 'small', text: '\ud83d\udcf7 Da immagine (AI)', title: 'Voci generate da una foto o screenshot', onclick: function () { openImgGen({ kinds: ['wheel'], onAccept: function (items) { let n = 0; items.forEach(function (it) { (it.items || []).forEach(function (t) { d.items.push({ text: t }); n++; }); }); changed(); redraw(); toast(n + ' voci aggiunte dall\u2019immagine'); } }); } }));
       if (ctx.lesson) r.appendChild(el('button', { class: 'small', text: '💬 Usa le domande di Parliamone', onclick: function () {
         const have = new Set(d.items.map(function (x) { return L.normalize(x.text || ''); }));
         let n = 0;
@@ -5142,6 +5146,98 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       el('button', { class: 'primary', text: 'Ricomincia', onclick: function () { openStudent(ls.id, false, ls); } })));
   }
 
+  // ---------- ESERCIZI DA UNA FOTO O SCREENSHOT (v70, 'ho una chiave API, voglio inserire screenshot
+  // o immagini dai quali generare esercizi... anche con la creazione giochi e attivita'') ----------
+  // Un dialog condiviso (#dlg-imggen): scegli fino a 3 immagini (ridotte a 1400px in JPEG sul client, mai
+  // caricate da nessuna parte: vanno solo all'API col resto della richiesta), l'AI propone il materiale
+  // (AI.itemsFromImage), l'insegnante spunta cosa tenere. Ogni chiamante passa i tipi che gli servono e
+  // riceve gli item accettati. La costruzione vera resta al motore: il modello scrive frasi/domande/coppie.
+  const IMGGEN = { imgs: [], items: [], accept: null, kinds: null };
+  function imgToJpeg(file, cb) {
+    const fr = new FileReader();
+    fr.onload = function () {
+      const im = new Image();
+      im.onload = function () {
+        const MAX = 1400;
+        const sc = Math.min(1, MAX / Math.max(im.width, im.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(im.width * sc)); c.height = Math.max(1, Math.round(im.height * sc));
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        const url = c.toDataURL('image/jpeg', 0.85);
+        cb({ media_type: 'image/jpeg', data: url.split(',')[1], preview: url });
+      };
+      im.onerror = function () { cb(null); };
+      im.src = fr.result;
+    };
+    fr.onerror = function () { cb(null); };
+    fr.readAsDataURL(file);
+  }
+  function igLabel(it) {
+    if (it.type === 'mc') return ['Scelta multipla', it.q + '  (giusta: ' + (it.options[it.correct] || '?') + ')'];
+    if (it.type === 'match') return ['Abbina', it.pairs.map(function (p) { return p.a + '↔' + p.b; }).join(' · ')];
+    if (it.type === 'wheel') return ['Ruota', it.items.join(' · ')];
+    return [VLChal.itemLabel(it.type), it.sentence];
+  }
+  function openImgGen(opts) {
+    IMGGEN.imgs = []; IMGGEN.items = []; IMGGEN.accept = opts.onAccept; IMGGEN.kinds = opts.kinds;
+    $('#ig-previews').innerHTML = ''; $('#ig-out').innerHTML = ''; $('#ig-msg').textContent = '';
+    $('#ig-go').disabled = true; $('#ig-accept-row').style.display = 'none';
+    $('#ig-file').value = '';
+    $('#dlg-imggen').showModal();
+  }
+  $('#ig-file').addEventListener('change', function () {
+    const files = Array.prototype.slice.call(this.files || []).slice(0, 3);
+    IMGGEN.imgs = [];
+    $('#ig-previews').innerHTML = '';
+    let left = files.length;
+    if (!left) { $('#ig-go').disabled = true; return; }
+    busyMsg($('#ig-msg'), 'Preparo ' + (files.length === 1 ? 'l\'immagine' : 'le immagini') + '…');
+    files.forEach(function (f) {
+      imgToJpeg(f, function (img) {
+        left--;
+        if (img) {
+          IMGGEN.imgs.push(img);
+          $('#ig-previews').appendChild(el('img', { src: img.preview, alt: '' }));
+        }
+        if (!left) {
+          $('#ig-msg').textContent = IMGGEN.imgs.length ? '' : 'Non sono riuscito a leggere le immagini.';
+          $('#ig-go').disabled = !IMGGEN.imgs.length;
+        }
+      });
+    });
+  });
+  $('#ig-close').addEventListener('click', function () { $('#dlg-imggen').close(); });
+  $('#ig-go').addEventListener('click', function () {
+    if (!S.settings.apiKey) { $('#ig-msg').textContent = 'Serve la chiave API (Impostazioni AI).'; return; }
+    if (!IMGGEN.imgs.length) return;
+    const go = $('#ig-go'); go.disabled = true;
+    busyMsg($('#ig-msg'), 'Leggo l\'immagine e scrivo gli esercizi… (10-30 secondi)');
+    AI.itemsFromImage({
+      images: IMGGEN.imgs.map(function (i) { return { media_type: i.media_type, data: i.data }; }),
+      n: +$('#ig-n').value || 5, kinds: IMGGEN.kinds,
+      lang: $('#ig-lang').value, level: $('#ig-level').value,
+      apiKey: S.settings.apiKey, model: S.settings.model
+    }).then(function (r) {
+      go.disabled = false;
+      IMGGEN.items = r.items;
+      $('#ig-msg').textContent = r.items.length ? (r.items.length + ' proposte' + (r.ai && r.ai.cost ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '') + ' · togli la spunta a quelle che non vuoi') : 'Nessuna proposta utilizzabile: prova con un\'immagine più leggibile.';
+      const out = $('#ig-out'); out.innerHTML = '';
+      r.items.forEach(function (it, i) {
+        const lb = igLabel(it);
+        out.appendChild(el('label', { class: 'ig-row' },
+          el('input', { type: 'checkbox', checked: 'checked', 'data-i': String(i) }),
+          el('span', { class: 'kind', text: lb[0] }),
+          el('span', { class: 'txt', text: lb[1] })));
+      });
+      $('#ig-accept-row').style.display = r.items.length ? '' : 'none';
+    }).catch(function (e) { go.disabled = false; $('#ig-msg').textContent = 'AI: ' + e.message; });
+  });
+  $('#ig-accept').addEventListener('click', function () {
+    const keep = $$('#ig-out input[type=checkbox]').filter(function (c) { return c.checked; }).map(function (c) { return IMGGEN.items[+c.getAttribute('data-i')]; }).filter(Boolean);
+    $('#dlg-imggen').close();
+    if (IMGGEN.accept) IMGGEN.accept(keep);
+  });
+
   // ---------- SFIDA IN CLASSE (v68, riprogettata in v69): due modalita', set multi-tipo ----------
   // Modalita' "Insieme sullo schermo" (stile Kahoot): la domanda e' proiettata, i telefoni mandano solo la
   // risposta, l'HOST valuta con VLChal.checkItem: le soluzioni non viaggiano MAI sul canale (wire() toglie
@@ -5301,6 +5397,23 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#dlg-chal-add').showModal();
   });
   $('#ca-close').addEventListener('click', function () { $('#dlg-chal-add').close(); });
+  // v70: esercizi del set generati da una foto o screenshot
+  $('#ca-img').addEventListener('click', function () {
+    openImgGen({ kinds: ['mc', 'gap', 'gapbank', 'extra', 'missing', 'wrong', 'match'], onAccept: function (items) {
+      const ls = current(); if (!ls || !ls.chal) return;
+      let n = 0;
+      items.forEach(function (it) {
+        let built = null;
+        if (it.type === 'mc') built = VLChal.buildItem('mc', it);
+        else if (it.type === 'match') built = VLChal.buildItem('match', it.pairs);
+        else built = VLChal.buildItem(it.type, it.sentence, { lang: 'it', seed: Date.now() % 100000, distractors: 2 });
+        if (built) { ls.chal.items.push(built); n++; }
+      });
+      $('#dlg-chal-add').close();
+      chalSetTouched(ls);
+      toast(n ? n + (n === 1 ? ' esercizio aggiunto dall\'immagine' : ' esercizi aggiunti dall\'immagine') : 'Nessun esercizio costruibile dalle proposte');
+    } });
+  });
   $('#ca-ok').addEventListener('click', function () {
     const ls = current(); if (!ls || !ls.chal) return;
     const k = $('#ca-kind').value;

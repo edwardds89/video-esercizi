@@ -1156,3 +1156,11 @@ body.view-chalplay { background: #f4f6fa; }
 .chp-reveal .sol { margin-top: 8px; color: #444; }
 .chp-reveal .pos { margin-top: 10px; font-weight: 700; }
 .chp-stage2 { min-height: 60vh; }
+
+/* ---------- v70: esercizi da una foto o screenshot ---------- */
+.ig-previews { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ig-previews img { max-height: 110px; max-width: 160px; border-radius: 8px; border: 1px solid var(--line); }
+.ig-out { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.ig-row { display: flex; gap: 8px; align-items: baseline; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+.ig-row .kind { font-weight: 700; white-space: nowrap; }
+.ig-row .txt { color: #444; font-size: 14px; }

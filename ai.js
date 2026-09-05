@@ -83,7 +83,10 @@
         model: o.model || DEFAULT_MODEL,
         max_tokens: o.maxTokens || 6000,
         system: o.system,
-        messages: [{ role: 'user', content: o.user }]
+        // con o.images il contenuto diventa multimodale: prima le immagini, poi il testo (v70)
+        messages: [{ role: 'user', content: Array.isArray(o.images) && o.images.length
+          ? o.images.map(function (im) { return { type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } }; }).concat([{ type: 'text', text: o.user }])
+          : o.user }]
       })
     });
     if (!res.ok) {
@@ -764,5 +767,59 @@
     return r;
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart };
+  /**
+   * Esercizi da una o piu' IMMAGINI (v70): pagina di libro, screenshot, slide o foto di una scena.
+   * Il modello legge l'immagine e scrive materiale GREZZO (domande mc, frasi per gap/extra/missing/wrong,
+   * coppie per il match): la costruzione vera dell'esercizio resta all'app (VLChal.buildItem / EX.buildExercise),
+   * cosi' buchi e parole da trovare li sceglie il motore, non il modello.
+   * params: { images:[{media_type,data}], n, kinds, lang, level, apiKey, model, fetchImpl }
+   * → { items:[{type, q,options,correct | sentence | pairs}], ai }
+   */
+  async function itemsFromImage(params) {
+    const lang = params.lang || 'Italian';
+    const level = params.level || 'B1';
+    const n = Math.max(1, Math.min(12, params.n || 5));
+    const kinds = (params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'extra', 'missing', 'wrong', 'match']);
+    const system = 'You are an experienced language-teaching materials author. You read images (textbook pages, screenshots, slides, photos) and write exercise material. Output ONLY a JSON object, no prose, no markdown fences.';
+    const spec = [];
+    if (kinds.indexOf('mc') !== -1) spec.push('{"type":"mc","q":"a comprehension or vocabulary question in ' + lang + '","options":["...","...","...","..."],"correct":0} — 4 plausible options, exactly one correct');
+    const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong'].indexOf(k) !== -1; });
+    if (sentKinds.length) spec.push('{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
+    if (kinds.indexOf('match') !== -1) spec.push('{"type":"match","pairs":[{"a":"word or expression in ' + lang + '","b":"English translation or a short definition"}]} — 4 to 8 pairs');
+    if (kinds.indexOf('wheel') !== -1) spec.push('{"type":"wheel","items":["...","..."]} — 6 to 10 short prompts in ' + lang + ' (words to explain, or mini-questions) for a spinning-wheel speaking game');
+    const user = [
+      'Look carefully at the attached image' + (params.images.length > 1 ? 's' : '') + ' (a textbook page, a screenshot, a slide or a photo).',
+      'If it contains TEXT: base the exercises on that content (topic, vocabulary, facts), REWRITING everything at the target level — never copy sentences with mistakes and never quote page numbers or layout.',
+      'If it is a SCENE or picture: use what is visible (objects, actions, places).',
+      'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
+      'Write exactly ' + n + ' items, mixing these shapes:',
+      spec.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n'),
+      'SCHEMA: {"items":[ ... ]}'
+    ].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, images: params.images, maxTokens: 4000, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    const okKinds = {}; kinds.forEach(function (k) { okKinds[k] = 1; });
+    const items = (Array.isArray(j.items) ? j.items : []).map(function (it) {
+      if (!it || !okKinds[it.type]) return null;
+      if (it.type === 'mc') {
+        const opts = (Array.isArray(it.options) ? it.options : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+        const q = String(it.q || '').trim();
+        if (!q || opts.length < 2) return null;
+        return { type: 'mc', q: q, options: opts.slice(0, 5), correct: Math.max(0, Math.min(opts.length - 1, it.correct | 0)) };
+      }
+      if (it.type === 'match') {
+        const pairs = (Array.isArray(it.pairs) ? it.pairs : []).map(function (p) { return { a: String(p && p.a || '').trim(), b: String(p && p.b || '').trim() }; }).filter(function (p) { return p.a && p.b; });
+        return pairs.length >= 2 ? { type: 'match', pairs: pairs.slice(0, 8) } : null;
+      }
+      if (it.type === 'wheel') {
+        const its = (Array.isArray(it.items) ? it.items : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+        return its.length >= 2 ? { type: 'wheel', items: its.slice(0, 12) } : null;
+      }
+      const s = String(it.sentence || '').trim();
+      return s.split(/\s+/).length >= 5 ? { type: it.type, sentence: s } : null;
+    }).filter(Boolean);
+    return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage };
 });
