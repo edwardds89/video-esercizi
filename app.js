@@ -1383,6 +1383,18 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('span', { class: 'fl', text: l[1] }), el('span', { text: l[2] }));
       }));
       wrap.appendChild(menu);
+      // Posizionamento sul VIEWPORT (v67, 'il pop up fa cacare e non permette di selezionare tutte le lingue'):
+      // ancorato in alto al pulsante finiva dietro il video e le prime lingue non si vedevano ne' si raggiungevano.
+      // Va sotto il pulsante se c'e' spazio, sopra altrimenti, sempre dentro lo schermo e con lo scroll interno.
+      const r = pick.getBoundingClientRect();
+      menu.style.position = 'fixed';
+      menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+      const below = window.innerHeight - r.bottom - 12, above = r.top - 12;
+      if (below >= Math.min(menu.offsetHeight, 240) || below >= above) {
+        menu.style.top = (r.bottom + 6) + 'px'; menu.style.bottom = 'auto'; menu.style.maxHeight = below + 'px';
+      } else {
+        menu.style.bottom = (window.innerHeight - r.top + 6) + 'px'; menu.style.top = 'auto'; menu.style.maxHeight = above + 'px';
+      }
       setTimeout(function () {
         document.addEventListener('pointerdown', function close(ev) {
           if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('pointerdown', close, true); }
@@ -3697,11 +3709,25 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         };
         inputs.forEach(function (i) { i.addEventListener('input', refreshBank); });
         const row = el('div', { class: 'chips' });
+        // Una casella con le lettere dell'Aiuto (o una parola a meta') NON e' piena: il chip che la completa va LI',
+        // sostituendo il prefisso (v67, 'se clicco su cellula mi mette la parola nel next gap e non va bene').
+        // Si confronta col CHIP cliccato, mai con la risposta: il posto dove va un chip non deve fare da spoiler.
+        const prefDi = function (inp, w) {
+          const parts = inp.value.trim().split(/\s+/).filter(Boolean);
+          if (!parts.length || parts.length > parseInt(inp.getAttribute('data-words'), 10)) return false;
+          const last = L.normalize(parts[parts.length - 1]), nw = L.normalize(w);
+          return last.length > 0 && last.length < nw.length && nw.indexOf(last) === 0;
+        };
         d.wordBank.forEach(function (w) {
           const c = el('span', { class: 'chip', text: w, onclick: function () {
-            const target = (active && manca(active)) ? active : inputs.find(manca);
+            const fits = function (inp) { return manca(inp) || prefDi(inp, w); };
+            const target = (active && fits(active)) ? active : inputs.find(fits);
             if (!target) return;
-            target.value = (target.value.trim() + ' ' + w).trim();
+            if (prefDi(target, w)) {
+              const parts = target.value.trim().split(/\s+/).filter(Boolean);
+              parts[parts.length - 1] = w;   // via le lettere del suggerimento: il chip le completa
+              target.value = parts.join(' ');
+            } else target.value = (target.value.trim() + ' ' + w).trim();
             refreshBank();
             const prossimo = manca(target) ? target : inputs.find(manca);
             active = prossimo || target;
@@ -3856,9 +3882,30 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const gfHint = el('div', { class: 'hint gapfind-hint', text: 'Dove manca la parola? Passa il mouse sulla frase: lo spazio si apre. Clicca e scrivila.' });
       body.appendChild(gfHint);
       getAnswer = function () { return selected === -1 ? null : { index: selected, word: inp.value }; };
+      // Aiuto in TRE stadi (v67, richiesta di Edoardo): (1) una zona gialla di 5 parole che CONTIENE il posto,
+      // come nella "parola in più"; (2) il posto esatto (lo spazio si apre); (3) una lettera alla volta.
+      let mzone = null;
       giveHint = function () {
-        // primo aiuto: il posto giusto; poi una lettera in più della parola
-        if (selected !== d.missingIndex) { choose(d.missingIndex); slots[d.missingIndex].classList.add('hinted'); return true; }
+        if (!mzone && selected !== d.missingIndex) {
+          const ws = $$('.w', sdiv), n = ws.length;
+          const size = Math.min(5, n);
+          // lo spazio k sta FRA le parole k-1 e k: la zona [a, a+size-1] deve coprirlo, con scarto casuale
+          let a = d.missingIndex - 1 - Math.floor(Math.random() * Math.max(1, size - 1));
+          a = Math.max(0, Math.min(n - size, Math.min(a, d.missingIndex)));
+          mzone = { from: a, to: a + size - 1 };
+          ws.forEach(function (w, i) {
+            const dentro = i >= mzone.from && i <= mzone.to;
+            w.classList.toggle('zone', dentro);
+            if (dentro) { w.classList.remove('zone-flash'); void w.offsetWidth; w.classList.add('zone-flash'); }
+          });
+          toast('La parola manca in mezzo alle parole segnate', 2500);
+          return true;
+        }
+        if (selected !== d.missingIndex) {
+          $$('.w.zone', sdiv).forEach(function (w) { w.classList.remove('zone', 'zone-flash'); });   // il posto esatto rende inutile la zona
+          choose(d.missingIndex); slots[d.missingIndex].classList.add('hinted');
+          return true;
+        }
         return sameWord(inp.value, d.answer) ? false : revealLetter(inp, d.answer);
       };
       markResult = function (res) {
