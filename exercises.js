@@ -17,7 +17,7 @@
 
   const INSTRUCTIONS = {
     gap: 'Ascolta e scrivi le parole mancanti.',
-    gapbank: 'Ascolta e metti negli spazi le parole giuste: nella lista ce ne sono anche di sbagliate.',
+    gapbank: 'Ascolta e metti negli spazi le parole giuste.',
     scramble: 'Tocca le parole nell\'ordine giusto per ricostruire la frase che hai sentito.',
     missing: 'In questa frase manca una parola rispetto a quello che hai sentito: trova dove manca (clicca lo spazio) e scrivila.',
     extra: 'In questa frase c\'è una parola in più rispetto a quello che hai sentito: toccala.',

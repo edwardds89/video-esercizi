@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260903-65">
+<link rel="stylesheet" href="styles.css?v=20260903-66">
 </head>
 <body>
 <header class="topbar">
@@ -308,7 +308,7 @@
     </div>
     <div class="card">
       <div class="row">
-        <label class="grow" style="min-width:220px">Argomento<input id="c-topic" type="text" placeholder="es. Cibo: cucinare, ordinare, sprecare"></label>
+        <label class="grow" style="min-width:220px">Argomento<input id="c-topic" type="text" placeholder="es. cibo, intelligenza artificiale, politica…"></label>
         <label>Livello<select id="c-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
         <label>Lingua di studio<select id="c-lang"></select></label>
         <label>Consegne e glosse<select id="c-uilang"></select></label>
@@ -367,7 +367,7 @@
   <h2>Nuova conversazione</h2>
   <p class="hint">Un'unità da parlare, senza video: lessico utile, domande numerate, due sondaggi, due testi da leggere e una telefonata di ruolo. Poi la stampi in A4.</p>
   <label for="cn-topic">Di che cosa si parla?</label>
-  <input id="cn-topic" type="text" placeholder="es. Cibo: cucinare, ordinare, sprecare">
+  <input id="cn-topic" type="text" placeholder="es. cibo, intelligenza artificiale, politica…">
   <div class="row">
     <label class="grow">Livello CEFR<select id="cn-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
     <label class="grow">Quante domande?<select id="cn-n"><option>6</option><option>8</option><option selected>10</option><option>12</option><option>14</option></select></label>
@@ -385,12 +385,12 @@
     <label class="chip"><input id="cn-role" type="checkbox" checked> telefonata di ruolo</label>
     <label class="chip"><input id="cn-photos" type="checkbox" checked> cerca le foto</label>
   </div>
-  <div class="row" style="margin-top:14px">
+  <div id="cn-msg" class="hint" style="margin-top:10px"></div>
+  <div class="row" style="margin-top:8px">
     <button id="cn-go" class="primary">✨ Genera l'unità</button>
     <button id="cn-blank">Parto da un foglio vuoto</button>
-    <button id="cn-close">Annulla</button>
+    <button id="cn-close">Chiudi</button>
   </div>
-  <div id="cn-msg" class="hint" style="margin-top:8px"></div>
 </dialog>
 
 <dialog id="dlg-sync">
@@ -515,14 +515,14 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260903-65"></script>
-<script src="exercises.js?v=20260903-65"></script>
-<script src="generator.js?v=20260903-65"></script>
-<script src="activities.js?v=20260903-65"></script>
-<script src="ai.js?v=20260903-65"></script>
-<script src="demo-data.js?v=20260903-65"></script>
-<script src="bookmarklet.js?v=20260903-65"></script>
-<script src="sync.js?v=20260903-65"></script>
-<script src="app.js?v=20260903-65"></script>
+<script src="lang.js?v=20260903-66"></script>
+<script src="exercises.js?v=20260903-66"></script>
+<script src="generator.js?v=20260903-66"></script>
+<script src="activities.js?v=20260903-66"></script>
+<script src="ai.js?v=20260903-66"></script>
+<script src="demo-data.js?v=20260903-66"></script>
+<script src="bookmarklet.js?v=20260903-66"></script>
+<script src="sync.js?v=20260903-66"></script>
+<script src="app.js?v=20260903-66"></script>
 </body>
 </html>

@@ -241,8 +241,13 @@ button.play { padding: 4px 12px; color: var(--accent); font-weight: 700; }
 .lesson-card .title { font-weight: 600; line-height: 1.3; cursor: pointer; }
 .lesson-card .meta { font-size: 12px; color: var(--muted); }
 .lesson-card .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
-dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; max-width: 560px; width: calc(100% - 32px); }
+/* Un dialog piu' alto della finestra SCORRE (v66, 'non c'è un pulsante': su una finestra bassa i pulsanti in fondo
+   a "Nuova conversazione" restavano fuori dallo schermo, e con loro la riga di stato — il click sembrava morto). */
+dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; max-width: 560px; width: calc(100% - 32px); max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
+/* ✕ di chiusura in alto a destra, su OGNI dialog (v66, richiesta di Edoardo: "la x sopra a destra") */
+.dlg-x { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; padding: 0; border: none; background: transparent; color: var(--muted, #667); font-size: 16px; line-height: 30px; text-align: center; border-radius: 8px; cursor: pointer; }
+.dlg-x:hover { background: #eef1f5; color: #111; }
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1c2330; color: #fff; padding: 10px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
 #toast.show { opacity: 1; }
 /* barra "si può tornare indietro": elemento suo, così un avviso qualsiasi non porta via il pulsante Annulla */
@@ -253,8 +258,15 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .undo-bar .undo { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.5); border-radius: 8px; padding: 5px 12px; font-weight: 600; white-space: nowrap; }
 .undo-bar .undo:hover { background: rgba(255,255,255,.16); border-color: #fff; }
 .undo-bar kbd { background: rgba(255,255,255,.12); color: #ccd4e2; border-radius: 5px; padding: 2px 7px; font-size: 12px; }
-.undo-bar .life { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; border-radius: 0 0 10px 10px; background: rgba(255,255,255,.5); transform-origin: left; animation: undo-life linear forwards; }
-@keyframes undo-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* La riga del tempo e' ARANCIONE e diventa ROSSA sul finale (v66, richiesta di Edoardo): il colore avvisa che
+   il tempo per Annullare sta per scadere. Il colore viaggia nella stessa animazione della larghezza. */
+.undo-bar .life { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; border-radius: 0 0 10px 10px; background: var(--marker, #ff8a00); transform-origin: left; animation: undo-life linear forwards; }
+@keyframes undo-life {
+  from { transform: scaleX(1); background: var(--marker, #ff8a00); }
+  70% { background: var(--marker, #ff8a00); }
+  88% { background: #e5484d; }
+  to { transform: scaleX(0); background: #e5484d; }
+}
 @media (prefers-reduced-motion: reduce) { .undo-bar .life { display: none; } }
 body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barra */
 /* "questa scheda è rimasta indietro": in alto, non sparisce da sola (è un problema, non una notifica) */
@@ -271,6 +283,9 @@ body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barr
 .loader-box .spinner { display: none; position: absolute; left: 50%; top: 50%; margin: -17px 0 0 -17px; }
 .loader-box .loader.off + .spinner { display: block; }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
+/* Spinner piccolo accanto a un messaggio di stato (v66, 'quando clicca su genera unità non appare nessun logo di
+   caricamento'): il testo da solo non dice che il lavoro STA andando avanti. */
+.spinner.inline { display: inline-block; width: 16px; height: 16px; border-width: 2px; margin: 0 8px 0 0; vertical-align: -3px; }
 #overlay-text { font-size: 17px; color: var(--muted); letter-spacing: .02em; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .linkbox { background: var(--chip); padding: 8px 10px; border-radius: 8px; word-break: break-all; font-size: 13px; max-height: 90px; overflow: auto; }
@@ -943,7 +958,8 @@ button.small.ai { background: #f3e8ff; border-color: #c99cf5; }
 .cp-row .bar i { display: block; height: 100%; background: #4a90d9; border-radius: 6px; }
 .cp-row .pc { text-align: right; font-weight: 700; color: #2f6fb0; font-size: 7.6pt; }
 .cp-note { margin: 5px 8px 0; font-size: 6.4pt; color: #9aa5b1; font-style: italic; line-height: 1.3; }
-.cp-quote { background: #eaf2fa; border-radius: 3px; padding: 8px 9px; }
+.cp-qref { font-size: .85em; color: #667; white-space: nowrap; }
+.cp-quote {background: #eaf2fa; border-radius: 3px; padding: 8px 9px; }
 .cp-quote p { margin: 0 0 4px; font-style: italic; font-size: 9.2pt; color: #2f4a63; font-weight: 500; line-height: 1.35; }
 .cp-src { font-size: 7.4pt; color: #7b8794; display: block; text-align: right; }
 .cp-right { min-width: 0; }
@@ -1017,6 +1033,10 @@ button.small.ok { background: #e6f6ea; border-color: #7fc99a; color: #17663a; fo
 
 /* Aiuto di "parola in più / parola sbagliata": segna una ZONA che lampeggia, non la parola */
 .chip.zone { background: #fff3d0; border-color: #f0c469; box-shadow: inset 0 -2px 0 0 #f5c400; }
+/* Il chip CLICCATO dentro la zona dell'aiuto deve mostrarsi selezionato (v66, 'rimane gialla com'è e non si capisce
+   che è stata selezionata'): .chip.sel e .chip.zone hanno la stessa specificità e zone, venendo dopo, vinceva.
+   Resta la riga gialla sotto (box-shadow di .zone): dice ancora "sei nella zona", ma la selezione si vede. */
+.chip.zone.sel { background: #ffe8cc; border-color: var(--marker); }
 .chip.zone-flash { animation: zone-blink .42s ease-in-out 4; }
 @keyframes zone-blink { 0%,100% { background: #fff3d0; } 50% { background: #ffd873; transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .chip.zone-flash { animation: none; } }

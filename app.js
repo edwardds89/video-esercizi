@@ -737,8 +737,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (ls.conv && !Array.isArray(ls.exercises)) {
         const u = ls.conv;
         const openC = function () { openConvPrint(ls.id); };
+        // anteprima: la prima foto dell'unita' (v66, 'perch\u00E9 non c'\u00E8 nessuna anteprima?'); senza foto resta il fumetto
+        const convPh = (u.photos || []).find(function (p) { return p.url; });
         const cardC = el('div', { class: 'lesson-card' },
-          el('div', { class: 'thumb act-thumb conv-thumb', onclick: openC, title: 'Apri il foglio' }, '\uD83D\uDCAC'),
+          el('div', { class: 'thumb act-thumb conv-thumb', style: convPh ? 'background-image:url(' + convPh.url.replace(/["\\)]/g, '') + ');background-size:cover;background-position:center' : '', onclick: openC, title: 'Apri il foglio' }, convPh ? '' : '\uD83D\uDCAC'),
           el('div', { class: 'body' },
             el('div', { class: 'title', text: ls.title || '(conversazione senza titolo)', onclick: openC }),
             el('div', { class: 'meta', text: 'Conversazione \u00b7 ' + (u.questions || []).length + ' domande \u00b7 livello ' + (u.level || 'B1') + (u.focus ? ' \u00b7 ' + u.focus : '') + (ls.updatedAt ? ' \u00b7 ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
@@ -1973,6 +1975,23 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const img = el('input', { type: 'text', placeholder: 'URL foto (facoltativo)', value: p.image || '', style: 'grid-column:1 / -2;font-size:13px;color:var(--muted)' });
         img.addEventListener('change', function () { p.image = img.value.trim(); changed(); });
         row.appendChild(img);
+        // stessa ricerca foto delle Parole utili (v66, 'voglio la stessa funzione che c'è su parole utili'):
+        // Wikipedia/Commons sulla parola della coppia; ricliccando scorre i candidati come '↻ Altra'
+        row.appendChild(el('button', { class: 'small', text: p.image ? '↻ Altra' : '🔍 Foto', title: 'Cerca una foto (Wikipedia e Wikimedia Commons) per la parola della coppia; riclicca per vederne un\'altra', onclick: function () {
+          const word = (a.value || p.a || '').trim();
+          if (!word) return toast('Scrivi prima la parola');
+          const go = function () {
+            const list = p._imgs || [];
+            if (!list.length) { toast('Nessuna foto trovata per "' + word + '" (Wikipedia e Wikimedia Commons): prova a cambiare la parola o incolla un URL', 5000); return; }
+            p._imgIdx = (p._imgIdx == null || p._imgIdx < 0) ? 0 : (p._imgIdx + 1) % list.length;
+            p.image = list[p._imgIdx].url;
+            changed(); redraw();
+            toast((p._imgIdx + 1) + '/' + list.length + ' · ' + list[p._imgIdx].title + ' (' + list[p._imgIdx].source + ')', 2500);
+          };
+          if (p._imgs && p._imgsFor === word) return go();
+          toast('Cerco foto per "' + word + '"…', 1500);
+          searchImages((ctx.lesson && ctx.lesson.lang) || 'it', word, (b.value || p.b || '').trim()).then(function (list) { p._imgs = list; p._imgsFor = word; p._imgIdx = -1; go(); });
+        } }));
         box.appendChild(row);
       });
       const r = el('div', { class: 'row', style: 'margin-top:10px' });
@@ -2566,8 +2585,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     return best;
   }
 
+  /** Quante parole sbagliate mettere nella banca del gapbank: scelta dell'insegnante (0-5, v66), default 2.
+   * ex.extraWords si salva nella lezione; il vecchio flag ex.noDistractors delle lezioni gia' fatte vale 0. */
+  function gapExtraCount(ex) {
+    if (ex && ex.extraWords != null) return Math.max(0, ex.extraWords | 0);
+    return (ex && ex.noDistractors) ? 0 : 2;
+  }
   function rebuildExercise(ls, ex, type, choices, seed) {
-    const built = EX.buildExercise(type, ex.sentence, { lang: ls.lang, seed: seed || (Date.now() % 100000), choices: choices || null, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 });
+    const built = EX.buildExercise(type, ex.sentence, { lang: ls.lang, seed: seed || (Date.now() % 100000), choices: choices || null, vocab: lessonVocab(ls), distractors: gapExtraCount(ex) });
     if (!built) return false;
     delete ex.reviewed;   // il contenuto e' cambiato: il "controllato" va rimesso guardandolo
     ex.type = built.type; ex.data = built.data;
@@ -2751,13 +2776,29 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const wrap = el('div', { style: 'margin-top:8px' });
     const toks = L.tokenize(ex.sentence);
     if (ex.type === 'gapbank') {
-      const cb = el('input', { type: 'checkbox' }); cb.checked = !ex.noDistractors;
-      cb.addEventListener('change', function () { ex.noDistractors = !cb.checked; rebuildExercise(ls, ex, 'gapbank', { gapWords: d.answers }); touch(ls); renderEditorBody(); });
-      wrap.appendChild(el('div', { class: 'row' }, el('label', { class: 'chip', style: 'margin:0' }, cb, ' Aggiungi parole sbagliate nella lista (distrattori)')));
-      if (!ex.noDistractors) {
+      // Quante parole sbagliate nella lista: lo sceglie l'insegnante, 0-5 (v66). Il numero vero (d.distractors.length)
+      // e' quello che lo studente legge in grassetto nella consegna; setBank lo tiene allineato a ex.extraWords.
+      const setBank = function () { ex.extraWords = (d.distractors || []).length; delete ex.noDistractors; d.wordBank = EX.shuffle(d.answers.concat(d.distractors || []), L.rng(Date.now() % 10000)); touch(ls); renderEditorBody(); };
+      const cur = (d.distractors || []).length;
+      const sel = el('select');
+      for (let k = 0; k <= Math.max(5, cur); k++) sel.appendChild(el('option', { value: String(k), text: k === 0 ? '0 (nessuna)' : String(k) }));
+      sel.value = String(cur);
+      sel.addEventListener('change', function () {
+        const n = parseInt(sel.value, 10) || 0;
+        d.distractors = d.distractors || [];
+        if (n < d.distractors.length) d.distractors = d.distractors.slice(0, n);   // si tolgono le ultime: quelle ritoccate a mano stanno in testa
+        else if (n > d.distractors.length) {
+          const pool = lessonVocab(ls).filter(function (w) { return d.answers.concat(d.distractors).map(function (x) { return L.normalize(x); }).indexOf(L.normalize(w)) === -1; });
+          const more = EX.similarDistractors(d.answers, pool, n, L.rng(Date.now() % 9973));
+          d.distractors = d.distractors.concat(more.slice(d.distractors.length));
+          if (d.distractors.length < n) toast('Nel lessico del video ho trovato solo ' + d.distractors.length + ' parole simili alle risposte');
+        }
+        setBank();
+      });
+      wrap.appendChild(el('div', { class: 'row' }, el('label', { class: 'chip', style: 'margin:0' }, 'Parole sbagliate in più nella lista: ', sel)));
+      if ((d.distractors || []).length) {
         // distrattori modificabili: simili alle risposte (stessa desinenza/lunghezza), non a caso
         const row = el('div', { class: 'row', style: 'margin-top:4px' }, el('span', { class: 'hint', text: 'Parole sbagliate:' }));
-        const setBank = function () { d.wordBank = EX.shuffle(d.answers.concat(d.distractors || []), L.rng(Date.now() % 10000)); touch(ls); renderEditorBody(); };
         (d.distractors || []).forEach(function (w, k) {
           const inp = el('input', { type: 'text', class: 'short', value: w, title: 'Modifica la parola sbagliata' });
           inp.addEventListener('change', function () { const v = inp.value.trim(); if (v) d.distractors[k] = v; else d.distractors.splice(k, 1); setBank(); });
@@ -2950,7 +2991,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       .catch(function (err) { toast('AI: ' + err.message, 6000); });
   }
   function applyCandidate(ls, ex, p) {
-    const bo = { lang: ls.lang, seed: Date.now() % 1000, source: 'rules', range: ex.range, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 };
+    const bo = { lang: ls.lang, seed: Date.now() % 1000, source: 'rules', range: ex.range, vocab: lessonVocab(ls), distractors: gapExtraCount(ex) };
     const nx = p.chunk ? G.makeExercise(p.chunk, ex.type, bo) : G.makeExerciseFromPassage(p, ex.type, bo);
     if (!nx) return toast('Frase non adatta a questo tipo di esercizio');
     ex.chunkId = nx.chunkId; ex.chunkIds = nx.chunkIds || [nx.chunkId]; ex.sentence = nx.sentence; ex.segment = nx.segment; ex.markerTime = nx.markerTime; ex.type = nx.type; ex.data = nx.data; ex.source = 'rules'; ex.note = '';
@@ -3500,7 +3541,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       preview ? el('button', { class: 'small', text: '✕ Chiudi anteprima', onclick: function () { if (opts.onClose) opts.onClose(); } }) : null));
     h.classList.add('ex-type-title');
     p.appendChild(h);
-    p.appendChild(el('div', { class: 'instr', text: EX.INSTRUCTIONS[ex.type] }));
+    const instr = el('div', { class: 'instr', text: EX.INSTRUCTIONS[ex.type] });
+    // Gapbank (v66, richiesta di Edoardo): la consegna dice IN GRASSETTO quante parole della lista sono in piu'.
+    // Il numero e' quello VERO della banca (d.distractors), non l'impostazione: se l'insegnante ha ritoccato la
+    // lista a mano, allo studente si dice quello che ha davanti. Con 0 parole in piu' la frase sparisce del tutto.
+    if (ex.type === 'gapbank') {
+      const dd = ex.data || {};
+      const nd = Array.isArray(dd.distractors) ? dd.distractors.length : Math.max(0, (dd.wordBank || []).length - (dd.answers || []).length);
+      if (nd > 0) {
+        instr.appendChild(document.createTextNode(' '));
+        instr.appendChild(el('b', { text: nd === 1 ? 'Nella lista c\'è 1 parola in più.' : 'Nella lista ci sono ' + nd + ' parole in più.' }));
+      }
+    }
+    p.appendChild(instr);
     const body = el('div');
     p.appendChild(body);
     const fb = el('div', { class: 'feedback' });
@@ -3960,7 +4013,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         actions.appendChild(el('button', { class: 'primary', text: continueLabel, onclick: onContinue }));
         // la frase completa in più solo se sopra non c'è (scelta multipla); negli altri tipi le parole sopra sono già cliccabili per la stella
         if (ex.type === 'mc') showFull();
-        else { const ins = p.querySelector('.instr'); if (ins && ins.textContent.indexOf('★') === -1) ins.textContent += ' · Clicca una parola per la stella ★.'; }
+        else { const ins = p.querySelector('.instr'); if (ins && ins.textContent.indexOf('★') === -1) ins.appendChild(document.createTextNode(' · Clicca una parola per la stella ★.')); }   // appendChild, non textContent +=: la consegna del gapbank contiene un <b> (v66)
       } else {
         fb.textContent = '✗ Non ancora. Riascolta e riprova.'; fb.style.color = 'var(--bad)';
         if (attempts[ex.id] >= 2 || preview) solBtn.style.display = '';
@@ -4041,8 +4094,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
    * riscaldando"), non quattro voci separate. Togliendo la stella a una parola in mezzo, i pezzi ai lati restano.
    */
   function starClick(ls, span) {
-    const parent = span.parentElement; if (!parent) return toggleStar(ls, span.textContent);
-    const spans = $$('.w', parent).filter(function (x) { return x.parentElement === parent; });
+    const scope = (span.closest && span.closest('.sentence')) || span.parentElement;
+    if (!scope) return toggleStar(ls, span.textContent);
+    const spans = starScopeSpans(scope);
     const idx = spans.indexOf(span); if (idx === -1) return toggleStar(ls, span.textContent);
     const norms = spans.map(function (x) { return x.getAttribute('data-w') || ''; });
     const on = spans.map(function (x) { return x.classList.contains('starred'); });
@@ -4072,15 +4126,24 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (added) toast('★ "' + added + '" segnata: la ritrovi nel pulsante ★ in basso e nel riepilogo finale', 2500);
     return !!added;
   }
+  /** Le parole cliccabili di un contenitore, nell'ordine in cui si leggono. Dentro una .sentence si prendono TUTTE,
+   * anche quelle avvolte in altri span (v66, 'ho cliccato "un essere vivente che di cellule ne ha miliardi" ma mi sono
+   * ritrovato tre voci separate': a risposta giusta i gap diventano <span class="filled"> con dentro le loro .w, che
+   * col vecchio filtro figli-diretti erano isole — i vicini si univano saltandole). Fuori da una .sentence (chip di
+   * Parliamone, chip della banca) ogni elemento resta un contenitore a sé: quelle parole NON devono unirsi tra chip. */
+  function starScopeSpans(scope) {
+    if (scope.classList && scope.classList.contains('sentence')) return $$('.w', scope);
+    return $$('.w', scope).filter(function (x) { return x.parentElement === scope; });
+  }
   /** Segna come stellate le parole (o sequenze di parole) presenti nella lista, in tutte le frasi visibili. Idempotente. */
   function refreshStarMarks(ls) {
     if (!ls) return;
     const stars = starStore(ls);
     const keys = Object.keys(stars).map(function (k) { return k.split(' '); });
     const parents = new Set();
-    $$('.w').forEach(function (x) { if (x.parentElement) parents.add(x.parentElement); });
+    $$('.w').forEach(function (x) { const sc = (x.closest && x.closest('.sentence')) || x.parentElement; if (sc) parents.add(sc); });
     parents.forEach(function (parent) {
-      const spans = $$('.w', parent).filter(function (x) { return x.parentElement === parent; });
+      const spans = starScopeSpans(parent);
       const norms = spans.map(function (x) { return x.getAttribute('data-w') || ''; });
       const want = spans.map(function () { return false; });
       keys.forEach(function (kw) {
@@ -4139,7 +4202,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     else if (ex.type === 'extra') { choices.extraWord = isExtra ? clean : d.extraWord; choices.extraAfter = Math.max(0, (d.extraIndex | 0) - 1); }
     else if (ex.type === 'wrong') { choices.wrongWord = fix(d.answer || ''); choices.wrongReplacement = isSwap ? clean : d.wrongWord; }
     else if (ex.type === 'mc') { choices.question = d.question; choices.options = d.options; choices.correct = d.correct; choices.tricky = d.tricky; }
-    const built = EX.buildExercise(ex.type, sentence, { lang: ls.lang, seed: Date.now() % 100000, choices: choices, vocab: lessonVocab(ls), distractors: ex.noDistractors ? 0 : 2 });
+    const built = EX.buildExercise(ex.type, sentence, { lang: ls.lang, seed: Date.now() % 100000, choices: choices, vocab: lessonVocab(ls), distractors: gapExtraCount(ex) });
     if (!built) return toast('Con questa correzione l\'esercizio non si può ricostruire: usa "Modifica"');
     ex.sentence = sentence; ex.type = built.type; ex.data = built.data;
     if (S.lessons[ls.id]) touch(ls);
@@ -4217,10 +4280,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   $('#btn-new-conv').addEventListener('click', openConvNew);
   $('#cn-close').addEventListener('click', function () { $('#dlg-conv-new').close(); });
+  // ✕ in alto a destra su OGNI dialog (v66, 'non c'è un pulsante x o chiudi'): su una finestra bassa i pulsanti
+  // in fondo possono stare fuori dallo schermo; la ✕ sta nell'angolo, sempre in vista all'apertura.
+  $$('dialog').forEach(function (d) {
+    d.appendChild(el('button', { class: 'dlg-x', type: 'button', title: 'Chiudi', text: '✕', onclick: function () { d.close(); } }));
+  });
   $('#cn-blank').addEventListener('click', function () {
     $('#dlg-conv-new').close();
     newConversation({ topic: $('#cn-topic').value.trim(), level: $('#cn-level').value, lang: $('#cn-lang').value, uiLang: $('#cn-uilang').value, focus: $('#cn-focus').value.trim(), n: +$('#cn-n').value || 10 });
   });
+  /** Messaggio di stato con la rotellina davanti: si vede che il lavoro sta andando avanti (v66). */
+  function busyMsg(node, text) { node.textContent = ''; node.appendChild(el('span', { class: 'spinner inline' })); node.appendChild(document.createTextNode(text)); }
   $('#cn-go').addEventListener('click', function () {
     const topic = $('#cn-topic').value.trim();
     if (!topic) { $('#cn-msg').textContent = 'Scrivi prima di che cosa si parla.'; $('#cn-topic').focus(); return; }
@@ -4233,11 +4303,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     };
     const wantPhotos = $('#cn-photos').checked;
     $('#cn-go').disabled = true;
-    $('#cn-msg').textContent = 'Scrivo l\'unità… (lessico, domande, sondaggi, testi: una ventina di secondi)';
+    busyMsg($('#cn-msg'), 'Scrivo l\'unità… (lessico, domande, sondaggi, testi: una ventina di secondi)');
     AI.generateConvUnit(params).then(function (r) {
       $('#dlg-conv-new').close();
       const ls = newConversation(Object.assign(r.unit, { n: params.n }));
       ls.title = r.unit.title;
+      ls.conv._autoFit = true;   // contenuto dell'AI: se il foglio sfora, l'app si regola da sola (v66)
       $('#c-title').value = ls.title;
       toast('Unità pronta' + (r.ai && r.ai.cost ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''), 3500);
       if (wantPhotos && r.unit.photos.length) fillConvPhotos(ls);
@@ -4566,13 +4637,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const cut = midAt === -1 ? Math.ceil(u.questions.length / 2) : midAt;
     const qlist = function (from, to) {
       return el('ol', { class: 'cp-q', start: String(from + 1) }, u.questions.slice(from, to).map(function (q) {
-        return el('li', {}, el('span', { text: q.text }));
+        const li = el('li', {}, el('span', { text: q.text }));
+        // la domanda che parla del sondaggio dice DOVE sta (v66, 'questo non ha minimo senso': sotto la domanda
+        // del grafico c'era una foto, e il grafico stava a sinistra senza che la domanda lo dicesse)
+        const m = /^chart([12])$/.exec(q.ref || '');
+        if (m) li.appendChild(el('span', { class: 'cp-qref', text: ' ← sondaggio ' + m[1] + ', a sinistra' }));
+        return li;
       }));
     };
     right.appendChild(qlist(0, cut));
+    // la foto di meta' pagina sta in mezzo alle domande SOLO se li' c'e' una domanda che la guarda (ref "photo"):
+    // piazzata a meta' "perche' si'" si incollava alla domanda sbagliata (v66, la foto sotto la domanda del grafico)
     const ph2 = withPhotos ? photoBySlot(u, 'mid') : null;
-    if (ph2) right.appendChild(el('figure', { class: 'cp-photo' }, el('img', { src: ph2.url, alt: ph2.alt || '', referrerpolicy: 'no-referrer' })));
+    if (ph2 && midAt !== -1) right.appendChild(el('figure', { class: 'cp-photo' }, el('img', { src: ph2.url, alt: ph2.alt || '', referrerpolicy: 'no-referrer' })));
     right.appendChild(qlist(cut, u.questions.length));
+    if (ph2 && midAt === -1) right.appendChild(el('figure', { class: 'cp-photo' }, el('img', { src: ph2.url, alt: ph2.alt || '', referrerpolicy: 'no-referrer' })));
 
     p1.appendChild(el('div', { class: 'cp-cols' }, left, right));
     p1.appendChild(foot(1));
@@ -4637,9 +4716,35 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       }
       if (pg.getBoundingClientRect().height > A4 + 1) { pg.classList.add('cp-tight'); tight++; }
     });
+    // Se il contenuto l'ha messo l'AI, il foglio si regola da solo (v66, 'non voglio questo errore rosso, sei tu
+    // che devi mettere un numero congruo di parole'): via una voce di lessico alla volta finche' ci sta (mai sotto
+    // le 10), con la barra Annulla che le rimette tutte. Le voci tolte stanno in _cutVocab (campo _, non salvato).
+    const ls = current(), u = ls && ls.conv;
+    if (tight && u && u._autoFit && (u.vocab || []).length > 10) {
+      u._cutVocab = (u._cutVocab || []).concat([u.vocab.pop()]);
+      touch(ls);
+      renderConvSheet(ls);   // ridisegna e rimisura: se sfora ancora si ripassa di qui (al massimo vocab.length volte)
+      return;
+    }
+    if (u && u._autoFit && !tight && (u._cutVocab || []).length) {
+      const cut = u._cutVocab; u._cutVocab = []; delete u._autoFit;   // sistemato: da qui in poi decide l'insegnante
+      toastUndo('Per far stare il foglio ho tolto ' + cut.length + (cut.length === 1 ? ' voce' : ' voci') + ' dal lessico', function () {
+        ls.conv.vocab = ls.conv.vocab.concat(cut);
+        touch(ls);
+        if (S.view === 'convprint') renderConvSheet(ls);
+      });
+    }
     const warn = $('#cp-warn');
     if (warn) {
-      warn.textContent = tight ? '⚠ ' + tight + (tight === 1 ? ' pagina non ci sta' : ' pagine non ci stanno') + ' nemmeno rimpicciolita: togli qualche parola dal lessico o una domanda.' : '';
+      warn.textContent = tight ? '⚠ ' + tight + (tight === 1 ? ' pagina non ci sta' : ' pagine non ci stanno') + ' nemmeno rimpicciolita: togli qualcosa, oppure ' : '';
+      if (tight) {
+        // il lavoro sporco lo fa l'app, ma su un foglio gia' ritoccato a mano solo se l'insegnante lo chiede
+        warn.appendChild(el('button', { class: 'small', text: '✂ togli tu dal lessico finché ci sta', onclick: function () {
+          const l2 = current(); if (!l2 || !l2.conv) return;
+          l2.conv._autoFit = true;
+          renderConvSheet(l2);
+        } }));
+      }
       warn.style.display = tight ? '' : 'none';
     }
   }

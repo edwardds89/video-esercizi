@@ -414,15 +414,18 @@
 
     const tasks = [];
     tasks.push('"title": a short unit title in ' + lang + ' about "' + topic + '" (like a textbook chapter, e.g. "Cibo: cucinare, ordinare, sprecare").');
-    tasks.push('"vocab": 18-24 useful words and expressions in ' + lang + ' for this topic at ' + level
-      + '. Real class vocabulary, not a dictionary dump: verbs and expressions too, not only nouns. '
+    tasks.push('"vocab": ' + (n >= 12 ? '10-14' : (n >= 10 ? '12-16' : '16-20')) + ' useful words and expressions in ' + lang + ' for this topic at ' + level
+      + '. The unit must fit two A4 pages, so with many questions keep the vocabulary list SHORT. '
+      + 'Real class vocabulary, not a dictionary dump: verbs and expressions too, not only nouns. '
       + 'Use "≠" between a word and its opposite ("comodo ≠ scomodo"), "/" between near-synonyms ("errore / sbaglio"), "=" between equivalents. '
       + 'Each entry: {"it":"the word or expression as it goes on the page","en":"short gloss in ' + uiLang + '"}. Order them so related words sit together.');
     tasks.push('"questions": exactly ' + n + ' numbered questions in ' + lang + ', in the order a teacher would ask them across a lesson: '
       + 'start from describing an image and from the student\'s own habits, move to memories and personal stories, then opinions, then the harder abstract ones. '
       + 'Every question is OPEN (never answerable yes/no or with one word) and asks for real talking. Two or three sentences at most, and it may contain a sub-question ("...? Secondo te perché?"). '
       + 'Each: {"text":"...","help":"2 or 3 sentence-openers in ' + lang + ' separated by ·, e.g. Secondo me… · Non sono d\'accordo perché…","ref":"photo|chart1|chart2|text1|text2|null"}. '
-      + '"ref" says what the question makes the student look at: use "photo" for the 1-2 questions that describe an image, '
+      + '"ref" says what the question makes the student look at: use "photo" for the 1-2 questions built around an image — '
+      + 'these must work with ANY relevant photo of the topic (the real photo is found later and may differ from what you imagine): '
+      + 'ask what the student sees and how it connects to the topic, NEVER assume specific people, actions or places ("queste persone" is wrong if the photo may have none). Use '
       + (charts ? '"chart1"/"chart2" for the two that send the student to a survey, ' : '')
       + (texts ? '"text1"/"text2" for the two that ask about the reading texts (put these last), ' : '')
       + 'null for the rest. Language and grammar suited to a ' + level + ' student.');
@@ -434,7 +437,9 @@
       + 'text2 = a short magazine article on the same topic: {"kind":"article","title":"a 2-3 word section heading","body":"260-320 words with 2 invented named experts quoted in « »","quote":"the one sentence from text2 worth printing big on page 1"}. '
       + 'The people are CHARACTERS you invent for the class, never real named individuals, and the article quotes no real organisation, study or statistic.');
     if (role) tasks.push('"roleplay": a phone-call task {"intro":"2-3 sentences in ' + lang + ' setting up a friend in trouble because of this topic","steps":["fatti raccontare…","spiegagli perché…","convincilo a…"]} — exactly 3 steps, imperative, second person singular.');
-    tasks.push('"photos": 3 objects {"slot":"top|mid|role","query":"a 3-6 word ENGLISH search query for a photo of a REAL EVERYDAY SCENE about this topic","alt":"what the photo shows, in ' + lang + '"} — the scenes the questions with ref "photo" describe.');
+    tasks.push('"photos": 3 objects {"slot":"top|mid|role","query":"a 3-6 word ENGLISH search query for a photo of a REAL EVERYDAY SCENE about this topic","alt":"what the photo shows, in ' + lang + '"}. '
+      + 'Each query names a CONCRETE, PHOTOGRAPHABLE subject tied to THIS topic (a place, an object, people doing something specific — e.g. "italian parliament chamber", "people voting polling station"), '
+      + 'never an abstract concept, a map, a flag, a logo or just the topic name: the search runs on Wikipedia and a vague query returns an off-topic image.');
 
     const user = ['TOPIC: ' + topic,
       'LANGUAGE OF THE UNIT (everything the student reads): ' + lang,
