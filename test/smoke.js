@@ -41,12 +41,14 @@ async function noOverflow(page, where) {
   await page.goto(BASE + '?mock=1&speed=8');
   await page.evaluate(function () { localStorage.clear(); });
   await page.goto(BASE + '?mock=1&speed=8');
-  // home Proflandia (v65): 4 card servizio, brand nuovo, sfida "in arrivo" che spiega senza rompere
+  // home Proflandia (v65): 4 card servizio, brand nuovo; la card sfida (v68) apre il dialog e senza quiz lo spiega
   assert.strictEqual(await page.$$eval('.services .svc', function (e) { return e.length; }), 4, 'quattro card servizio');
   assert.ok((await page.textContent('.brand')).indexOf('Proflandia') !== -1, 'il brand dice Proflandia');
   await page.click('#svc-qr');
-  await page.waitForTimeout(300);
-  assert.ok((await page.textContent('#toast')).indexOf('sfida in classe') !== -1 || (await page.textContent('#toast')).indexOf('Sfida') !== -1 || (await page.textContent('#toast')).indexOf('QR') !== -1, 'la card in arrivo spiega cosa arriva');
+  await page.waitForSelector('#dlg-chal-new[open]');
+  assert.ok((await page.$eval('#ch-empty', function (e) { return getComputedStyle(e).display; })) !== 'none', 'senza quiz il dialog spiega di crearne uno');
+  assert.ok(await page.$eval('#ch-go', function (b) { return b.disabled; }), 'senza quiz non si può avviare');
+  await page.click('#ch-close');
   await page.click('#btn-demo');
   await page.waitForSelector('#view-editor.active', { timeout: 15000 });
   await page.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
@@ -1786,6 +1788,57 @@ async function noOverflow(page, where) {
   assert.ok(warm2.fermo, 'il video e\' in pausa, pronto');
   assert.ok(warm2.tempo < 1, 'ed e\' tornato all\'inizio (t=' + warm2.tempo + ')');
   await page.evaluate(function () { const p = window.VLApp.S.player; p.kind = 'mock'; });
+
+  console.log('24. sfida in classe: QR e PIN dal prof, nickname dal telefono, classifica in diretta e podio');
+  const ctxC = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const hostP = await ctxC.newPage();
+  const studP = await ctxC.newPage();
+  await hostP.goto(BASE + '?mock=1');
+  await hostP.evaluate(function () {
+    const S = window.VLApp.S;
+    S.lessons['chalquiz'] = { id: 'chalquiz', title: 'Quiz sfida', updatedAt: new Date().toISOString(), activity: { type: 'quiz', title: 'Quiz sfida', theme: 'classic', data: { questions: [
+      { q: 'Qual è la capitale d\'Italia?', options: ['Roma', 'Milano', 'Parigi', 'Madrid'], correct: 0 },
+      { q: 'Quanto fa 2 + 2?', options: ['3', '4', '5', '22'], correct: 1 }
+    ] } } };
+    window.VLApp.renderHome();
+  });
+  await hostP.click('#svc-qr');
+  await hostP.waitForSelector('#dlg-chal-new[open]');
+  assert.ok((await hostP.$eval('#ch-quiz', function (s) { return s.textContent; })).indexOf('Quiz sfida') !== -1, 'il quiz compare nella scelta');
+  await hostP.check('#dlg-chal-new input[name=chmode][value=right]');   // 100 punti secchi: punteggio deterministico
+  await hostP.click('#ch-go');
+  await hostP.waitForSelector('#view-chal.active', { timeout: 8000 });
+  const pin = (await hostP.$eval('#chal-pin', function (x) { return x.textContent; })).trim();
+  assert.ok(/^[A-HJ-KM-NP-Z2-9]{6}$/.test(pin), 'PIN leggibile di 6 caratteri: ' + pin);
+  assert.ok(await hostP.$('#chal-qr svg'), 'il QR è disegnato');
+  assert.ok(/#c=/.test(await hostP.$eval('#chal-url', function (x) { return x.textContent; })), 'sotto il QR c\'è il link con il PIN');
+  // lo studente entra dal telefono (stessa origine: il canale finto passa da localStorage fra le due tab)
+  await studP.goto(BASE + '?mock=1#c=' + pin);
+  await studP.waitForSelector('#chp-nick');
+  await studP.fill('#chp-nick', 'Anna');
+  await studP.click('#view-chalplay button:has-text("Entra nella sfida")');
+  await studP.waitForSelector('#view-chalplay .quiz-opt', { timeout: 9000 });
+  assert.ok((await hostP.waitForFunction(function () { return /Anna/.test(document.querySelector('#chal-board').textContent); }, null, { timeout: 6000 })), 'il prof vede Anna collegata');
+  for (let stp = 0; stp < 2; stp++) {   // le domande sono mescolate: si legge quella mostrata e si risponde giusto
+    await studP.waitForSelector('#view-chalplay .quiz-opt:not(.picked)');
+    const qtxt = await studP.$eval('#view-chalplay .quiz-q', function (x) { return x.textContent; });
+    const giusta = /capitale/.test(qtxt) ? 'Roma' : '4';
+    await studP.click('#view-chalplay .quiz-opt .txt:text-is("' + giusta + '")');
+    await studP.waitForTimeout(1150);   // avanzamento automatico dopo la risposta giusta
+  }
+  await hostP.waitForFunction(function () {
+    const r = document.querySelector('#chal-board .chal-row');
+    return r && /Anna/.test(r.textContent) && /200 pt/.test(r.textContent) && /✓/.test(r.textContent);
+  }, null, { timeout: 8000 });
+  // fine sfida: doppio click esplicito (niente confirm), podio dal prof e classifica sul telefono
+  await hostP.click('#chal-end');
+  await hostP.click('#chal-end');
+  await hostP.waitForSelector('#chal-board .chal-row.final', { timeout: 5000 });
+  assert.ok(/🥇/.test(await hostP.$eval('#chal-board', function (x) { return x.textContent; })), 'podio dal prof');
+  await studP.waitForSelector('.chp-final', { timeout: 6000 });
+  const fin = await studP.$eval('.chp-final', function (x) { return x.textContent; });
+  assert.ok(/Anna \(tu\)/.test(fin) && /🥇/.test(fin) && /Hai vinto/.test(fin), 'classifica finale sul telefono con la propria riga: ' + fin.slice(0, 80));
+  await ctxC.close();
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
