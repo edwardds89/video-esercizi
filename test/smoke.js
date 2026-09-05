@@ -451,6 +451,19 @@ async function noOverflow(page, where) {
       assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 1).toLowerCase(), 'prima lettera svelata');
       await page.click('#s-panel button:has-text("Aiuto")');
       assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 2).toLowerCase(), 'seconda lettera svelata (risposta dello spazio unito)');
+      if (ex.type === 'gapbank') {
+        // v67: il chip che completa le lettere dell'Aiuto va nella casella dell'aiuto, non nel gap dopo
+        const prima = run0.split(' ')[0];
+        if (prima.length > 2) {
+          const chips2 = await page.$$('#s-panel .chips:not(.answer-row) .chip');
+          let clicked2 = false;
+          for (const c of chips2) { if ((await c.textContent()).trim() === prima) { await c.click(); clicked2 = true; break; } }
+          assert.ok(clicked2, 'chip "' + prima + '" presente nella banca');
+          assert.strictEqual((await inputs[0].inputValue()).trim().toLowerCase(), prima.toLowerCase(), 'il chip sostituisce le lettere del suggerimento nella casella dell\'aiuto');
+          if (inputs.length > 1) assert.strictEqual((await inputs[1].inputValue()).trim(), '', 'niente parola scappata nel gap successivo');
+          await inputs[0].fill('');
+        }
+      }
       for (const inp of inputs) await inp.fill('zzz');
       await page.click('#s-panel button:has-text("Controlla")');
       assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })));
@@ -485,9 +498,19 @@ async function noOverflow(page, where) {
       await page.click('#s-panel button:has-text("Controlla")');
       assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })), 'posto sbagliato = non ancora');
       assert.ok(/Non è lì/.test(await page.$eval('#s-panel .gapfind-hint', function (f) { return f.textContent; })), 'suggerimento sul posto');
-      // "Aiuto" porta al posto giusto
+      // "Aiuto" in tre stadi (v67): prima la ZONA gialla di 5 parole che copre il posto, poi il posto esatto, poi le lettere
       await page.click('#s-panel button:has-text("Aiuto")');
-      assert.ok(await page.$('#s-panel .gapfinder .slot[data-k="' + ex.data.missingIndex + '"].sel'), 'aiuto = posto giusto');
+      const mz = await page.evaluate(function (mi) {
+        const ws = [].slice.call(document.querySelectorAll('#s-panel .gapfinder .w'));
+        const on = ws.map(function (w, i) { return w.classList.contains('zone') ? i : -1; }).filter(function (i) { return i !== -1; });
+        return { n: on.length, from: on[0], to: on[on.length - 1], copre: on.length ? on[0] <= mi && mi - 1 <= on[on.length - 1] : false };
+      }, ex.data.missingIndex);
+      assert.ok(mz.n >= 3 && mz.n <= 5, 'primo aiuto: zona gialla di 3-5 parole accesa (' + mz.n + ')');
+      assert.ok(mz.copre, 'la zona copre il posto della parola mancante: ' + JSON.stringify(mz));
+      assert.ok(!(await page.$('#s-panel .gapfinder .slot[data-k="' + ex.data.missingIndex + '"].sel')), 'il primo aiuto NON svela ancora il posto');
+      await page.click('#s-panel button:has-text("Aiuto")');
+      assert.ok(await page.$('#s-panel .gapfinder .slot[data-k="' + ex.data.missingIndex + '"].sel'), 'secondo aiuto = posto giusto');
+      assert.ok(!(await page.$('#s-panel .gapfinder .w.zone')), 'aperto il posto, la zona si spegne');
       await page.fill('#s-panel input.gapfind', ex.data.answer);
     } else if (ex.type === 'extra') {
       const chips = await page.$$('#s-panel .chips .chip');
@@ -1505,6 +1528,19 @@ async function noOverflow(page, where) {
   await page.waitForSelector('.tr-menu .tr-opt');
   const nLingue = await page.$$eval('.tr-menu .tr-opt', function (o) { return o.length; });
   assert.ok(nLingue >= 16, 'almeno sedici lingue fra cui scegliere (sono ' + nLingue + ')');
+  // v67: il menu sta TUTTO dentro lo schermo e ogni lingua e' raggiungibile (prima sconfinava dietro il video)
+  const menuBox = await page.evaluate(function () {
+    const m = document.querySelector('.tr-menu'); const r = m.getBoundingClientRect();
+    const opts = [].slice.call(m.querySelectorAll('.tr-opt'));
+    const reach = opts.every(function (o) {
+      o.scrollIntoView({ block: 'nearest' });
+      const b = o.getBoundingClientRect();
+      return b.top >= -1 && b.bottom <= window.innerHeight + 1;
+    });
+    return { top: r.top, bottom: r.bottom, h: window.innerHeight, reach: reach };
+  });
+  assert.ok(menuBox.top >= 0 && menuBox.bottom <= menuBox.h + 1, 'menu delle lingue dentro lo schermo: ' + JSON.stringify(menuBox));
+  assert.ok(menuBox.reach, 'ogni lingua si puo\' raggiungere (scroll interno)');
   await page.evaluate(function () { [].slice.call(document.querySelectorAll('.tr-opt')).filter(function (o) { return /Spagnolo/.test(o.textContent); })[0].click(); });
   await page.waitForTimeout(250);
   assert.notStrictEqual(await page.$eval('.tr-wrap .tr-btn', function (b) { return b.textContent; }), bandiera, 'scegliendo un\'altra lingua la bandiera cambia');
