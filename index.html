@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260905-67">
+<link rel="stylesheet" href="styles.css?v=20260905-68">
 </head>
 <body>
 <header class="topbar">
@@ -44,10 +44,10 @@
           <div class="go">+ Nuova conversazione</div>
         </div>
         <div class="svc svc-qr" id="svc-qr" role="button" tabindex="0">
-          <span class="soon">IN ARRIVO</span>
+          <span class="soon new">NUOVO</span>
           <div class="ico">📱</div><h3>Sfida in classe</h3>
           <p>Gli studenti scannerizzano un QR col telefono, nickname e via: classifica in diretta, senza account.</p>
-          <div class="go">Gioca in classe</div>
+          <div class="go">▶ Gioca in classe</div>
         </div>
       </div>
     </div>
@@ -335,6 +335,37 @@
     <div id="cp-sheet" class="cp-sheet"></div>
   </section>
 
+  <!-- SFIDA IN CLASSE: schermo del prof (da proiettare) -->
+  <section id="view-chal" class="view">
+    <div class="row" style="margin-bottom:10px">
+      <button id="chal-exit">✕ Chiudi</button>
+      <span id="chal-title" class="hint grow"></span>
+      <button id="chal-end" class="primary">🏁 Termina la sfida</button>
+    </div>
+    <div class="chal-cols">
+      <div class="card chal-join" id="chal-live">
+        <h2 style="margin-top:0">Entra con il telefono</h2>
+        <div id="chal-qr" class="chal-qr"></div>
+        <div class="chal-pin-lbl">PIN</div>
+        <div id="chal-pin" class="chal-pin"></div>
+        <div id="chal-url" class="hint" style="text-align:center"></div>
+      </div>
+      <div class="card chal-join" id="chal-after" style="display:none">
+        <h2 style="margin-top:0">🏁 Sfida chiusa</h2>
+        <p class="hint">La classifica finale è anche sui telefoni degli studenti.</p>
+      </div>
+      <div class="card grow">
+        <div class="row"><h2 style="margin:0" class="grow">Classifica</h2><span id="chal-count" class="hint"></span></div>
+        <div id="chal-board" class="chal-board"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SFIDA IN CLASSE: telefono dello studente (#c=PIN) -->
+  <section id="view-chalplay" class="view">
+    <div id="chp-wrap" class="chp-wrap"></div>
+  </section>
+
   <!-- ATTIVITÀ: gioco (studente) -->
   <section id="view-actplay" class="view">
     <div class="row" style="margin-bottom:8px">
@@ -390,6 +421,28 @@
     <button id="cn-go" class="primary">✨ Genera l'unità</button>
     <button id="cn-blank">Parto da un foglio vuoto</button>
     <button id="cn-close">Chiudi</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-chal-new">
+  <h2>Sfida in classe</h2>
+  <p class="hint">Proietti il QR, gli studenti lo scannerizzano col telefono, mettono un nickname (niente account) e rispondono al proprio ritmo. Tu vedi la classifica in diretta.</p>
+  <div id="ch-empty" style="display:none">
+    <p class="notice">Per la sfida serve un <b>Quiz</b>: creane uno da <b>Giochi e attività</b> (anche con l'AI in un minuto), poi torna qui.</p>
+  </div>
+  <div id="ch-form">
+    <label for="ch-quiz">Quale quiz giochiamo?</label>
+    <select id="ch-quiz" style="width:100%"></select>
+    <p class="hint" style="margin-top:12px">Come si vince (lo scegli a ogni sfida):</p>
+    <div class="chips" id="ch-modes">
+      <label class="chip"><input type="radio" name="chmode" value="right"> solo risposte giuste</label>
+      <label class="chip"><input type="radio" name="chmode" value="streak" checked> giuste + serie 🔥</label>
+      <label class="chip"><input type="radio" name="chmode" value="speed"> giuste + velocità ⚡</label>
+    </div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <button id="ch-go" class="primary">▶ Avvia la sfida</button>
+    <button id="ch-close">Chiudi</button>
   </div>
 </dialog>
 
@@ -515,14 +568,16 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260905-67"></script>
-<script src="exercises.js?v=20260905-67"></script>
-<script src="generator.js?v=20260905-67"></script>
-<script src="activities.js?v=20260905-67"></script>
-<script src="ai.js?v=20260905-67"></script>
-<script src="demo-data.js?v=20260905-67"></script>
-<script src="bookmarklet.js?v=20260905-67"></script>
-<script src="sync.js?v=20260905-67"></script>
-<script src="app.js?v=20260905-67"></script>
+<script src="lang.js?v=20260905-68"></script>
+<script src="exercises.js?v=20260905-68"></script>
+<script src="generator.js?v=20260905-68"></script>
+<script src="activities.js?v=20260905-68"></script>
+<script src="ai.js?v=20260905-68"></script>
+<script src="demo-data.js?v=20260905-68"></script>
+<script src="bookmarklet.js?v=20260905-68"></script>
+<script src="sync.js?v=20260905-68"></script>
+<script src="qr.js?v=20260905-68"></script>
+<script src="challenge.js?v=20260905-68"></script>
+<script src="app.js?v=20260905-68"></script>
 </body>
 </html>

@@ -337,6 +337,7 @@
             onReplay: play, result: { done: true, score: score, right: right, total: qs.length }
           });
         }
+        const tQ = Date.now();   // per il punteggio a velocità della Sfida in classe (v68)
         const q = qs[order[at]];
         const view = quizOrder(q, Math.random);
         const head = h('div', { class: 'act-head' });
@@ -362,7 +363,8 @@
             grid.classList.add('shown');
             grid.children[view.correct].classList.add('good');
             if (okAns) {
-              right++; score += quizPoints(streak); streak++; best = Math.max(best, streak);
+              // la Sfida in classe (v68) passa opts.points per la modalità scelta dall'insegnante (serie/velocità/secche)
+              right++; score += (opts && opts.points ? opts.points(streak, Date.now() - tQ) : quizPoints(streak)); streak++; best = Math.max(best, streak);
               sc.textContent = score + ' pt';
               b.classList.add('picked');
               if (opts && opts.sound) opts.sound();
@@ -370,6 +372,7 @@
               streak = 0;
               b.classList.add('bad', 'picked');
             }
+            if (opts && opts.onAnswer) opts.onAnswer({ index: at, total: order.length, ok: okAns, score: score, right: right, streak: streak });
             setTimeout(function () { at++; step(); }, okAns ? 950 : 1600);
           });
           grid.appendChild(b);

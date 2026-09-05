@@ -1061,3 +1061,38 @@ button.small.ok { background: #e6f6ea; border-color: #7fc99a; color: #17663a; fo
   background: rgba(0,0,0,.55); color: #fff; font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center;
   text-shadow: 0 1px 3px rgba(0,0,0,.9); box-shadow: 0 2px 8px rgba(0,0,0,.5); }
 .img-preview .img-x:hover { background: rgba(0,0,0,.78); }
+
+/* ---------- SFIDA IN CLASSE (v68) ---------- */
+.soon.new { background: #e7f6ec; color: #1c7c3e; }
+.chal-cols { display: grid; grid-template-columns: minmax(300px, 440px) 1fr; gap: 14px; align-items: start; }
+@media (max-width: 860px) { .chal-cols { grid-template-columns: 1fr; } }
+.chal-join { text-align: center; }
+.chal-qr { max-width: 400px; margin: 0 auto; }
+.chal-qr svg { width: 100%; height: auto; display: block; border-radius: 8px; }
+.chal-pin-lbl { margin-top: 8px; color: var(--muted, #667); font-size: 13px; letter-spacing: .2em; }
+.chal-pin { font-size: clamp(34px, 6vw, 56px); font-weight: 800; letter-spacing: .18em; margin: 2px 0 6px; }
+.chal-board { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.chal-row { display: grid; grid-template-columns: 2.4em 1fr minmax(60px, 180px) auto; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.chal-row .rk { font-weight: 800; text-align: center; }
+.chal-row .nick { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chal-row .bar { height: 8px; border-radius: 99px; background: var(--chip, #eef2f7); overflow: hidden; }
+.chal-row .bar i { display: block; height: 100%; background: var(--accent, #1f6feb); border-radius: 99px; transition: width .4s; }
+.chal-row .pts { font-weight: 700; white-space: nowrap; }
+.chal-row.done { background: #f4fbf6; border-color: #bfe3c8; }
+.chal-row.final { grid-template-columns: 2.4em 1fr auto auto; }
+.chal-row.final .sub { color: var(--muted, #667); font-size: 13px; }
+.chal-row.final.top { background: #fff8e6; border-color: #f0d78a; }
+.chal-row.final.me { outline: 2px solid var(--accent, #1f6feb); }
+/* telefono dello studente */
+body.view-chalplay { background: #f4f6fa; }
+.chp-wrap { max-width: 620px; margin: 0 auto; padding: 10px; }
+.chp-join { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 26px 18px; text-align: center; margin-top: 8vh; }
+.chp-logo { font-weight: 800; color: var(--accent, #1f6feb); letter-spacing: .02em; }
+.chp-join input { width: 100%; max-width: 320px; font-size: 18px; text-align: center; padding: 10px; margin: 14px auto 10px; display: block; }
+.chp-join .primary.big { font-size: 17px; padding: 12px 22px; }
+.chp-stage { min-height: 72vh; }
+.chp-stage .act { min-height: 72vh; }
+.chp-status { text-align: center; margin-top: 8px; padding: 8px; color: var(--muted, #667); font-size: 14px; }
+.chp-final { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px 14px; margin-top: 4vh; display: flex; flex-direction: column; gap: 6px; }
+.chp-final h2 { text-align: center; margin: 0 0 8px; }
+.chp-me { text-align: center; font-size: 18px; font-weight: 700; margin: 10px 0 0; }
