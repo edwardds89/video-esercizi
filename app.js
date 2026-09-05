@@ -686,6 +686,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function homeKind(ls) {
     if (ls.activity && !Array.isArray(ls.exercises)) return 'act';
     if (ls.conv && !Array.isArray(ls.exercises)) return 'conv';
+    if (ls.chal && !Array.isArray(ls.exercises)) return 'chal';
     return 'video';
   }
   function renderHome() {
@@ -695,12 +696,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     list.innerHTML = '';
     const all = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
     // chip dei filtri con i conteggi veri + ricerca per titolo (v65, home Proflandia)
-    const counts = { all: all.length, video: 0, act: 0, conv: 0 };
+    const counts = { all: all.length, video: 0, act: 0, conv: 0, chal: 0 };
     all.forEach(function (ls) { counts[homeKind(ls)]++; });
     const fbox = $('#home-filter');
     if (fbox) {
       fbox.innerHTML = '';
-      [['all', 'Tutte'], ['video', '\ud83c\udfac Lezioni'], ['act', '\ud83c\udfb2 Attivit\u00e0'], ['conv', '\ud83d\udcac Conversazioni']].forEach(function (f) {
+      [['all', 'Tutte'], ['video', '\ud83c\udfac Lezioni'], ['act', '\ud83c\udfb2 Attivit\u00e0'], ['conv', '\ud83d\udcac Conversazioni'], ['chal', '\ud83d\udcf1 Sfide']].forEach(function (f) {
         const b = el('button', { class: 'fchip' + ((S.homeFilter || 'all') === f[0] ? ' on' : ''), text: f[1] + ' (' + counts[f[0]] + ')', onclick: function () { S.homeFilter = f[0]; renderHome(); } });
         fbox.appendChild(b);
       });
@@ -731,6 +732,23 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'attivita') + '.json', JSON.stringify(actPayload(ls), null, 1)); } }),
               el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'attività senza titolo') + '"?')) deleteLesson(ls); } }))));
         list.appendChild(cardA);
+        return;
+      }
+      // set della Sfida in classe: si apre l'editor, "Gioca" lancia il dialog della sfida
+      if (ls.chal && !Array.isArray(ls.exercises)) {
+        const nIt = (ls.chal.items || []).length;
+        const openS = function () { openChalSet(ls.id); };
+        const cardS = el('div', { class: 'lesson-card' },
+          el('div', { class: 'thumb act-thumb chal-thumb', onclick: openS, title: 'Apri il set' }, '📱'),
+          el('div', { class: 'body' },
+            el('div', { class: 'title', text: ls.title || '(set senza titolo)', onclick: openS }),
+            el('div', { class: 'meta', text: 'Sfida in classe · ' + nIt + (nIt === 1 ? ' esercizio' : ' esercizi') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            el('div', { class: 'actions' },
+              el('button', { class: 'small primary', text: '▶ Gioca', onclick: function () { openChalNew(ls.id); } }),
+              el('button', { class: 'small', text: '✎ Modifica', onclick: openS }),
+              el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'sfida') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, chal: ls.chal }, null, 1)); } }),
+              el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'set senza titolo') + '"?')) deleteLesson(ls); } }))));
+        list.appendChild(cardS);
         return;
       }
       // conversazione standalone: nessun video, si apre il foglio A4
@@ -799,7 +817,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   });
   $('#btn-new-act').addEventListener('click', function () { openActNew(newActivity); });
   $('#home-search').addEventListener('input', function () { S.homeSearch = this.value; renderHome(); });
-  $('#svc-qr').addEventListener('click', function () { openChalNew(); });   // v68: la sfida esiste, la card e' il punto d'ingresso
+  // (la card #svc-qr e' agganciata nel blocco Sfida in classe, piu' sotto)
   $('#btn-demo').addEventListener('click', function () {
     if (!window.VL_DEMO) return toast('Dati demo non trovati');
     const parsed = G.parseTranscript(window.VL_DEMO.transcript);
@@ -5124,11 +5142,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       el('button', { class: 'primary', text: 'Ricomincia', onclick: function () { openStudent(ls.id, false, ls); } })));
   }
 
-  // ---------- SFIDA IN CLASSE (v68): QR + nickname senza account + classifica in diretta ----------
-  // Trasporto: canale broadcast di Supabase Realtime con la sola chiave pubblicabile (verificato: SUBSCRIBED
-  // senza login). Niente tabelle, niente dati salvati: chiusa la sfida non resta nulla. In ?mock=1 il canale
-  // e' VLChal.localBus (localStorage fra tab dello stesso browser), cosi' lo smoke prova host+studente senza rete.
-  let CHAL = null;   // host: { pin, act, mode, conn, state, ended }
+  // ---------- SFIDA IN CLASSE (v68, riprogettata in v69): due modalita', set multi-tipo ----------
+  // Modalita' "Insieme sullo schermo" (stile Kahoot): la domanda e' proiettata, i telefoni mandano solo la
+  // risposta, l'HOST valuta con VLChal.checkItem: le soluzioni non viaggiano MAI sul canale (wire() toglie
+  // anche il mapping del match). Modalita' "Ognuno al suo ritmo" (stile Quizizz): il set viaggia intero e il
+  // telefono corregge da solo (ok per giocare, NON per verifiche). Trasporto: Supabase Realtime broadcast con
+  // la sola chiave pubblicabile; in ?mock=1 il canale e' VLChal.localBus (localStorage fra tab) per lo smoke.
+  let CHAL = null;   // host: { pin, play:'tp'|'sp', items, mode, secs, showQ, conn, state, pub, timer, ... }
   function loadSupaLib(cb) {
     if (window.supabase) return cb(true);
     const s = document.createElement('script');
@@ -5144,7 +5164,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const client = window.supabase.createClient(VLSync.CONFIG.url, VLSync.CONFIG.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
       const cbs = {};
       const ch = client.channel('chal:' + pin, { config: { broadcast: { self: false } } });
-      ['hello', 'score', 'quiz', 'board', 'end'].forEach(function (ev) {
+      ['hello', 'score', 'set', 'q', 'ans', 'reveal', 'board', 'end'].forEach(function (ev) {
         ch.on('broadcast', { event: ev }, function (msg) { if (cbs[ev]) cbs[ev](msg.payload); });
       });
       let opened = false;
@@ -5161,55 +5181,237 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
   }
   function chalUrl(pin) { return location.origin + location.pathname + '#c=' + pin; }
-  /** I quiz giocabili in classe: attivita' standalone + quiz dentro le lezioni. */
-  function chalQuizzes() {
+
+  // ---- il SET di esercizi della sfida (ls.chal = { items }) ----
+  function chalSets() {
+    return Object.keys(S.lessons).map(function (k) { return S.lessons[k]; })
+      .filter(function (ls) { return ls.chal && Array.isArray(ls.chal.items); });
+  }
+  function chalSetReady(ls) { return ls.chal && (ls.chal.items || []).length >= 1; }
+  function newChalSet() {
+    const id = 'chal-' + Date.now().toString(36);
+    S.lessons[id] = { id: id, title: '', chal: { items: [] }, updatedAt: new Date().toISOString() };
+    saveDebounced();
+    openChalSet(id);
+  }
+  function openChalSet(id) {
+    const ls = S.lessons[id]; if (!ls || !ls.chal) return renderHome();
+    S.currentId = id;
+    show('chalset');
+    renderChalSet(ls);
+  }
+  /** Le sorgenti da cui si puo' importare: lezioni con esercizi adatti, quiz, parole utili con traduzione. */
+  function chalImportSources() {
     const out = [];
-    Object.keys(S.lessons).forEach(function (id) {
-      const ls = S.lessons[id];
-      if (ls.activity && ls.activity.type === 'quiz' && ACT.validate(ls.activity)) out.push({ label: ls.title || 'Quiz', act: ls.activity });
-      (ls.acts || []).forEach(function (a) { if (a.type === 'quiz' && ACT.validate(a)) out.push({ label: (ls.title || 'Lezione') + ' · ' + (a.title || 'Quiz'), act: a }); });
+    const okKinds = { gap: 1, gapbank: 1, mc: 1, extra: 1, missing: 1, wrong: 1 };
+    Object.keys(S.lessons).forEach(function (k) {
+      const ls = S.lessons[k];
+      if (Array.isArray(ls.exercises)) {
+        const exs = ls.exercises.filter(function (e) { return okKinds[e.type] && (e.type !== 'mc' || (e.data && e.data.question)); });
+        if (exs.length) out.push({ label: '🎬 ' + (ls.title || 'Lezione') + ' · ' + exs.length + ' esercizi', add: function (set) { return exs.map(function (e) { return { id: 'i' + Math.random().toString(36).slice(2, 9), kind: e.type, sentence: e.sentence || '', data: JSON.parse(JSON.stringify(e.data)) }; }); } });
+        const words = (ls.vocab && ls.vocab.words || []).filter(function (w) { return w.selected !== false && w.word && w.translation; });
+        if (words.length >= 2) out.push({ label: '🃏 ' + (ls.title || 'Lezione') + ' · abbina ' + Math.min(words.length, 8) + ' parole', add: function () { const it = VLChal.buildItem('match', words.slice(0, 8).map(function (w) { return { a: w.word, b: w.translation }; })); return it ? [it] : []; } });
+      }
+      const quizzes = [];
+      if (ls.activity && ls.activity.type === 'quiz') quizzes.push(ls.activity);
+      (ls.acts || []).forEach(function (a) { if (a.type === 'quiz') quizzes.push(a); });
+      quizzes.forEach(function (qz) {
+        const qs = (qz.data.questions || []).filter(function (q) { return q.q && (q.options || []).filter(Boolean).length >= 2 && q.correct != null; });
+        if (qs.length) out.push({ label: '🎲 ' + (ls.title || qz.title || 'Quiz') + ' · ' + qs.length + ' domande', add: function () { return qs.map(function (q) { return VLChal.buildItem('mc', { q: q.q, options: q.options, correct: q.correct }); }).filter(Boolean); } });
+      });
     });
     return out;
   }
-  function openChalNew() {
-    const list = chalQuizzes();
-    const sel = $('#ch-quiz'); sel.innerHTML = '';
-    if (!list.length) {
+  function renderChalSet(ls) {
+    $('#cs-title').value = ls.title || '';
+    const srcSel = $('#cs-import-src'); srcSel.innerHTML = '';
+    const sources = chalImportSources();
+    if (!sources.length) srcSel.appendChild(el('option', { value: '', text: 'niente da importare' }));
+    sources.forEach(function (s, i) { srcSel.appendChild(el('option', { value: String(i), text: s.label })); });
+    $('#cs-import').disabled = !sources.length;
+    const box = $('#cs-items'); box.innerHTML = '';
+    const items = ls.chal.items || [];
+    if (!items.length) box.appendChild(el('p', { class: 'hint', text: 'Il set è vuoto: importa dagli esercizi che hai già o aggiungine uno nuovo.' }));
+    items.forEach(function (it, i) {
+      const row = el('div', { class: 'cs-item' },
+        el('span', { class: 'badge', text: String(i + 1) }),
+        el('span', { class: 'kind', text: VLChal.itemLabel(it.kind) }),
+        el('span', { class: 'txt grow', text: chalItemSummary(it) }),
+        el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { const t = items[i - 1]; items[i - 1] = it; items[i] = t; chalSetTouched(ls); } }),
+        el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === items.length - 1 ? 'disabled' : null, onclick: function () { const t = items[i + 1]; items[i + 1] = it; items[i] = t; chalSetTouched(ls); } }),
+        el('button', { class: 'small danger', text: '✕', onclick: function () { items.splice(i, 1); chalSetTouched(ls); toast('Esercizio tolto dal set'); } }));
+      box.appendChild(row);
+    });
+  }
+  function chalItemSummary(it) {
+    if (it.kind === 'mc') return it.data.question + '  (' + (it.data.options || []).filter(Boolean).length + ' risposte)';
+    if (it.kind === 'match') return it.pairs.map(function (p) { return p.a; }).join(' · ');
+    if (it.kind === 'gap' || it.kind === 'gapbank') return VLChal.gapText(it);
+    return it.sentence || (it.data.shown || it.data.tokens || []).join(' ');
+  }
+  function chalSetTouched(ls) { ls.updatedAt = new Date().toISOString(); saveDebounced(); renderChalSet(ls); }
+  $('#cs-title').addEventListener('change', function () { const ls = current(); if (ls && ls.chal) { ls.title = this.value.trim(); ls.updatedAt = new Date().toISOString(); saveDebounced(); } });
+  $('#cs-import').addEventListener('click', function () {
+    const ls = current(); if (!ls || !ls.chal) return;
+    const src = chalImportSources()[+$('#cs-import-src').value || 0]; if (!src) return;
+    const add = src.add(ls.chal).filter(Boolean);
+    ls.chal.items = (ls.chal.items || []).concat(add);
+    chalSetTouched(ls);
+    toast(add.length + (add.length === 1 ? ' esercizio importato' : ' esercizi importati'));
+  });
+  $('#cs-delete').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    if (confirm('Eliminare il set "' + (ls.title || 'senza titolo') + '"?')) { deleteLesson(ls); renderHome(); }
+  });
+  $('#cs-play').addEventListener('click', function () { const ls = current(); if (ls) openChalNew(ls.id); });
+  // "+ Esercizio": un piccolo dialog che cambia campi secondo il tipo
+  $('#cs-add').addEventListener('click', function () {
+    const body = $('#ca-body'); body.innerHTML = '';
+    const kindSel = el('select', { id: 'ca-kind' });
+    VLChal.ITEM_KINDS.forEach(function (k) { kindSel.appendChild(el('option', { value: k[0], text: k[1] })); });
+    const fields = el('div', { style: 'margin-top:10px' });
+    const paint = function () {
+      const k = kindSel.value; fields.innerHTML = '';
+      if (k === 'mc') {
+        fields.appendChild(el('label', { text: 'Domanda' }));
+        fields.appendChild(el('textarea', { id: 'ca-q', rows: '2', style: 'width:100%' }));
+        for (let i = 0; i < 4; i++) {
+          fields.appendChild(el('div', { class: 'row', style: 'margin-top:4px' },
+            el('input', { type: 'radio', name: 'ca-right', value: String(i), checked: i === 0 ? 'checked' : null, title: 'La risposta giusta' }),
+            el('input', { type: 'text', class: 'grow ca-opt', placeholder: 'Risposta ' + 'ABCD'[i] })));
+        }
+      } else if (k === 'match') {
+        fields.appendChild(el('p', { class: 'hint', text: 'Da 2 a 8 coppie (parola · traduzione o definizione).' }));
+        for (let i = 0; i < 8; i++) {
+          fields.appendChild(el('div', { class: 'row', style: 'margin-top:4px' },
+            el('input', { type: 'text', class: 'grow ca-a', placeholder: 'parola ' + (i + 1) }),
+            el('input', { type: 'text', class: 'grow ca-b', placeholder: 'abbinamento ' + (i + 1) })));
+        }
+      } else {
+        fields.appendChild(el('label', { text: 'La frase (l\'esercizio viene costruito da qui)' }));
+        fields.appendChild(el('textarea', { id: 'ca-sent', rows: '3', style: 'width:100%', placeholder: 'Es. Il mare si sta riscaldando molto in fretta e questo preoccupa gli scienziati.' }));
+        fields.appendChild(el('p', { class: 'hint', text: 'Come nelle lezioni: spazi, parola in più/mancante/sbagliata li sceglie l\'app dalla frase.' }));
+      }
+    };
+    kindSel.addEventListener('change', paint);
+    body.appendChild(el('label', { text: 'Tipo di esercizio' }));
+    body.appendChild(kindSel);
+    body.appendChild(fields);
+    paint();
+    $('#dlg-chal-add').showModal();
+  });
+  $('#ca-close').addEventListener('click', function () { $('#dlg-chal-add').close(); });
+  $('#ca-ok').addEventListener('click', function () {
+    const ls = current(); if (!ls || !ls.chal) return;
+    const k = $('#ca-kind').value;
+    let it = null;
+    if (k === 'mc') {
+      const q = ($('#ca-q').value || '').trim();
+      const opts = $$('.ca-opt', $('#ca-body')).map(function (i) { return i.value.trim(); });
+      const right = +(document.querySelector('#ca-body input[name=ca-right]:checked') || {}).value || 0;
+      if (!q || opts.filter(Boolean).length < 2) return toast('Servono la domanda e almeno due risposte');
+      it = VLChal.buildItem('mc', { q: q, options: opts.filter(Boolean), correct: right });
+    } else if (k === 'match') {
+      const as = $$('.ca-a', $('#ca-body')).map(function (i) { return i.value.trim(); });
+      const bs = $$('.ca-b', $('#ca-body')).map(function (i) { return i.value.trim(); });
+      const pairs = as.map(function (a, i) { return { a: a, b: bs[i] }; }).filter(function (p) { return p.a && p.b; });
+      if (pairs.length < 2) return toast('Servono almeno due coppie complete');
+      it = VLChal.buildItem('match', pairs);
+    } else {
+      const sent = ($('#ca-sent').value || '').trim();
+      if (!sent) return toast('Scrivi prima la frase');
+      it = VLChal.buildItem(k, sent, { lang: 'it', seed: Date.now() % 100000, distractors: 2 });
+      if (!it) return toast('Frase non adatta a questo tipo (troppo corta?): prova con una frase più lunga');
+    }
+    if (!it) return toast('Non sono riuscito a costruire l\'esercizio');
+    ls.chal.items.push(it);
+    $('#dlg-chal-add').close();
+    chalSetTouched(ls);
+  });
+
+  // ---- lancio ----
+  function openChalNew(preferId) {
+    const sets = chalSets();
+    const sel = $('#ch-set'); sel.innerHTML = '';
+    if (!sets.length) {
       $('#ch-empty').style.display = '';
       $('#ch-form').style.display = 'none';
     } else {
       $('#ch-empty').style.display = 'none';
       $('#ch-form').style.display = '';
-      list.forEach(function (it, i) { sel.appendChild(el('option', { value: String(i), text: it.label })); });
+      sets.forEach(function (ls) { sel.appendChild(el('option', { value: ls.id, text: (ls.title || 'Set senza titolo') + ' · ' + ls.chal.items.length + ' esercizi' })); });
+      if (preferId && S.lessons[preferId]) sel.value = preferId;
     }
-    $('#ch-go').disabled = !list.length;
+    $('#ch-go').disabled = !sets.length;
+    chTpOpts();
     $('#dlg-chal-new').showModal();
   }
+  function chTpOpts() { const tp = (document.querySelector('#dlg-chal-new input[name=chplay]:checked') || {}).value !== 'sp'; $('#ch-tp-opts').style.display = tp ? '' : 'none'; }
+  $$('#dlg-chal-new input[name=chplay]').forEach(function (r) { r.addEventListener('change', chTpOpts); });
   function chalMode() { const r = document.querySelector('#dlg-chal-new input[name=chmode]:checked'); return r ? r.value : 'streak'; }
-  function startChal(act, mode) {
+  $('#ch-new-set').addEventListener('click', function () { $('#dlg-chal-new').close(); newChalSet(); });
+  $('#ch-new-set2').addEventListener('click', function () { $('#dlg-chal-new').close(); newChalSet(); });
+  $('#ch-edit-set').addEventListener('click', function () { const id = $('#ch-set').value; $('#dlg-chal-new').close(); if (S.lessons[id]) openChalSet(id); });
+  $('#ch-go').addEventListener('click', function () {
+    const ls = S.lessons[$('#ch-set').value];
+    if (!ls || !chalSetReady(ls)) return toast('Il set è vuoto: aggiungi almeno un esercizio');
+    $('#dlg-chal-new').close();
+    startChal(ls, {
+      play: (document.querySelector('#dlg-chal-new input[name=chplay]:checked') || {}).value === 'sp' ? 'sp' : 'tp',
+      mode: chalMode(),
+      secs: +$('#ch-secs').value || 0,
+      showQ: $('#ch-showq').checked
+    });
+  });
+  $('#ch-close').addEventListener('click', function () { $('#dlg-chal-new').close(); });
+  $('#svc-qr').addEventListener('click', function () { openChalNew(); });
+
+  function startChal(setLs, cfg) {
     const pin = VLChal.makePin();
+    const items = JSON.parse(JSON.stringify(setLs.chal.items, function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; }));
     overlay(true, 'loading');
     chalJoin(pin, function (conn) {
       overlay(false);
-      CHAL = { pin: pin, act: JSON.parse(JSON.stringify(act, function (k, v) { return k.charAt(0) === '_' ? undefined : v; })), mode: mode, conn: conn, state: VLChal.newState(), ended: false, boardAt: 0, boardTimer: null };
+      CHAL = { pin: pin, title: setLs.title || 'Sfida', play: cfg.play, items: items, mode: cfg.mode, secs: cfg.secs, showQ: cfg.showQ,
+        conn: conn, state: cfg.play === 'tp' ? VLChal.tpNew() : VLChal.newState(), pub: null, ended: false, boardAt: 0, boardTimer: null, clock: null };
       conn.on('hello', function (p) {
-        VLChal.reduce(CHAL.state, 'hello', p);
-        conn.send('quiz', { act: CHAL.act, mode: CHAL.mode });   // a ogni hello: chi arriva tardi riceve tutto
+        if (!p || !p.id) return;
+        if (CHAL.play === 'tp') {
+          VLChal.tpJoin(CHAL.state, p);
+          if (CHAL.state.phase === 'question') conn.send('q', chalQPayload());   // chi arriva a domanda aperta la riceve
+        } else {
+          VLChal.reduce(CHAL.state, 'hello', p);
+          conn.send('set', { items: CHAL.items, mode: CHAL.mode });
+        }
         renderChalBoard(); chalBoardOut();
       });
-      conn.on('score', function (p) {
+      conn.on('score', function (p) {   // solo student-paced
+        if (CHAL.play !== 'sp') return;
         VLChal.reduce(CHAL.state, 'score', p);
         renderChalBoard(); chalBoardOut();
+      });
+      conn.on('ans', function (p) {     // solo teacher-paced
+        if (CHAL.play !== 'tp' || !p) return;
+        const item = CHAL.items[CHAL.state.i];
+        if (!item) return;
+        const r = VLChal.tpAnswer(CHAL.state, p, item, CHAL.mode, CHAL.pub);
+        if (r) {
+          chalAnswered();
+          if (VLChal.tpAllAnswered(CHAL.state)) chalCloseQuestion();   // tutti hanno risposto: si chiude da sola
+        }
       });
       show('chal');
       renderChal();
     }, function (err) { overlay(false); toast(err, 6000); });
   }
-  /** La classifica ai telefoni: al massimo una ogni 700 ms, con coda per l'ultimo stato. */
+  function chalQPayload() {
+    return { i: CHAL.state.i, total: CHAL.items.length, pub: VLChal.wire(CHAL.pub), showQ: !!CHAL.showQ, secs: CHAL.secs || 0 };
+  }
+  /** La classifica ai telefoni (student-paced): al massimo una ogni 700 ms. */
   function chalBoardOut() {
-    if (!CHAL || CHAL.ended) return;
+    if (!CHAL || CHAL.ended || CHAL.play !== 'sp') return;
     const now = Date.now();
-    const sendNow = function () { CHAL.boardAt = Date.now(); CHAL.conn.send('board', { rows: VLChal.leaderboard(CHAL.state) }); };
+    const sendNow = function () { if (!CHAL || CHAL.ended) return; CHAL.boardAt = Date.now(); CHAL.conn.send('board', { rows: VLChal.leaderboard(CHAL.state) }); };
     if (now - CHAL.boardAt > 700) return sendNow();
     clearTimeout(CHAL.boardTimer);
     CHAL.boardTimer = setTimeout(sendNow, 750 - (now - CHAL.boardAt));
@@ -5218,12 +5420,112 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!CHAL) return;
     $('#chal-pin').textContent = CHAL.pin;
     $('#chal-url').textContent = chalUrl(CHAL.pin).replace(/^https?:\/\//, '');
-    $('#chal-title').textContent = (CHAL.act.title || 'Quiz') + ' · ' + (VLChal.MODES.find(function (m) { return m[0] === CHAL.mode; }) || VLChal.MODES[1])[1];
+    const modeLbl = (VLChal.MODES.find(function (m) { return m[0] === CHAL.mode; }) || VLChal.MODES[1])[1];
+    $('#chal-title').textContent = CHAL.title + ' · ' + (CHAL.play === 'tp' ? 'insieme sullo schermo' : 'ognuno al suo ritmo') + ' · ' + modeLbl;
     const q = qrcode(0, 'M');
     q.addData(chalUrl(CHAL.pin));
     q.make();
     $('#chal-qr').innerHTML = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+    $('#chal-start').style.display = CHAL.play === 'tp' ? '' : 'none';
+    $('#chal-stagebox').style.display = 'none';
+    $('#chal-live').style.display = '';
+    $('#chal-after').style.display = 'none';
     renderChalBoard();
+  }
+  function chalAnswered() {
+    if (!CHAL || CHAL.play !== 'tp') return;
+    const n = Object.keys(CHAL.state.answers).length, tot = Object.keys(CHAL.state.players).length;
+    $('#chal-answered').textContent = n + ' su ' + tot + ' hanno risposto';
+    renderChalBoard();
+  }
+  /** Modalita' Kahoot: apre la domanda i sullo schermo grande e la manda ai telefoni. */
+  function chalOpenQuestion(i) {
+    const item = CHAL.items[i]; if (!item) return chalFinish();
+    CHAL.pub = VLChal.pubItem(item, { showQ: CHAL.showQ });
+    VLChal.tpOpen(CHAL.state, i, Date.now());
+    CHAL.conn.send('q', chalQPayload());
+    $('#chal-start').style.display = 'none';
+    $('#chal-live').style.display = 'none';
+    $('#chal-stagebox').style.display = '';
+    $('#chal-progress').textContent = 'Domanda ' + (i + 1) + ' di ' + CHAL.items.length;
+    chalAnswered();
+    const box = $('#chal-qbox'); box.innerHTML = '';
+    box.appendChild(chalScreenItem(item, CHAL.pub));
+    const act = $('#chal-stage-actions'); act.innerHTML = '';
+    act.appendChild(el('button', { class: 'small', text: '⏹ Chiudi la domanda', onclick: chalCloseQuestion }));
+    clearInterval(CHAL.clock);
+    const clock = $('#chal-clock');
+    if (CHAL.secs) {
+      let left = CHAL.secs;
+      clock.textContent = left + 's';
+      clock.classList.remove('low');
+      CHAL.clock = setInterval(function () {
+        left--;
+        clock.textContent = left + 's';
+        if (left <= 5) clock.classList.add('low');
+        if (left <= 0) chalCloseQuestion();
+      }, 1000);
+    } else clock.textContent = '';
+  }
+  function chalCloseQuestion() {
+    if (!CHAL || CHAL.state.phase !== 'question') return;
+    clearInterval(CHAL.clock);
+    const item = CHAL.items[CHAL.state.i];
+    const rev = VLChal.tpReveal(CHAL.state);
+    CHAL.conn.send('reveal', { i: CHAL.state.i, per: rev.perPlayer, top: rev.top, sol: VLChal.solutionText(item) });
+    const box = $('#chal-qbox'); box.innerHTML = '';
+    box.appendChild(el('div', { class: 'chal-sol' }, el('div', { class: 'lbl', text: 'Risposta' }), el('div', { class: 'val', text: VLChal.solutionText(item) })));
+    const wrap = el('div', { class: 'chal-top5' });
+    rev.top.forEach(function (r) { wrap.appendChild(el('div', { class: 'chal-row' }, el('span', { class: 'rk', text: r.rank + '°' }), el('span', { class: 'nick', text: r.nick }), el('span', { class: 'pts', text: r.score + ' pt' }))); });
+    box.appendChild(wrap);
+    const act = $('#chal-stage-actions'); act.innerHTML = '';
+    const last = CHAL.state.i + 1 >= CHAL.items.length;
+    act.appendChild(el('button', { class: 'primary big', text: last ? '🏁 Classifica finale' : 'Avanti ▶', onclick: function () { if (last) chalFinish(); else chalOpenQuestion(CHAL.state.i + 1); } }));
+    $('#chal-clock').textContent = '';
+    renderChalBoard();
+  }
+  function chalFinish() {
+    if (!CHAL || CHAL.ended) return;
+    CHAL.ended = true;
+    clearInterval(CHAL.clock); clearTimeout(CHAL.boardTimer);
+    CHAL.conn.send('end', { rows: VLChal.leaderboard(CHAL.state) });
+    $('#chal-stagebox').style.display = 'none';
+    $('#chal-live').style.display = 'none';
+    $('#chal-after').style.display = '';
+    renderChalBoard();
+  }
+  /** Il rendering GRANDE della domanda per lo schermo proiettato. */
+  function chalScreenItem(item, pub) {
+    const box = el('div', { class: 'chal-screen' });
+    box.appendChild(el('div', { class: 'instr', text: item.kind === 'gapbank' ? 'Completa gli spazi con le parole della lista (dal telefono).' : EX.INSTRUCTIONS[item.kind] || 'Rispondi dal telefono.' }));
+    if (item.kind === 'mc') {
+      box.appendChild(el('div', { class: 'chal-q', text: item.data.question }));
+      const grid = el('div', { class: 'chal-mcgrid' });
+      (item.data.options || []).filter(Boolean).forEach(function (op, i) {
+        grid.appendChild(el('div', { class: 'chal-mcopt o' + i }, el('span', { class: 'lt', text: 'ABCD'[i] }), el('span', { text: op })));
+      });
+      box.appendChild(grid);
+    } else if (item.kind === 'gap' || item.kind === 'gapbank') {
+      box.appendChild(el('div', { class: 'chal-q', text: VLChal.gapText(item) }));
+      if (item.kind === 'gapbank') {
+        const bank = el('div', { class: 'chips chal-bank' });
+        (item.data.wordBank || []).forEach(function (w) { bank.appendChild(el('span', { class: 'chip', text: w })); });
+        box.appendChild(bank);
+      }
+    } else if (item.kind === 'extra' || item.kind === 'wrong') {
+      box.appendChild(el('div', { class: 'chal-q', text: (item.data.shown || []).join(' ') }));
+    } else if (item.kind === 'missing') {
+      box.appendChild(el('div', { class: 'chal-q', text: (item.data.tokens || []).join(' ') }));
+    } else if (item.kind === 'match') {
+      const cols = el('div', { class: 'chal-matchcols' });
+      const left = el('div');
+      item.pairs.forEach(function (p, i) { left.appendChild(el('div', { class: 'chal-mrow', text: (i + 1) + '. ' + p.a })); });
+      const right = el('div');
+      (pub.right || []).forEach(function (b, i) { right.appendChild(el('div', { class: 'chal-mrow', text: 'ABCDEFGH'[i] + '. ' + b })); });
+      cols.appendChild(left); cols.appendChild(right);
+      box.appendChild(cols);
+    }
+    return box;
   }
   function renderChalBoard() {
     if (!CHAL) return;
@@ -5231,20 +5533,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#chal-count').textContent = rows.length ? rows.length + (rows.length === 1 ? ' studente collegato' : ' studenti collegati') : 'Nessuno ancora: fai scannerizzare il QR';
     const box = $('#chal-board'); box.innerHTML = '';
     if (CHAL.ended) {
-      // podio + classifica completa
       const medals = ['🥇', '🥈', '🥉'];
-      rows.forEach(function (r, i) {
+      rows.forEach(function (r) {
         box.appendChild(el('div', { class: 'chal-row final' + (r.rank <= 3 ? ' top' : '') },
           el('span', { class: 'rk', text: r.rank <= 3 ? medals[r.rank - 1] : r.rank + '°' }),
           el('span', { class: 'nick', text: r.nick }),
           el('span', { class: 'pts', text: r.score + ' pt' }),
-          el('span', { class: 'sub', text: r.right + '/' + (r.total || '?') + ' giuste' })));
+          el('span', { class: 'sub', text: r.right + '/' + (CHAL.items.length || r.total || '?') + ' giuste' })));
       });
       if (!rows.length) box.appendChild(el('div', { class: 'hint', text: 'Nessuno ha partecipato.' }));
       return;
     }
     rows.forEach(function (r) {
-      const pct = r.total ? Math.round(r.at / r.total * 100) : 0;
+      const tot = CHAL.play === 'tp' ? CHAL.items.length : r.total;
+      const pct = tot ? Math.round(r.at / tot * 100) : 0;
       box.appendChild(el('div', { class: 'chal-row' + (r.done ? ' done' : '') },
         el('span', { class: 'rk', text: r.rank + '°' }),
         el('span', { class: 'nick', text: r.nick }),
@@ -5252,34 +5554,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('span', { class: 'pts', text: r.score + ' pt' + (r.done ? ' ✓' : '') })));
     });
   }
-  function endChal() {
-    if (!CHAL || CHAL.ended) return;
-    CHAL.ended = true;
-    clearTimeout(CHAL.boardTimer);
-    CHAL.conn.send('end', { rows: VLChal.leaderboard(CHAL.state) });
-    $('#chal-live').style.display = 'none';
-    $('#chal-after').style.display = '';
-    renderChalBoard();
-  }
+  $('#chal-start').addEventListener('click', function () { if (CHAL && CHAL.play === 'tp' && CHAL.state.phase === 'lobby') chalOpenQuestion(0); });
+  $('#chal-end').addEventListener('click', function () {
+    if (this.dataset.arm) { delete this.dataset.arm; this.textContent = '🏁 Termina la sfida'; chalFinish(); }
+    else { this.dataset.arm = '1'; this.textContent = 'Sicuro? Clicca ancora per chiudere'; const b = this; setTimeout(function () { delete b.dataset.arm; b.textContent = '🏁 Termina la sfida'; }, 2500); }
+  });
   function closeChal() {
-    if (CHAL) { try { CHAL.conn.close(); } catch (e) { /* ignora */ } clearTimeout(CHAL.boardTimer); }
+    if (CHAL) { try { CHAL.conn.close(); } catch (e) { /* ignora */ } clearTimeout(CHAL.boardTimer); clearInterval(CHAL.clock); }
     CHAL = null;
     renderHome();
   }
-  $('#chal-end').addEventListener('click', function () {
-    // niente confirm(): doppio click esplicito, come "✕ Sezione"
-    if (this.dataset.arm) { delete this.dataset.arm; this.textContent = '🏁 Termina la sfida'; endChal(); }
-    else { this.dataset.arm = '1'; this.textContent = 'Sicuro? Clicca ancora per chiudere'; const b = this; setTimeout(function () { delete b.dataset.arm; b.textContent = '🏁 Termina la sfida'; }, 2500); }
-  });
   $('#chal-exit').addEventListener('click', closeChal);
-  $('#ch-go').addEventListener('click', function () {
-    const list = chalQuizzes();
-    const it = list[+$('#ch-quiz').value || 0];
-    if (!it) return;
-    $('#dlg-chal-new').close();
-    startChal(it.act, chalMode());
-  });
-  $('#ch-close').addEventListener('click', function () { $('#dlg-chal-new').close(); });
 
   // ---- lato studente (telefono, rotta #c=PIN) ----
   function openChalPlay(pin) {
@@ -5307,54 +5592,219 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       try { id = sessionStorage.getItem('vle.chalid.' + pin) || ''; } catch (e) { /* ignora */ }
       if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem('vle.chalid.' + pin, id); } catch (e) { /* ignora */ } }
       chalJoin(pin, function (conn) {
-        let got = null, tries = 0;
-        const hello = function () {
-          if (got) return;
-          conn.send('hello', { id: id, nick: nk });
-          if (++tries === 4) busyMsg(msg, 'Collegato: aspetto che il prof avvii la sfida…');
-          if (tries < 120) setTimeout(hello, 2500);
-        };
-        conn.on('quiz', function (p) {
-          if (got || !p || !p.act) return;
-          got = p;
-          playChal(conn, id, nk, p.act, p.mode);
+        const me = { conn: conn, id: id, nick: nk, started: false };
+        conn.on('set', function (p) {   // ognuno al suo ritmo: il set arriva intero
+          if (me.started || !p || !Array.isArray(p.items)) return;
+          me.started = true;
+          chpPlaySelf(me, p.items, p.mode);
         });
-        conn.on('end', function (p) { chalFinal(wrap, p && p.rows, id); try { conn.close(); } catch (e) { /* ignora */ } });
+        conn.on('q', function (p) {     // insieme sullo schermo: arriva la domanda corrente
+          if (!p || p.pub == null) return;
+          me.started = true;
+          chpQuestion(me, p);
+        });
+        conn.on('reveal', function (p) { if (me.onReveal) me.onReveal(p); });
+        conn.on('end', function (p) { chpFinal($('#chp-wrap'), p && p.rows, id); try { conn.close(); } catch (e) { /* ignora */ } });
+        let tries = 0;
+        const hello = function () {
+          if (me.started) return;
+          conn.send('hello', { id: id, nick: nk });
+          if (++tries === 4) busyMsg(msg, 'Collegato: aspetta che il prof avvii la sfida…');
+          if (tries < 150) setTimeout(hello, 2500);
+        };
         hello();
       }, function (err) { go.disabled = false; msg.textContent = err; });
     });
   }
-  function playChal(conn, id, nick, act, mode) {
+  /** Il pannello di risposta sul telefono, per tipo. pub e' la versione pubblica; con opts.local (item completo,
+   *  student-paced) la domanda e' sempre visibile e la correzione avviene sul telefono. */
+  function chpItemInput(pub, opts) {
+    const box = el('div', { class: 'chp-item' });
+    let getVal = function () { return null; };
+    const kind = pub.kind;
+    if (pub.sentence) box.appendChild(el('div', { class: 'chp-q', text: pub.sentence }));
+    if (kind === 'mc') {
+      if (pub.q) box.appendChild(el('div', { class: 'chp-q', text: pub.q }));
+      let sel = -1;
+      const grid = el('div', { class: 'chp-mcgrid' });
+      for (let i = 0; i < (pub.n || 4); i++) {
+        const b = el('button', { class: 'chp-mc o' + i }, el('span', { class: 'lt', text: 'ABCD'[i] }), pub.options ? el('span', { class: 'tx', text: pub.options[i] || '' }) : null);
+        b.addEventListener('click', function () { sel = i; $$('.chp-mc', grid).forEach(function (x, j) { x.classList.toggle('sel', j === i); }); });
+        grid.appendChild(b);
+      }
+      box.appendChild(grid);
+      getVal = function () { return sel === -1 ? null : sel; };
+    } else if (kind === 'gap' || kind === 'gapbank') {
+      const inputs = [];
+      (pub.runs || []).forEach(function (r, i) {
+        const inp = el('input', { type: 'text', class: 'chp-gap', autocomplete: 'off', autocapitalize: 'off', placeholder: 'spazio ' + (i + 1) + (r.words > 1 ? ' (' + r.words + ' parole)' : '') });
+        inputs.push(inp);
+        box.appendChild(inp);
+      });
+      if (kind === 'gapbank' && pub.bank) {
+        const bank = el('div', { class: 'chips chp-bank' });
+        pub.bank.forEach(function (w) {
+          bank.appendChild(el('span', { class: 'chip', text: w, onclick: function () {
+            const t = inputs.find(function (x) { return !x.value.trim() || x === document.activeElement; }) || inputs[inputs.length - 1];
+            t.value = (t.value.trim() + ' ' + w).trim();
+          } }));
+        });
+        box.appendChild(bank);
+      }
+      getVal = function () { return inputs.some(function (i) { return i.value.trim(); }) ? inputs.map(function (i) { return i.value; }) : null; };
+    } else if (kind === 'extra' || kind === 'wrong') {
+      let sel = -1;
+      const chips = el('div', { class: 'chips chp-words' });
+      (pub.shown || []).forEach(function (w, i) {
+        chips.appendChild(el('span', { class: 'chip', text: w, onclick: function () { sel = i; $$('.chip', chips).forEach(function (x, j) { x.classList.toggle('sel', j === i); }); if (corr) corr.style.display = ''; } }));
+      });
+      box.appendChild(chips);
+      let corr = null;
+      if (kind === 'wrong') {
+        corr = el('input', { type: 'text', class: 'chp-gap', placeholder: 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', style: 'display:none' });
+        box.appendChild(corr);
+      }
+      getVal = function () {
+        if (sel === -1) return null;
+        return kind === 'extra' ? sel : { index: sel, correction: corr.value };
+      };
+    } else if (kind === 'missing') {
+      let sel = -1;
+      const line = el('div', { class: 'chp-missline' });
+      const mkSlot = function (k) {
+        const b = el('button', { class: 'chp-slot', text: '＋', title: 'Manca qui?' });
+        b.addEventListener('click', function () { sel = k; $$('.chp-slot', line).forEach(function (x, j) { x.classList.toggle('sel', j === k); }); });
+        return b;
+      };
+      (pub.tokens || []).forEach(function (t, k) {
+        line.appendChild(mkSlot(k));
+        line.appendChild(el('span', { class: 'chp-w', text: t }));
+      });
+      line.appendChild(mkSlot((pub.tokens || []).length));
+      box.appendChild(line);
+      const word = el('input', { type: 'text', class: 'chp-gap', placeholder: 'La parola che manca', autocomplete: 'off', autocapitalize: 'off' });
+      box.appendChild(word);
+      getVal = function () { return sel === -1 || !word.value.trim() ? null : { index: sel, word: word.value }; };
+    } else if (kind === 'match') {
+      const chosen = (pub.left || []).map(function () { return -1; });
+      let cur = -1;
+      const cols = el('div', { class: 'chp-matchcols' });
+      const lcol = el('div'), rcol = el('div');
+      const paint = function () {
+        $$('.chp-mleft', lcol).forEach(function (x, k) { x.classList.toggle('sel', k === cur); x.querySelector('.tag').textContent = chosen[k] === -1 ? '' : 'ABCDEFGH'[chosen[k]]; });
+        $$('.chp-mright', rcol).forEach(function (x, j) { x.classList.toggle('used', chosen.indexOf(j) !== -1); });
+      };
+      (pub.left || []).forEach(function (a, k) {
+        const b = el('button', { class: 'chp-mleft' }, el('span', { text: a }), el('span', { class: 'tag' }));
+        b.addEventListener('click', function () { cur = k; paint(); });
+        lcol.appendChild(b);
+      });
+      (pub.right || []).forEach(function (bTxt, j) {
+        const b = el('button', { class: 'chp-mright', text: 'ABCDEFGH'[j] + '. ' + bTxt });
+        b.addEventListener('click', function () {
+          if (cur === -1) return;
+          const prev = chosen.indexOf(j); if (prev !== -1) chosen[prev] = -1;   // una lettera per riga
+          chosen[cur] = j;
+          cur = chosen.indexOf(-1);
+          paint();
+        });
+        rcol.appendChild(b);
+      });
+      cols.appendChild(lcol); cols.appendChild(rcol);
+      box.appendChild(cols);
+      cur = 0; paint();
+      getVal = function () { return chosen.some(function (v) { return v !== -1; }) ? chosen.slice() : null; };
+    }
+    const send = el('button', { class: 'primary big chp-send', text: 'Invia ▶' });
+    send.addEventListener('click', function () {
+      const v = getVal();
+      if (v == null) return toast('Prima rispondi');
+      send.disabled = true;
+      $$('button, input', box).forEach(function (x) { if (x !== send) x.disabled = true; });
+      opts.onSubmit(v);
+    });
+    box.appendChild(send);
+    return box;
+  }
+  /** Insieme sullo schermo: arriva una domanda alla volta, si risponde e si aspetta la rivelazione. */
+  function chpQuestion(me, p) {
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
-    const stage = el('div', { class: 'chp-stage' });
+    const t0 = Date.now();
+    wrap.appendChild(el('div', { class: 'chp-status', text: 'Domanda ' + (p.i + 1) + ' di ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo!') }));
+    const done = el('div', { class: 'chp-status', style: 'display:none' });
+    const inputBox = chpItemInput(p.pub, { onSubmit: function (v) {
+      me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, value: v, ms: Date.now() - t0 });
+      done.textContent = 'Risposta inviata: aspetta la rivelazione…';
+      done.style.display = '';
+    } });
+    wrap.appendChild(inputBox);
+    wrap.appendChild(done);
+    me.onReveal = function (rev) {
+      if (!rev || rev.i !== p.i) return;
+      const mine = rev.per && rev.per[me.id];
+      const boxr = el('div', { class: 'chp-reveal ' + (mine && mine.ok ? 'ok' : 'no') },
+        el('div', { class: 'big', text: mine ? (mine.ok ? '✓ Giusto! +' + mine.pts : (mine.pts ? 'Quasi: +' + mine.pts : '✗ Sbagliata')) : 'Tempo scaduto' }),
+        rev.sol ? el('div', { class: 'sol', text: 'Risposta: ' + rev.sol }) : null);
+      const meRow = (rev.top || []).find(function (r) { return r.id === me.id; });
+      if (meRow) boxr.appendChild(el('div', { class: 'pos', text: 'Sei ' + meRow.rank + '° con ' + meRow.score + ' punti' }));
+      wrap.innerHTML = '';
+      wrap.appendChild(boxr);
+      wrap.appendChild(el('div', { class: 'chp-status', text: 'Aspetta la prossima domanda…' }));
+    };
+  }
+  /** Ognuno al suo ritmo: il set intero sul telefono, correzione locale, punteggio come nel v68. */
+  function chpPlaySelf(me, items, mode) {
+    const wrap = $('#chp-wrap'); wrap.innerHTML = '';
+    const stage = el('div', { class: 'chp-stage2' });
     const status = el('div', { class: 'chp-status', text: 'Rispondi al tuo ritmo: la classifica è dal prof' });
     wrap.appendChild(stage); wrap.appendChild(status);
-    conn.on('board', function (p) {
-      const me = (p && p.rows || []).find(function (r) { return r.id === id; });
-      if (me) status.textContent = 'Sei ' + me.rank + '° con ' + me.score + ' punti';
+    me.conn.on('board', function (p) {
+      const mr = (p && p.rows || []).find(function (r) { return r.id === me.id; });
+      if (mr) status.textContent = 'Sei ' + mr.rank + '° con ' + mr.score + ' punti';
     });
-    const send = function (a, done) {
-      conn.send('score', { id: id, nick: nick, score: a.score, right: a.right, at: a.index + 1, total: a.total, done: !!done || a.index + 1 >= a.total });
+    let i = 0, score = 0, right = 0, streak = 0;
+    const pts = VLChal.pointsFor(mode);
+    const sendScore = function (done) {
+      me.conn.send('score', { id: me.id, nick: me.nick, score: score, right: right, at: i, total: items.length, done: !!done });
     };
-    ACT.render(stage, act, {
-      points: VLChal.pointsFor(mode),
-      onAnswer: function (a) { send(a, false); },
-      onDone: function (r) {
-        conn.send('score', { id: id, nick: nick, score: r.score || 0, right: r.right || 0, at: r.total || 0, total: r.total || 0, done: true });
-        status.textContent = 'Risultato inviato: aspetta la classifica del prof (puoi rigiocare per migliorare)';
-      },
-      doneLabel: 'Invia il risultato ✔',
-      sound: playWinSound, fx: true
-    });
+    const step = function () {
+      stage.innerHTML = '';
+      if (i >= items.length) {
+        stage.appendChild(el('div', { class: 'chp-reveal ok' },
+          el('div', { class: 'big', text: '🏁 Finito: ' + right + ' su ' + items.length }),
+          el('div', { class: 'pos', text: score + ' punti · aspetta la classifica del prof' })));
+        sendScore(true);
+        return;
+      }
+      const item = items[i];
+      const pub = VLChal.pubItem(item, { showQ: true });
+      const t0 = Date.now();
+      stage.appendChild(el('div', { class: 'chp-status', text: (i + 1) + ' di ' + items.length + ' · ' + VLChal.itemLabel(item.kind) }));
+      if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
+      stage.appendChild(chpItemInput(pub, { onSubmit: function (v) {
+        const res = VLChal.checkItem(item, v, pub);
+        if (res.frac === 1) { right++; score += pts(streak, Date.now() - t0); streak++; if (typeof playWinSound === 'function') playWinSound(); }
+        else if (res.frac > 0) { score += Math.round(100 * res.frac); streak = 0; }
+        else streak = 0;
+        i++;
+        sendScore(false);
+        const fb = el('div', { class: 'chp-reveal ' + (res.correct ? 'ok' : 'no') },
+          el('div', { class: 'big', text: res.correct ? '✓ Giusto!' : (res.frac > 0 ? 'Quasi: ' + Math.round(res.frac * 100) + '%' : '✗ Sbagliata') }),
+          res.correct ? null : el('div', { class: 'sol', text: 'Risposta: ' + VLChal.solutionText(item) }));
+        stage.innerHTML = '';
+        stage.appendChild(fb);
+        setTimeout(step, res.correct ? 900 : 2200);
+      } }));
+    };
+    step();
   }
-  function chalFinal(wrap, rows, myId) {
+  function chpFinal(wrap, rows, myId) {
     wrap.innerHTML = '';
     rows = rows || [];
     const medals = ['🥇', '🥈', '🥉'];
     const box = el('div', { class: 'chp-final' }, el('h2', { text: 'Classifica finale' }));
     rows.forEach(function (r) {
-      box.appendChild(el('div', { class: 'chal-row final' + (r.id === myId ? ' me' : ''),
-        },
+      box.appendChild(el('div', { class: 'chal-row final' + (r.id === myId ? ' me' : '') },
         el('span', { class: 'rk', text: r.rank <= 3 ? medals[r.rank - 1] : r.rank + '°' }),
         el('span', { class: 'nick', text: r.nick + (r.id === myId ? ' (tu)' : '') }),
         el('span', { class: 'pts', text: r.score + ' pt' })));

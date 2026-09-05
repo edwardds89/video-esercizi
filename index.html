@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260905-68">
+<link rel="stylesheet" href="styles.css?v=20260905-69">
 </head>
 <body>
 <header class="topbar">
@@ -340,9 +340,20 @@
     <div class="row" style="margin-bottom:10px">
       <button id="chal-exit">✕ Chiudi</button>
       <span id="chal-title" class="hint grow"></span>
+      <button id="chal-start" class="primary" style="display:none">▶ Prima domanda</button>
       <button id="chal-end" class="primary">🏁 Termina la sfida</button>
     </div>
-    <div class="chal-cols">
+    <!-- modalità Kahoot: la domanda a tutto schermo -->
+    <div id="chal-stagebox" class="card" style="display:none">
+      <div class="row">
+        <span id="chal-progress" class="badge"></span>
+        <span id="chal-answered" class="hint grow"></span>
+        <span id="chal-clock" class="chal-clock"></span>
+      </div>
+      <div id="chal-qbox" class="chal-qbox"></div>
+      <div class="row" id="chal-stage-actions" style="justify-content:center;margin-top:10px"></div>
+    </div>
+    <div class="chal-cols" id="chal-cols">
       <div class="card chal-join" id="chal-live">
         <h2 style="margin-top:0">Entra con il telefono</h2>
         <div id="chal-qr" class="chal-qr"></div>
@@ -354,10 +365,30 @@
         <h2 style="margin-top:0">🏁 Sfida chiusa</h2>
         <p class="hint">La classifica finale è anche sui telefoni degli studenti.</p>
       </div>
-      <div class="card grow">
+      <div class="card grow" id="chal-boardcard">
         <div class="row"><h2 style="margin:0" class="grow">Classifica</h2><span id="chal-count" class="hint"></span></div>
         <div id="chal-board" class="chal-board"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- SFIDA IN CLASSE: editor del set di esercizi -->
+  <section id="view-chalset" class="view">
+    <div class="row" style="margin-bottom:10px">
+      <button data-view="home">◀ Portfolio</button>
+      <input id="cs-title" type="text" class="grow" placeholder="Titolo del set (es. Ripasso unità 3)" style="font-size:18px;font-weight:700">
+      <button id="cs-play" class="primary">▶ Lancia la sfida</button>
+      <button id="cs-delete" class="danger">Elimina</button>
+    </div>
+    <div class="card">
+      <div class="row">
+        <h2 style="margin:0" class="grow">Esercizi del set</h2>
+        <select id="cs-import-src" class="small"></select>
+        <button id="cs-import" class="small">⬇ Importa</button>
+        <button id="cs-add" class="small primary">+ Esercizio</button>
+      </div>
+      <p class="hint">Importa gli esercizi già fatti (lezioni, quiz, parole utili) o scrivine di nuovi. In modalità "Insieme sullo schermo" si giocano tutti i tipi; le risposte restano sul tuo schermo.</p>
+      <div id="cs-items" class="cs-items"></div>
     </div>
   </section>
 
@@ -426,23 +457,49 @@
 
 <dialog id="dlg-chal-new">
   <h2>Sfida in classe</h2>
-  <p class="hint">Proietti il QR, gli studenti lo scannerizzano col telefono, mettono un nickname (niente account) e rispondono al proprio ritmo. Tu vedi la classifica in diretta.</p>
+  <p class="hint">Proietti il QR, gli studenti entrano col telefono e un nickname, niente account. Scegli tu come si gioca.</p>
   <div id="ch-empty" style="display:none">
-    <p class="notice">Per la sfida serve un <b>Quiz</b>: creane uno da <b>Giochi e attività</b> (anche con l'AI in un minuto), poi torna qui.</p>
+    <p class="notice">Per la sfida serve un <b>set di esercizi</b>: lo crei in un minuto importando gli esercizi di una lezione, un quiz o le parole utili.</p>
+    <button id="ch-new-set" class="primary">+ Crea un set di esercizi</button>
   </div>
   <div id="ch-form">
-    <label for="ch-quiz">Quale quiz giochiamo?</label>
-    <select id="ch-quiz" style="width:100%"></select>
-    <p class="hint" style="margin-top:12px">Come si vince (lo scegli a ogni sfida):</p>
+    <label for="ch-set">Quale set giochiamo?</label>
+    <div class="row"><select id="ch-set" class="grow"></select><button id="ch-edit-set" class="small" title="Apri l'editor del set">✎</button><button id="ch-new-set2" class="small" title="Nuovo set">+ Nuovo</button></div>
+    <p class="hint" style="margin-top:12px">Come si gioca:</p>
+    <div class="chal-modes">
+      <label class="chal-mode"><input type="radio" name="chplay" value="tp" checked>
+        <span><b>🖥 Insieme, sullo schermo</b><br><span class="hint">Stile Kahoot: la domanda è proiettata, tutti rispondono dal telefono alla stessa domanda, tra una domanda e l'altra la classifica. Le risposte giuste non passano MAI sui telefoni.</span></span></label>
+      <label class="chal-mode"><input type="radio" name="chplay" value="sp">
+        <span><b>📱 Ognuno al suo ritmo</b><br><span class="hint">Stile Quizizz: ogni studente ha gli esercizi sul suo telefono, sullo schermo solo la classifica in diretta.</span></span></label>
+    </div>
+    <p class="hint" style="margin-top:12px">Come si vince:</p>
     <div class="chips" id="ch-modes">
       <label class="chip"><input type="radio" name="chmode" value="right"> solo risposte giuste</label>
       <label class="chip"><input type="radio" name="chmode" value="streak" checked> giuste + serie 🔥</label>
       <label class="chip"><input type="radio" name="chmode" value="speed"> giuste + velocità ⚡</label>
     </div>
+    <div id="ch-tp-opts">
+      <div class="row" style="margin-top:12px">
+        <label style="margin:0">Tempo per domanda
+          <select id="ch-secs"><option value="20">20 secondi</option><option value="30" selected>30 secondi</option><option value="60">60 secondi</option><option value="90">90 secondi</option><option value="0">Nessun timer</option></select>
+        </label>
+        <label class="chip" style="margin:0;align-self:end"><input type="checkbox" id="ch-showq"> mostra la domanda anche sui telefoni</label>
+      </div>
+      <p class="hint">La domanda si chiude allo scadere del tempo o quando tutti hanno risposto; ad Avanti ci pensi tu.</p>
+    </div>
   </div>
   <div class="row" style="margin-top:14px">
     <button id="ch-go" class="primary">▶ Avvia la sfida</button>
     <button id="ch-close">Chiudi</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-chal-add">
+  <h2>Nuovo esercizio del set</h2>
+  <div id="ca-body"></div>
+  <div class="row" style="margin-top:12px">
+    <button id="ca-ok" class="primary">Aggiungi</button>
+    <button id="ca-close">Chiudi</button>
   </div>
 </dialog>
 
@@ -568,16 +625,16 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260905-68"></script>
-<script src="exercises.js?v=20260905-68"></script>
-<script src="generator.js?v=20260905-68"></script>
-<script src="activities.js?v=20260905-68"></script>
-<script src="ai.js?v=20260905-68"></script>
-<script src="demo-data.js?v=20260905-68"></script>
-<script src="bookmarklet.js?v=20260905-68"></script>
-<script src="sync.js?v=20260905-68"></script>
-<script src="qr.js?v=20260905-68"></script>
-<script src="challenge.js?v=20260905-68"></script>
-<script src="app.js?v=20260905-68"></script>
+<script src="lang.js?v=20260905-69"></script>
+<script src="exercises.js?v=20260905-69"></script>
+<script src="generator.js?v=20260905-69"></script>
+<script src="activities.js?v=20260905-69"></script>
+<script src="ai.js?v=20260905-69"></script>
+<script src="demo-data.js?v=20260905-69"></script>
+<script src="bookmarklet.js?v=20260905-69"></script>
+<script src="sync.js?v=20260905-69"></script>
+<script src="qr.js?v=20260905-69"></script>
+<script src="challenge.js?v=20260905-69"></script>
+<script src="app.js?v=20260905-69"></script>
 </body>
 </html>
