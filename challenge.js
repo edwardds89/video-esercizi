@@ -1,5 +1,5 @@
 /*
- * Sfida in classe (VLChal) — la logica della modalità stile Quizizz: PIN, punteggi, classifica, protocollo
+ * Sfida in classe (VLChal) — la logica della sfida in classe: PIN, punteggi, classifica, protocollo
  * dei messaggi. QUI non c'è rete: il canale vero (Supabase Realtime) lo costruisce app.js e lo inietta;
  * per i test e per ?mock=1 ci sono memBus (in-process) e localBus (localStorage fra tab dello stesso browser).
  *
@@ -119,12 +119,13 @@
 
   // ---------- SET DELLA SFIDA: esercizi multi-tipo (v69) ----------
   // Un item ha la STESSA forma degli esercizi delle lezioni ({kind, sentence, data} via EX.buildExercise),
-  // piu' 'match' (coppie parola-traduzione). In modalita' Kahoot le risposte NON viaggiano mai ai telefoni:
+  // piu' 'match' (coppie parola-traduzione). In modalita' guidata (teacher-paced) le risposte NON viaggiano mai ai telefoni:
   // pubItem() produce la versione pubblica (solo l'input necessario) e checkItem() valuta LATO HOST.
   var ITEM_KINDS = [
     ['mc', 'Scelta multipla'],
     ['gap', 'Completa gli spazi'],
     ['gapbank', 'Completa con le parole (banca)'],
+    ['scramble', 'Riordina la frase'],
     ['extra', 'Trova la parola in più'],
     ['missing', 'Trova la parola mancante'],
     ['wrong', 'Trova la parola sbagliata'],
@@ -157,8 +158,8 @@
     return out.join(' ');
   }
   /** Versione PUBBLICA di un item: solo quello che serve al telefono per rispondere, MAI le risposte.
-   *  Per extra/missing/wrong/gapbank i pezzi della frase SONO l'input e viaggiano comunque (come i puzzle
-   *  di Kahoot); per gap/mc la domanda viaggia solo con showQ. Per match il mescolamento e' deciso QUI
+   *  Per extra/missing/wrong/gapbank i pezzi della frase SONO l'input e viaggiano comunque (come le tessere da ordinare
+   *  di altri giochi live); per gap/mc la domanda viaggia solo con showQ. Per match il mescolamento e' deciso QUI
    *  (una volta per domanda, uguale per tutti) e serve anche al check. */
   function pubItem(item, opts) {
     opts = opts || {};
@@ -170,6 +171,12 @@
       return { kind: item.kind, runs: runs, bank: item.kind === 'gapbank' ? (d.wordBank || []).slice() : undefined, sentence: showQ ? gapText(item) : undefined };
     }
     if (item.kind === 'extra' || item.kind === 'wrong') return { kind: item.kind, shown: (d.shown || []).slice() };
+    if (item.kind === 'scramble') {
+      var tiles = shuffleArr(d.words || [], rand), tr = 0;
+      while (tiles.join('\u0001') === (d.words || []).join('\u0001') && tr++ < 10) tiles = shuffleArr(d.words, rand);
+      if (tiles.join('\u0001') === (d.words || []).join('\u0001')) tiles = d.words.slice().reverse();
+      return { kind: 'scramble', tiles: tiles };
+    }
     if (item.kind === 'missing') return { kind: 'missing', tokens: (d.tokens || []).slice() };
     if (item.kind === 'match') {
       var left = item.pairs.map(function (p) { return p.a; });
@@ -207,7 +214,7 @@
     return EX.solution({ type: item.kind, data: item.data });
   }
 
-  // ---------- riduttore TEACHER-PACED (modalita' Kahoot) ----------
+  // ---------- riduttore TEACHER-PACED (modalita' guidata) ----------
   function tpNew() { return { players: {}, i: -1, phase: 'lobby', answers: {}, opened: 0, ended: false }; }
   function tpJoin(st, p) { reduce(st, 'hello', p); }
   function tpOpen(st, i, now) { st.i = i; st.phase = 'question'; st.answers = {}; st.opened = now || Date.now(); }

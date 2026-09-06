@@ -1177,3 +1177,21 @@ dialog.wide { max-width: 720px; }
 .ci-preview summary { color: var(--accent, #1f6feb); font-size: 13px; cursor: pointer; }
 .ci-line { font-size: 13px; color: #444; padding: 3px 0 3px 10px; border-left: 2px solid var(--line); margin-top: 3px; }
 .ci-line.done { color: #99a3b0; text-decoration: line-through; }
+
+/* ---------- v72: genera dalla trascrizione (card import), tessere scramble, modifica item ---------- */
+.ci-gen { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.ci-gen .lbl { font-size: 13px; font-weight: 700; color: #6b46c1; }
+.ci-krow { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0; }
+.ci-krow label { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; cursor: pointer; }
+.ci-gen .row select { padding: 4px 6px; }
+.ci-gmsg { font-size: 13px; margin-top: 4px; }
+/* schermo del prof: tessere della frase da riordinare, nell'ordine mescolato pubblico */
+.chal-tiles { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 14px; }
+.chal-tile { background: #fff; border: 2px solid #6b46c1; color: #333; border-radius: 12px; padding: 10px 16px; font-size: clamp(18px, 3.2vw, 30px); font-weight: 700; }
+/* telefono: banca di tessere + riga della risposta componibile */
+.chp-scrans { min-height: 52px; border: 2px dashed var(--line); border-radius: 12px; padding: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; background: #fafbfc; }
+.chp-scrhint { color: #99a3b0; font-size: 14px; }
+.chp-scrbank { display: flex; flex-wrap: wrap; gap: 8px; }
+.chp-tile { border: 2px solid #6b46c1; background: #fff; border-radius: 10px; padding: 8px 12px; font-size: 16px; font-weight: 600; cursor: pointer; }
+.chp-tile:disabled { opacity: .35; cursor: default; }
+.chp-tile.inans { border-color: var(--accent, #1f6feb); background: #eef4ff; }

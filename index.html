@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260906-71">
+<link rel="stylesheet" href="styles.css?v=20260906-72">
 </head>
 <body>
 <header class="topbar">
@@ -343,7 +343,7 @@
       <button id="chal-start" class="primary" style="display:none">▶ Prima domanda</button>
       <button id="chal-end" class="primary">🏁 Termina la sfida</button>
     </div>
-    <!-- modalità Kahoot: la domanda a tutto schermo -->
+    <!-- modalità guidata: la domanda a tutto schermo -->
     <div id="chal-stagebox" class="card" style="display:none">
       <div class="row">
         <span id="chal-progress" class="badge"></span>
@@ -467,9 +467,9 @@
     <p class="hint" style="margin-top:12px">Come si gioca:</p>
     <div class="chal-modes">
       <label class="chal-mode"><input type="radio" name="chplay" value="tp" checked>
-        <span><b>🖥 Insieme, sullo schermo</b><br><span class="hint">Stile Kahoot: la domanda è proiettata, tutti rispondono dal telefono alla stessa domanda, tra una domanda e l'altra la classifica. Le risposte giuste non passano MAI sui telefoni.</span></span></label>
+        <span><b>🖥 Insieme, sullo schermo</b><br><span class="hint">La domanda è proiettata e tutta la classe risponde dal telefono nello stesso momento; tra una domanda e l'altra, la classifica. Le risposte giuste non passano MAI sui telefoni.</span></span></label>
       <label class="chal-mode"><input type="radio" name="chplay" value="sp">
-        <span><b>📱 Ognuno al suo ritmo</b><br><span class="hint">Stile Quizizz: ogni studente ha gli esercizi sul suo telefono, sullo schermo solo la classifica in diretta.</span></span></label>
+        <span><b>📱 Ognuno al suo ritmo</b><br><span class="hint">Ogni studente ha gli esercizi sul suo telefono e avanza da solo; sullo schermo solo la classifica in diretta.</span></span></label>
     </div>
     <p class="hint" style="margin-top:12px">Come si vince:</p>
     <div class="chips" id="ch-modes">
@@ -494,7 +494,7 @@
 </dialog>
 
 <dialog id="dlg-chal-add">
-  <h2>Nuovo esercizio del set</h2>
+  <h2 id="ca-title">Nuovo esercizio del set</h2>
   <div class="row" style="margin-bottom:8px"><button id="ca-img" class="small">📷 Genera da una foto o screenshot (AI)</button></div>
   <div id="ca-body"></div>
   <div class="row" style="margin-top:12px">
@@ -658,16 +658,16 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260906-71"></script>
-<script src="exercises.js?v=20260906-71"></script>
-<script src="generator.js?v=20260906-71"></script>
-<script src="activities.js?v=20260906-71"></script>
-<script src="ai.js?v=20260906-71"></script>
-<script src="demo-data.js?v=20260906-71"></script>
-<script src="bookmarklet.js?v=20260906-71"></script>
-<script src="sync.js?v=20260906-71"></script>
-<script src="qr.js?v=20260906-71"></script>
-<script src="challenge.js?v=20260906-71"></script>
-<script src="app.js?v=20260906-71"></script>
+<script src="lang.js?v=20260906-72"></script>
+<script src="exercises.js?v=20260906-72"></script>
+<script src="generator.js?v=20260906-72"></script>
+<script src="activities.js?v=20260906-72"></script>
+<script src="ai.js?v=20260906-72"></script>
+<script src="demo-data.js?v=20260906-72"></script>
+<script src="bookmarklet.js?v=20260906-72"></script>
+<script src="sync.js?v=20260906-72"></script>
+<script src="qr.js?v=20260906-72"></script>
+<script src="challenge.js?v=20260906-72"></script>
+<script src="app.js?v=20260906-72"></script>
 </body>
 </html>
