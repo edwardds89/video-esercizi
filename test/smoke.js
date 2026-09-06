@@ -1794,19 +1794,42 @@ async function noOverflow(page, where) {
   const hostP = await ctxC.newPage();
   const studP = await ctxC.newPage();
   await hostP.goto(BASE + '?mock=1');
+  // una lezione demo nel portfolio: servira' per l'import nel set
+  await hostP.click('#btn-demo');
+  await hostP.waitForSelector('#view-editor.active', { timeout: 15000 });
+  await hostP.evaluate(function () { window.VLApp.renderHome(); });
   // card senza set: il dialog invita a crearne uno; da li' si apre l'editor
   await hostP.click('#svc-qr');
   await hostP.waitForSelector('#dlg-chal-new[open]');
   await hostP.click('#ch-new-set');
   await hostP.waitForSelector('#view-chalset.active');
   await hostP.fill('#cs-title', 'Ripasso di prova');
+  // import con ricerca e UNA card per lezione (v71): niente tendina, niente voci ripetute, anteprima dentro la card
+  await hostP.click('#cs-import');
+  await hostP.waitForSelector('#dlg-chal-import[open]');
+  assert.strictEqual(await hostP.$$eval('#ci-list .ci-card', function (c) { return c.length; }), 1, 'una sola card per la lezione demo');
+  assert.ok(await hostP.$('#ci-list .ci-card .ci-preview'), 'la card ha l\'anteprima del contenuto');
+  await hostP.fill('#ci-search', 'zzz-niente');
+  assert.strictEqual(await hostP.$$eval('#ci-list .ci-card', function (c) { return c.length; }), 0, 'la ricerca filtra');
+  await hostP.fill('#ci-search', '');
+  await hostP.check('#ci-list .ci-card input[data-key=exs]');
+  await hostP.click('#ci-ok');
+  const nImp = await hostP.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].chal.items.length; });
+  assert.ok(nImp > 0, 'esercizi importati dalla demo: ' + nImp);
+  // reimportare NON duplica: la voce risulta gia' nel set e il conteggio resta uguale
+  await hostP.click('#cs-import');
+  await hostP.waitForSelector('#dlg-chal-import[open]');
+  assert.ok(await hostP.$eval('#ci-list .ci-card input[data-key=exs]', function (c) { return c.disabled; }), 'la voce e\' segnata "già nel set"');
+  await hostP.click('#ci-ok');
+  const nImp2 = await hostP.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].chal.items.length; });
+  assert.strictEqual(nImp2, nImp, 'reimport senza doppioni');
   // il set: una scelta multipla + un fill the gaps, costruiti col motore vero
   const setInfo = await hostP.evaluate(function () {
     const S = window.VLApp.S, C = window.VLChal;
     const ls = S.lessons[S.currentId];
     const mc = C.buildItem('mc', { q: 'Qual e\u0300 la capitale d\u2019Italia?', options: ['Roma', 'Milano', 'Parigi', 'Madrid'], correct: 0 });
     const gap = C.buildItem('gap', 'Il mare si sta riscaldando molto in fretta e questo preoccupa gli scienziati del clima.', { lang: 'it', seed: 3 });
-    ls.chal.items = [mc, gap];
+    ls.chal.items = [mc, gap];   // per il resto del test si riparte da due item noti (via gli importati)
     ls.title = 'Ripasso di prova';
     window.VLApp.renderHome();
     const runs = window.VLEx.gapRuns(gap.data).map(function (r) { return r.answer; });
