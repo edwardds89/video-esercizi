@@ -175,6 +175,18 @@ ok('checkItem valuta lato host: gap, mc, extra, missing, wrong', function () {
   assert.ok(C.checkItem(wr, { index: wr.data.wrongIndex, correction: wr.data.answer }).correct);
 });
 
+ok('scramble in sfida: tessere mescolate dall\'host (mai l\'ordine giusto), check sulle parole ordinate', function () {
+  const sc = C.buildItem('scramble', 'Il gatto dorme sul divano tutto il giorno.', { lang: 'it', seed: 4 });
+  assert.strictEqual(sc.kind, 'scramble');
+  for (let i = 0; i < 20; i++) {
+    const pub = C.pubItem(sc, {});
+    assert.notStrictEqual(pub.tiles.join(' '), sc.data.words.join(' '), 'le tessere non arrivano mai già in ordine');
+    assert.strictEqual(pub.tiles.slice().sort().join(' '), sc.data.words.slice().sort().join(' '), 'stesse parole');
+  }
+  assert.ok(C.checkItem(sc, sc.data.words.slice()).correct, 'parole nell\'ordine giusto = corretto');
+  assert.ok(!C.checkItem(sc, sc.data.words.slice().reverse()).correct);
+});
+
 ok('match: coppie parziali = frazione, tutte giuste = correct', function () {
   const ma = C.buildItem('match', [{ a: 'mare', b: 'sea' }, { a: 'cane', b: 'dog' }, { a: 'pane', b: 'bread' }]);
   const pub = C.pubItem(ma, { rand: function () { return 0; } });

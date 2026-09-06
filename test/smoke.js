@@ -1789,7 +1789,7 @@ async function noOverflow(page, where) {
   assert.ok(warm2.tempo < 1, 'ed e\' tornato all\'inizio (t=' + warm2.tempo + ')');
   await page.evaluate(function () { const p = window.VLApp.S.player; p.kind = 'mock'; });
 
-  console.log('24. sfida in classe v69: set multi-tipo, modalita\u0300 Kahoot con reveal, telefono che risponde');
+  console.log('24. sfida in classe v69+v72: set multi-tipo, genera/modifica, modalita\u0300 guidata con reveal');
   const ctxC = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const hostP = await ctxC.newPage();
   const studP = await ctxC.newPage();
@@ -1823,23 +1823,61 @@ async function noOverflow(page, where) {
   await hostP.click('#ci-ok');
   const nImp2 = await hostP.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].chal.items.length; });
   assert.strictEqual(nImp2, nImp, 'reimport senza doppioni');
-  // il set: una scelta multipla + un fill the gaps, costruiti col motore vero
+  // v72: nella card del picker si GENERANO esercizi nuovi dalla trascrizione (a regole, senza chiave API)
+  await hostP.click('#cs-import');
+  await hostP.waitForSelector('#dlg-chal-import[open]');
+  assert.ok(await hostP.$('#ci-list .ci-card .ci-gen'), 'la card ha la sezione "genera dalla trascrizione"');
+  await hostP.click('#ci-list .ci-card .ci-gen button:has-text("Genera")');
+  await hostP.waitForFunction(function () {
+    const m = document.querySelector('#ci-list .ci-gmsg');
+    return m && /aggiunti al set|frasi adatte/.test(m.textContent);
+  }, null, { timeout: 12000 });
+  const genMsg = await hostP.$eval('#ci-list .ci-gmsg', function (x) { return x.textContent; });
+  assert.ok(/aggiunti al set/.test(genMsg), 'esercizi generati dalla trascrizione: ' + genMsg.slice(0, 90));
+  const nGen = await hostP.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].chal.items.length; });
+  assert.ok(nGen > nImp2, 'il set e\u0300 cresciuto con i generati (' + nImp2 + ' -> ' + nGen + ')');
+  assert.ok(await hostP.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].chal.items.some(function (x) { return !x.src; }); }), 'i generati sono item nuovi (senza src), modificabili');
+  await hostP.click('#ci-close');
+  // il set: scelta multipla + fill the gaps + riordino, costruiti col motore vero; piu' un set VUOTO che al lancio non deve comparire
   const setInfo = await hostP.evaluate(function () {
     const S = window.VLApp.S, C = window.VLChal;
     const ls = S.lessons[S.currentId];
     const mc = C.buildItem('mc', { q: 'Qual e\u0300 la capitale d\u2019Italia?', options: ['Roma', 'Milano', 'Parigi', 'Madrid'], correct: 0 });
     const gap = C.buildItem('gap', 'Il mare si sta riscaldando molto in fretta e questo preoccupa gli scienziati del clima.', { lang: 'it', seed: 3 });
-    ls.chal.items = [mc, gap];   // per il resto del test si riparte da due item noti (via gli importati)
+    const scr = C.buildItem('scramble', 'Il gatto dorme volentieri sul divano rosso');
+    ls.chal.items = [mc, gap, scr];   // per il resto del test si riparte da item noti (via importati e generati)
     ls.title = 'Ripasso di prova';
+    S.lessons.zz9 = { id: 'zz9', title: 'Set vuoto di prova', chal: { items: [] }, updatedAt: new Date().toISOString() };
     window.VLApp.renderHome();
     const runs = window.VLEx.gapRuns(gap.data).map(function (r) { return r.answer; });
-    return { gapRuns: runs };
+    return { gapRuns: runs, scrWords: scr.data.words.slice() };
   });
-  // lancio: modalita' Kahoot (default), punti secchi, nessun timer (chiusura quando tutti rispondono)
+  // lancio: modalita' guidata (default), punti secchi, nessun timer (chiusura quando tutti rispondono)
   await hostP.evaluate(function () { window.VLApp.renderHome(); });
   await hostP.click('#svc-qr');
   await hostP.waitForSelector('#dlg-chal-new[open]');
   assert.ok((await hostP.$eval('#ch-set', function (s) { return s.textContent; })).indexOf('Ripasso di prova') !== -1, 'il set compare nella scelta');
+  // v72: niente nomi di prodotti concorrenti nel dialog, e i set vuoti restano fuori
+  const dlgTxt = await hostP.$eval('#dlg-chal-new', function (d) { return d.textContent; });
+  assert.ok(!/kahoot|quizizz/i.test(dlgTxt), 'nel dialog di lancio nessun marchio altrui');
+  assert.ok(dlgTxt.indexOf('Set vuoto di prova') === -1, 'un set vuoto non si puo\u0300 lanciare: non compare');
+  // v72: \u270e modifica un item mantenendone l'identita': cambio la domanda della scelta multipla
+  await hostP.click('#ch-edit-set');
+  await hostP.waitForSelector('#view-chalset.active');
+  await hostP.click('#cs-items .cs-item:first-child button[title=Modifica]');
+  await hostP.waitForSelector('#dlg-chal-add[open]');
+  assert.strictEqual(await hostP.$eval('#ca-title', function (x) { return x.textContent; }), 'Modifica esercizio', 'dialog in modalita\u0300 modifica');
+  assert.ok(await hostP.$eval('#ca-kind', function (s) { return s.disabled && s.value === 'mc'; }), 'il tipo resta bloccato');
+  assert.ok(/capitale/.test(await hostP.$eval('#ca-q', function (x) { return x.value; })), 'la domanda arriva precompilata');
+  await hostP.fill('#ca-q', 'Dove sta il Colosseo?');
+  await hostP.click('#ca-ok');
+  await hostP.waitForFunction(function () { return /Colosseo/.test(document.querySelector('#cs-items').textContent); }, null, { timeout: 4000 });
+  const edited = await hostP.evaluate(function () { const it = window.VLApp.S.lessons[window.VLApp.S.currentId].chal.items[0]; return { q: it.data.question, opts: it.data.options.join('|'), id: it.id }; });
+  assert.strictEqual(edited.q, 'Dove sta il Colosseo?', 'domanda aggiornata');
+  assert.ok(/Roma\|Milano/.test(edited.opts), 'le risposte precompilate sono sopravvissute al salvataggio');
+  // si rilancia dal set stesso
+  await hostP.click('#cs-play');
+  await hostP.waitForSelector('#dlg-chal-new[open]');
   await hostP.check('#dlg-chal-new input[name=chmode][value=right]');
   await hostP.selectOption('#ch-secs', '0');
   await hostP.click('#ch-go');
@@ -1847,7 +1885,7 @@ async function noOverflow(page, where) {
   const pin = (await hostP.$eval('#chal-pin', function (x) { return x.textContent; })).trim();
   assert.ok(/^[A-HJ-KM-NP-Z2-9]{6}$/.test(pin), 'PIN leggibile: ' + pin);
   assert.ok(await hostP.$('#chal-qr svg'), 'QR disegnato');
-  assert.ok(await hostP.$eval('#chal-start', function (b) { return b.style.display !== 'none'; }), 'in modalita\u0300 Kahoot c\u2019e\u0300 "Prima domanda"');
+  assert.ok(await hostP.$eval('#chal-start', function (b) { return b.style.display !== 'none'; }), 'in modalita\u0300 guidata c\u2019e\u0300 "Prima domanda"');
   // lo studente entra
   await studP.goto(BASE + '?mock=1#c=' + pin);
   await studP.waitForSelector('#chp-nick');
@@ -1857,10 +1895,10 @@ async function noOverflow(page, where) {
   // prima domanda: la scelta multipla sta sullo SCHERMO, sul telefono i tasti colorati SENZA i testi
   await hostP.click('#chal-start');
   await hostP.waitForSelector('#chal-stagebox .chal-mcgrid');
-  assert.ok(/capitale/.test(await hostP.$eval('#chal-qbox', function (x) { return x.textContent; })), 'la domanda e\u0300 proiettata');
+  assert.ok(/Colosseo/.test(await hostP.$eval('#chal-qbox', function (x) { return x.textContent; })), 'la domanda e\u0300 proiettata');
   await studP.waitForSelector('.chp-mc', { timeout: 6000 });
   const mcTxt = await studP.$eval('.chp-item', function (x) { return x.textContent; });
-  assert.ok(mcTxt.indexOf('Roma') === -1 && mcTxt.indexOf('capitale') === -1, 'sul telefono NIENTE domanda ne\u0301 risposte (Kahoot puro): ' + mcTxt.slice(0, 60));
+  assert.ok(mcTxt.indexOf('Roma') === -1 && mcTxt.indexOf('Colosseo') === -1, 'sul telefono NIENTE domanda ne\u0301 risposte: ' + mcTxt.slice(0, 60));
   await studP.click('.chp-mc.o0');
   await studP.click('.chp-item button:has-text("Invia")');
   // tutti hanno risposto (c'e' solo Anna): reveal automatico
@@ -1876,11 +1914,21 @@ async function noOverflow(page, where) {
   for (let g = 0; g < setInfo.gapRuns.length; g++) await studP.fill('.chp-gap >> nth=' + g, setInfo.gapRuns[g]);
   await studP.click('.chp-item button:has-text("Invia")');
   await hostP.waitForSelector('#chal-qbox .chal-sol', { timeout: 6000 });
+  // terza domanda (v72): riordino della frase, tessere sullo schermo e tessere da toccare sul telefono
+  await hostP.click('#chal-stage-actions button:has-text("Avanti")');
+  await hostP.waitForSelector('#chal-stagebox .chal-tiles', { timeout: 6000 });
+  assert.strictEqual(await hostP.$$eval('#chal-stagebox .chal-tile', function (t) { return t.length; }), setInfo.scrWords.length, 'tutte le tessere proiettate');
+  await studP.waitForSelector('.chp-scrbank .chp-tile', { timeout: 6000 });
+  for (const w of setInfo.scrWords) await studP.click('.chp-scrbank .chp-tile:not([disabled]):text-is("' + w + '")');
+  assert.strictEqual(await studP.$$eval('.chp-scrans .chp-tile', function (t) { return t.length; }), setInfo.scrWords.length, 'la frase composta \u00e8 completa');
+  await studP.click('.chp-item button:has-text("Invia")');
+  await studP.waitForSelector('.chp-reveal.ok', { timeout: 6000 });
+  await hostP.waitForSelector('#chal-qbox .chal-sol', { timeout: 6000 });
   // ultima domanda fatta: classifica finale per tutti
   await hostP.click('#chal-stage-actions button:has-text("Classifica finale")');
   await hostP.waitForSelector('#chal-board .chal-row.final', { timeout: 5000 });
   assert.ok(/\ud83e\udd47/.test(await hostP.$eval('#chal-board', function (x) { return x.textContent; })), 'podio dal prof');
-  assert.ok(/200 pt/.test(await hostP.$eval('#chal-board', function (x) { return x.textContent; })), 'due giuste secche = 200');
+  assert.ok(/300 pt/.test(await hostP.$eval('#chal-board', function (x) { return x.textContent; })), 'tre giuste secche = 300');
   await studP.waitForSelector('.chp-final', { timeout: 6000 });
   const fin = await studP.$eval('.chp-final', function (x) { return x.textContent; });
   assert.ok(/Anna \(tu\)/.test(fin) && /Hai vinto/.test(fin), 'classifica finale sul telefono: ' + fin.slice(0, 80));
