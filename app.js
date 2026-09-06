@@ -5296,35 +5296,84 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     show('chalset');
     renderChalSet(ls);
   }
-  /** Le sorgenti da cui si puo' importare: lezioni con esercizi adatti, quiz, parole utili con traduzione. */
-  function chalImportSources() {
-    const out = [];
+  /** Cosa si puo' importare, UNA VOCE PER LEZIONE (v71, 'non voglio che lo stesso set per video
+   *  lezione sia ripetuto piu' volte'): esercizi del video, parole utili da abbinare, domande dei quiz,
+   *  raggruppati sotto il titolo. Ogni pezzo porta un 'src' (lezione:id) e l'import salta cio' che il set
+   *  ha gia': reimportare non duplica mai. */
+  function chalImportGroups() {
     const okKinds = { gap: 1, gapbank: 1, mc: 1, extra: 1, missing: 1, wrong: 1 };
+    const out = [];
     Object.keys(S.lessons).forEach(function (k) {
       const ls = S.lessons[k];
-      if (Array.isArray(ls.exercises)) {
-        const exs = ls.exercises.filter(function (e) { return okKinds[e.type] && (e.type !== 'mc' || (e.data && e.data.question)); });
-        if (exs.length) out.push({ label: '🎬 ' + (ls.title || 'Lezione') + ' · ' + exs.length + ' esercizi', add: function (set) { return exs.map(function (e) { return { id: 'i' + Math.random().toString(36).slice(2, 9), kind: e.type, sentence: e.sentence || '', data: JSON.parse(JSON.stringify(e.data)) }; }); } });
-        const words = (ls.vocab && ls.vocab.words || []).filter(function (w) { return w.selected !== false && w.word && w.translation; });
-        if (words.length >= 2) out.push({ label: '🃏 ' + (ls.title || 'Lezione') + ' · abbina ' + Math.min(words.length, 8) + ' parole', add: function () { const it = VLChal.buildItem('match', words.slice(0, 8).map(function (w) { return { a: w.word, b: w.translation }; })); return it ? [it] : []; } });
-      }
+      if (!Array.isArray(ls.exercises)) return;
+      const g = { id: ls.id, title: ls.title || 'Lezione senza titolo', updatedAt: ls.updatedAt || '', exs: [], words: [], quizzes: [] };
+      ls.exercises.forEach(function (e) {
+        if (okKinds[e.type] && (e.type !== 'mc' || (e.data && e.data.question))) g.exs.push({ src: ls.id + ':' + e.id, kind: e.type, sentence: e.sentence || '', data: e.data });
+      });
+      (ls.vocab && ls.vocab.words || []).forEach(function (w) {
+        if (w.selected !== false && w.word && w.translation && g.words.length < 8) g.words.push({ a: w.word, b: w.translation });
+      });
+      let qn = 0;
       const quizzes = [];
       if (ls.activity && ls.activity.type === 'quiz') quizzes.push(ls.activity);
       (ls.acts || []).forEach(function (a) { if (a.type === 'quiz') quizzes.push(a); });
       quizzes.forEach(function (qz) {
-        const qs = (qz.data.questions || []).filter(function (q) { return q.q && (q.options || []).filter(Boolean).length >= 2 && q.correct != null; });
-        if (qs.length) out.push({ label: '🎲 ' + (ls.title || qz.title || 'Quiz') + ' · ' + qs.length + ' domande', add: function () { return qs.map(function (q) { return VLChal.buildItem('mc', { q: q.q, options: q.options, correct: q.correct }); }).filter(Boolean); } });
+        (qz.data.questions || []).forEach(function (q) {
+          if (q.q && (q.options || []).filter(Boolean).length >= 2 && q.correct != null) g.quizzes.push({ src: ls.id + ':q' + (qn++), q: q.q, options: q.options.filter(Boolean), correct: q.correct });
+        });
       });
+      if (g.exs.length || g.words.length >= 2 || g.quizzes.length) out.push(g);
     });
+    out.sort(function (a, b) { return b.updatedAt.localeCompare(a.updatedAt); });
     return out;
+  }
+  function chalHave(ls) {
+    const have = new Set();
+    (ls.chal.items || []).forEach(function (it) { if (it.src) have.add(it.src); });
+    return have;
+  }
+  function openChalImport() {
+    const ls = current(); if (!ls || !ls.chal) return;
+    $('#ci-search').value = '';
+    renderChalImport();
+    $('#dlg-chal-import').showModal();
+    $('#ci-search').focus();
+  }
+  function renderChalImport() {
+    const ls = current(); if (!ls || !ls.chal) return;
+    const have = chalHave(ls);
+    const q = L.normalize($('#ci-search').value || '');
+    const box = $('#ci-list'); box.innerHTML = '';
+    const groups = chalImportGroups().filter(function (g) { return !q || L.normalize(g.title).indexOf(q) !== -1; });
+    if (!groups.length) { box.appendChild(el('p', { class: 'hint', text: q ? 'Nessuna lezione con questo titolo.' : 'Niente da importare ancora: crea prima una lezione, un quiz o delle parole utili.' })); return; }
+    groups.forEach(function (g) {
+      const card = el('div', { class: 'ci-card', 'data-id': g.id });
+      card.appendChild(el('div', { class: 'ci-title', text: g.title }));
+      const rows = el('div', { class: 'ci-rows' });
+      const addRow = function (key, label, items, doneAll) {
+        const cb = el('input', { type: 'checkbox', 'data-key': key });
+        if (doneAll) { cb.disabled = true; }
+        const lab = el('label', { class: 'ci-row' + (doneAll ? ' done' : '') }, cb, el('span', { text: label + (doneAll ? ' · già nel set ✓' : '') }));
+        rows.appendChild(lab);
+      };
+      if (g.exs.length) addRow('exs', '🎬 esercizi del video (' + g.exs.length + ')', g.exs, g.exs.every(function (x) { return have.has(x.src); }));
+      if (g.words.length >= 2) addRow('words', '🃏 abbina le parole utili (' + g.words.length + ' coppie)', g.words, have.has(g.id + ':vocab'));
+      if (g.quizzes.length) addRow('quiz', '🎲 domande dei quiz (' + g.quizzes.length + ')', g.quizzes, g.quizzes.every(function (x) { return have.has(x.src); }));
+      card.appendChild(rows);
+      // anteprima: cosa c'e' dentro, esercizio per esercizio (v71, 'non ho l'anteprima di quali sono gli esercizi')
+      const det = el('details', { class: 'ci-preview' }, el('summary', { text: 'vedi il contenuto' }));
+      const ul = el('div');
+      g.exs.forEach(function (x) { ul.appendChild(el('div', { class: 'ci-line' + (have.has(x.src) ? ' done' : ''), text: VLChal.itemLabel(x.kind) + ' · ' + chalItemSummary({ kind: x.kind, sentence: x.sentence, data: x.data, pairs: [] }) })); });
+      if (g.words.length >= 2) ul.appendChild(el('div', { class: 'ci-line' + (have.has(g.id + ':vocab') ? ' done' : ''), text: 'Abbina · ' + g.words.map(function (p) { return p.a; }).join(' · ') }));
+      g.quizzes.forEach(function (x) { ul.appendChild(el('div', { class: 'ci-line' + (have.has(x.src) ? ' done' : ''), text: 'Scelta multipla · ' + x.q })); });
+      det.appendChild(ul);
+      card.appendChild(det);
+      box.appendChild(card);
+    });
   }
   function renderChalSet(ls) {
     $('#cs-title').value = ls.title || '';
-    const srcSel = $('#cs-import-src'); srcSel.innerHTML = '';
-    const sources = chalImportSources();
-    if (!sources.length) srcSel.appendChild(el('option', { value: '', text: 'niente da importare' }));
-    sources.forEach(function (s, i) { srcSel.appendChild(el('option', { value: String(i), text: s.label })); });
-    $('#cs-import').disabled = !sources.length;
+    $('#cs-import').disabled = !chalImportGroups().length;
     const box = $('#cs-items'); box.innerHTML = '';
     const items = ls.chal.items || [];
     if (!items.length) box.appendChild(el('p', { class: 'hint', text: 'Il set è vuoto: importa dagli esercizi che hai già o aggiungine uno nuovo.' }));
@@ -5347,13 +5396,40 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   function chalSetTouched(ls) { ls.updatedAt = new Date().toISOString(); saveDebounced(); renderChalSet(ls); }
   $('#cs-title').addEventListener('change', function () { const ls = current(); if (ls && ls.chal) { ls.title = this.value.trim(); ls.updatedAt = new Date().toISOString(); saveDebounced(); } });
-  $('#cs-import').addEventListener('click', function () {
+  $('#cs-import').addEventListener('click', openChalImport);
+  $('#ci-search').addEventListener('input', renderChalImport);
+  $('#ci-close').addEventListener('click', function () { $('#dlg-chal-import').close(); });
+  $('#ci-ok').addEventListener('click', function () {
     const ls = current(); if (!ls || !ls.chal) return;
-    const src = chalImportSources()[+$('#cs-import-src').value || 0]; if (!src) return;
-    const add = src.add(ls.chal).filter(Boolean);
-    ls.chal.items = (ls.chal.items || []).concat(add);
+    const have = chalHave(ls);
+    const groups = chalImportGroups();
+    let added = 0, skipped = 0;
+    $$('#ci-list .ci-card').forEach(function (card) {
+      const g = groups.find(function (x) { return x.id === card.getAttribute('data-id'); });
+      if (!g) return;
+      $$('input[type=checkbox]', card).forEach(function (cb) {
+        if (!cb.checked || cb.disabled) return;
+        const key = cb.getAttribute('data-key');
+        if (key === 'exs') g.exs.forEach(function (x) {
+          if (have.has(x.src)) { skipped++; return; }
+          ls.chal.items.push({ id: 'i' + Math.random().toString(36).slice(2, 9), src: x.src, kind: x.kind, sentence: x.sentence, data: JSON.parse(JSON.stringify(x.data)) });
+          have.add(x.src); added++;
+        });
+        if (key === 'words') {
+          if (have.has(g.id + ':vocab')) { skipped++; return; }
+          const it = VLChal.buildItem('match', g.words);
+          if (it) { it.src = g.id + ':vocab'; ls.chal.items.push(it); have.add(it.src); added++; }
+        }
+        if (key === 'quiz') g.quizzes.forEach(function (x) {
+          if (have.has(x.src)) { skipped++; return; }
+          const it = VLChal.buildItem('mc', { q: x.q, options: x.options, correct: x.correct });
+          if (it) { it.src = x.src; ls.chal.items.push(it); have.add(x.src); added++; }
+        });
+      });
+    });
+    $('#dlg-chal-import').close();
     chalSetTouched(ls);
-    toast(add.length + (add.length === 1 ? ' esercizio importato' : ' esercizi importati'));
+    toast(added ? added + (added === 1 ? ' esercizio importato' : ' esercizi importati') + (skipped ? ' · ' + skipped + ' già nel set, saltati' : '') : (skipped ? 'Tutto già nel set: niente doppioni' : 'Seleziona prima cosa importare'));
   });
   $('#cs-delete').addEventListener('click', function () {
     const ls = current(); if (!ls) return;

@@ -1164,3 +1164,16 @@ body.view-chalplay { background: #f4f6fa; }
 .ig-row { display: flex; gap: 8px; align-items: baseline; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
 .ig-row .kind { font-weight: 700; white-space: nowrap; }
 .ig-row .txt { color: #444; font-size: 14px; }
+
+/* ---------- v71: import nel set con ricerca, una card per lezione, niente doppioni ---------- */
+dialog.wide { max-width: 720px; }
+.ci-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
+.ci-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.ci-title { font-weight: 700; margin-bottom: 6px; }
+.ci-rows { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.ci-row { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; font-size: 14px; }
+.ci-row.done { color: var(--muted, #667); }
+.ci-preview { margin-top: 6px; }
+.ci-preview summary { color: var(--accent, #1f6feb); font-size: 13px; cursor: pointer; }
+.ci-line { font-size: 13px; color: #444; padding: 3px 0 3px 10px; border-left: 2px solid var(--line); margin-top: 3px; }
+.ci-line.done { color: #99a3b0; text-decoration: line-through; }
