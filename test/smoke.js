@@ -32,7 +32,10 @@ async function noOverflow(page, where) {
 
 (async function () {
   const browser = await chromium.launch();
+  // v73: il tour di benvenuto si apre da solo al primo accesso; le pagine dei test "gia' viste" lo marcano visto
+  const tourSeen = function () { try { const st = JSON.parse(localStorage.getItem('vle.settings') || '{}'); st.tourSeen = true; localStorage.setItem('vle.settings', JSON.stringify(st)); } catch (e) { /* ignora */ } };
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+  await page.addInitScript(tourSeen);
   const errors = [];
   page.on('pageerror', function (e) { errors.push('pageerror: ' + e.message); });
   page.on('console', function (m) { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -681,6 +684,7 @@ async function noOverflow(page, where) {
     return location.origin + location.pathname + '?mock=1&speed=8#d=' + btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   });
   const page2 = await browser.newPage();
+  await page2.addInitScript(tourSeen);
   page2.on('pageerror', function (e) { errors.push('pageerror(2): ' + e.message); });
   await page2.goto(link);
   await page2.waitForSelector('#view-student.active');
@@ -789,6 +793,7 @@ async function noOverflow(page, where) {
       ' remove: async function (rs) { rs.forEach(function (r) { window.__rows[r.id] = Object.assign({}, window.__rows[r.id], r); }); } }; })();';
   };
   const ctxA = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxA.addInitScript(tourSeen);
   await ctxA.addInitScript(fakeCloud({}));
   const pa = await ctxA.newPage();
   pa.on('pageerror', function (e) { errors.push('pageerror(A): ' + e.message); });
@@ -812,6 +817,7 @@ async function noOverflow(page, where) {
   const rowsA = await pa.evaluate(function () { return window.__rows; });
   // secondo browser: parte vuoto, trova la lezione nel cloud
   const ctxB = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxB.addInitScript(tourSeen);
   await ctxB.addInitScript(fakeCloud(rowsA));
   const pb = await ctxB.newPage();
   pb.on('pageerror', function (e) { errors.push('pageerror(B): ' + e.message); });
@@ -1791,6 +1797,7 @@ async function noOverflow(page, where) {
 
   console.log('24. sfida in classe v69+v72: set multi-tipo, genera/modifica, modalita\u0300 guidata con reveal');
   const ctxC = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctxC.addInitScript(tourSeen);
   const hostP = await ctxC.newPage();
   const studP = await ctxC.newPage();
   await hostP.goto(BASE + '?mock=1');
@@ -1933,6 +1940,42 @@ async function noOverflow(page, where) {
   const fin = await studP.$eval('.chp-final', function (x) { return x.textContent; });
   assert.ok(/Anna \(tu\)/.test(fin) && /Hai vinto/.test(fin), 'classifica finale sul telefono: ' + fin.slice(0, 80));
   await ctxC.close();
+
+  console.log('25. tour di benvenuto v73: primo accesso, mai due volte, "?" per rivederlo, mai sulle rotte studente');
+  const ctxT = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  const pt = await ctxT.newPage();
+  pt.on('pageerror', function (e) { errors.push('pageerror(T): ' + e.message); });
+  await pt.goto(BASE + '?mock=1');
+  await pt.waitForSelector('#dlg-tour[open]', { timeout: 6000 });
+  assert.strictEqual(await pt.$$eval('#dlg-tour .tour-slide', function (x) { return x.length; }), 4, 'quattro schede');
+  assert.ok(await pt.$eval('#tour-prev', function (b) { return b.style.visibility === 'hidden'; }), 'sulla prima scheda niente Indietro');
+  await pt.click('#tour-next'); await pt.click('#tour-next'); await pt.click('#tour-next');
+  assert.strictEqual(await pt.$eval('#tour-next', function (b) { return b.textContent; }), 'Chiudi', 'sull’ultima scheda il pulsante diventa Chiudi');
+  // la demo parte direttamente dal tour: dialog chiuso, lezione generata, editor aperto
+  await pt.click('#tour-demo');
+  await pt.waitForSelector('#view-editor.active', { timeout: 20000 });
+  assert.ok(!(await pt.$('#dlg-tour[open]')), 'il tour si è chiuso');
+  // alla seconda visita NON riappare (flag salvato nel browser)
+  await pt.goto(BASE + '?mock=1');
+  await pt.waitForSelector('#view-home.active');
+  await pt.waitForTimeout(600);
+  assert.ok(!(await pt.$('#dlg-tour[open]')), 'alla seconda visita il tour non si ripresenta');
+  // ma il "?" in alto lo riapre, e la ✕ lo chiude
+  await pt.click('#btn-tour');
+  await pt.waitForSelector('#dlg-tour[open]');
+  assert.ok(await pt.$eval('#dlg-tour .tour-slide', function (s) { return !s.hidden; }), 'riaperto dalla prima scheda');
+  await pt.click('#dlg-tour .dlg-x');
+  assert.ok(!(await pt.$('#dlg-tour[open]')), 'la ✕ chiude');
+  await ctxT.close();
+  // browser vergine su una rotta studente: il tour non deve MAI coprire una sfida
+  const ctxT2 = await browser.newContext({ viewport: { width: 500, height: 800 } });
+  const pt2 = await ctxT2.newPage();
+  pt2.on('pageerror', function (e) { errors.push('pageerror(T2): ' + e.message); });
+  await pt2.goto(BASE + '?mock=1#c=ABCDEF');
+  await pt2.waitForSelector('#view-chalplay.active', { timeout: 6000 });
+  await pt2.waitForTimeout(400);
+  assert.ok(!(await pt2.$('#dlg-tour[open]')), 'niente tour sulle rotte studente');
+  await ctxT2.close();
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
