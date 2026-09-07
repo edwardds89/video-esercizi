@@ -1949,7 +1949,15 @@ async function noOverflow(page, where) {
   await pt.waitForSelector('#dlg-tour[open]', { timeout: 6000 });
   assert.strictEqual(await pt.$$eval('#dlg-tour .tour-slide', function (x) { return x.length; }), 4, 'quattro schede');
   assert.ok(await pt.$eval('#tour-prev', function (b) { return b.style.visibility === 'hidden'; }), 'sulla prima scheda niente Indietro');
-  await pt.click('#tour-next'); await pt.click('#tour-next'); await pt.click('#tour-next');
+  // v74: la scheda della lezione spiega il procedimento VERO (preferiti/bookmarklet), quella dei giochi entrambe le vie, e la GIF esiste
+  const slide2 = await pt.$eval('#dlg-tour .tour-slide:nth-of-type(2)', function (s) { return s.textContent; });
+  assert.ok(/preferiti/.test(slide2) && /YouTube/.test(slide2), 'la scheda della lezione parla del pulsante nei preferiti');
+  const slide3 = await pt.$eval('#dlg-tour .tour-slide:nth-of-type(3)', function (s) { return s.textContent; });
+  assert.ok(/link condiviso/.test(slide3) && /QR/.test(slide3), 'la scheda dei giochi racconta entrambe le vie');
+  await pt.click('#tour-next'); await pt.click('#tour-next');
+  // sulla scheda dei giochi (visibile) la GIF lazy parte e deve caricare davvero
+  await pt.waitForFunction(function () { const i = document.querySelector('#dlg-tour .tour-gif'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 8000 });
+  await pt.click('#tour-next');
   assert.strictEqual(await pt.$eval('#tour-next', function (b) { return b.textContent; }), 'Chiudi', 'sull’ultima scheda il pulsante diventa Chiudi');
   // la demo parte direttamente dal tour: dialog chiuso, lezione generata, editor aperto
   await pt.click('#tour-demo');
