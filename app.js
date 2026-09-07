@@ -844,6 +844,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#tour-next').addEventListener('click', function () { if (tourIx < TOUR_N - 1) { tourIx++; tourPaint(); } else $('#dlg-tour').close(); });
   $('#btn-tour').addEventListener('click', openTour);
   $('#tour-demo').addEventListener('click', function () { $('#dlg-tour').close(); $('#btn-demo').click(); });
+  $('#tour-bm').addEventListener('click', function () {   // v74: il tour porta DAVVERO al pulsante dei preferiti
+    $('#dlg-tour').close();
+    const nb = document.querySelector('#nav [data-view=home]'); if (nb) nb.click();
+    const card = $('#bookmarklet-card');
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('spot'); setTimeout(function () { card.classList.remove('spot'); }, 2600);
+  });
   $('#tour-new').addEventListener('click', function () { $('#dlg-tour').close(); const b = document.querySelector('#nav [data-view=new]'); if (b) b.click(); });
   function maybeTour() {
     if (S.standalone || S.settings.tourSeen) return;

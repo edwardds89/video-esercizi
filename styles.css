@@ -1213,3 +1213,6 @@ dialog.wide { max-width: 720px; }
 #tour-dots i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--line); margin: 0 3px; }
 #tour-dots i.on { background: var(--accent, #1f6feb); }
 @media (max-width: 560px) { .tour-grid { grid-template-columns: 1fr; } }
+
+/* v74: la card del bookmarklet si illumina quando ci si arriva dal tour */
+#bookmarklet-card.spot { outline: 3px solid var(--marker, #f6a821); outline-offset: 3px; transition: outline-color .4s; }
