@@ -1195,3 +1195,21 @@ dialog.wide { max-width: 720px; }
 .chp-tile { border: 2px solid #6b46c1; background: #fff; border-radius: 10px; padding: 8px 12px; font-size: 16px; font-weight: 600; cursor: pointer; }
 .chp-tile:disabled { opacity: .35; cursor: default; }
 .chp-tile.inans { border-color: var(--accent, #1f6feb); background: #eef4ff; }
+
+/* ---------- v73: tour di benvenuto + "?" in alto ---------- */
+#btn-tour.qmark { width: 34px; padding: 8px 0; border-radius: 50%; font-weight: 800; }
+#dlg-tour { max-width: 640px; width: calc(100vw - 40px); }
+#dlg-tour h2 { margin-top: 0; }
+.tour-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.tour-mini { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
+.tour-mini .ico { font-size: 26px; }
+.tour-mini span:last-child { font-size: 13px; color: #566; }
+.tour-step { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; }
+.tour-step i { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: var(--accent, #1f6feb); color: #fff; font-style: normal; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.tour-step span { padding-top: 3px; }
+.tour-cta { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+.tour-cta button { font-size: 16px; padding: 12px; }
+.tour-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+#tour-dots i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--line); margin: 0 3px; }
+#tour-dots i.on { background: var(--accent, #1f6feb); }
+@media (max-width: 560px) { .tour-grid { grid-template-columns: 1fr; } }

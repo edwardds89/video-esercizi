@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260906-72">
+<link rel="stylesheet" href="styles.css?v=20260907-73">
 </head>
 <body>
 <header class="topbar">
@@ -17,6 +17,7 @@
     <button data-view="home">Portfolio</button>
     <button data-view="new" class="primary">Nuova lezione</button>
     <button id="btn-settings">Impostazioni AI</button>
+    <button id="btn-tour" class="qmark" title="Come funziona: la guida in mezzo minuto">?</button>
     <button id="btn-account" class="account" style="display:none" title="Salva le lezioni nel cloud per ritrovarle su ogni computer"><span class="dot off"></span> Accedi</button>
   </nav>
 </header>
@@ -493,6 +494,47 @@
   </div>
 </dialog>
 
+<!-- v73: tour di benvenuto — al primo accesso e dal "?" in alto -->
+<dialog id="dlg-tour">
+  <div class="tour-slide">
+    <h2>Benvenuto! 👋</h2>
+    <p>Qui prepari lezioni, giochi e sfide per la tua classe, partendo da un video YouTube o da zero. Puoi creare quattro cose:</p>
+    <div class="tour-grid">
+      <div class="tour-mini"><span class="ico">🎬</span><b>Lezione da video</b><span>il video si ferma da solo e compaiono gli esercizi</span></div>
+      <div class="tour-mini"><span class="ico">🎲</span><b>Giochi e attività</b><span>memory, quiz, anagramma e ruota, con 18 template</span></div>
+      <div class="tour-mini"><span class="ico">💬</span><b>Conversazione</b><span>unità da parlare, col foglio A4 da stampare</span></div>
+      <div class="tour-mini"><span class="ico">📱</span><b>Sfida in classe</b><span>QR sullo schermo, si risponde dal telefono</span></div>
+    </div>
+  </div>
+  <div class="tour-slide" hidden>
+    <h2>🎬 Dal video alla lezione in tre passi</h2>
+    <div class="tour-step"><i>1</i><span>Incolla il link di un video YouTube (serve la trascrizione: se manca, te lo dico subito).</span></div>
+    <div class="tour-step"><i>2</i><span>L'app sceglie le frasi giuste e propone gli esercizi: tu li controlli e li ritocchi come vuoi.</span></div>
+    <div class="tour-step"><i>3</i><span>Condividi il link con la classe: il video si ferma da solo e gli studenti rispondono.</span></div>
+    <p class="hint">💬 Senza video? C'è la Conversazione: dai argomento e livello, l'unità esce pronta col foglio A4.</p>
+  </div>
+  <div class="tour-slide" hidden>
+    <h2>📱 Giochi e sfide in classe</h2>
+    <div class="tour-step"><i>1</i><span>Prepara un gioco o un set di esercizi (anche dalla trascrizione di una tua lezione, con ✨).</span></div>
+    <div class="tour-step"><i>2</i><span>Proietta lo schermo: gli studenti scannerizzano il QR col telefono.</span></div>
+    <div class="tour-step"><i>3</i><span>Nickname e via, senza account: classifica in diretta e podio finale.</span></div>
+  </div>
+  <div class="tour-slide" hidden>
+    <h2>Da dove comincio?</h2>
+    <p>Il modo più veloce per capire tutto è provare: la lezione demo si crea da sola in pochi secondi, col player finto.</p>
+    <div class="tour-cta">
+      <button id="tour-demo" class="primary big">▶ Prova la lezione demo</button>
+      <button id="tour-new">🎬 Parto dal mio primo video</button>
+    </div>
+    <p class="hint">Puoi riaprire questa guida quando vuoi dal <b>?</b> in alto.</p>
+  </div>
+  <div class="tour-nav">
+    <button id="tour-prev">◀ Indietro</button>
+    <span id="tour-dots"><i class="on"></i><i></i><i></i><i></i></span>
+    <button id="tour-next" class="primary">Avanti ▶</button>
+  </div>
+</dialog>
+
 <dialog id="dlg-chal-add">
   <h2 id="ca-title">Nuovo esercizio del set</h2>
   <div class="row" style="margin-bottom:8px"><button id="ca-img" class="small">📷 Genera da una foto o screenshot (AI)</button></div>
@@ -658,16 +700,16 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260906-72"></script>
-<script src="exercises.js?v=20260906-72"></script>
-<script src="generator.js?v=20260906-72"></script>
-<script src="activities.js?v=20260906-72"></script>
-<script src="ai.js?v=20260906-72"></script>
-<script src="demo-data.js?v=20260906-72"></script>
-<script src="bookmarklet.js?v=20260906-72"></script>
-<script src="sync.js?v=20260906-72"></script>
-<script src="qr.js?v=20260906-72"></script>
-<script src="challenge.js?v=20260906-72"></script>
-<script src="app.js?v=20260906-72"></script>
+<script src="lang.js?v=20260907-73"></script>
+<script src="exercises.js?v=20260907-73"></script>
+<script src="generator.js?v=20260907-73"></script>
+<script src="activities.js?v=20260907-73"></script>
+<script src="ai.js?v=20260907-73"></script>
+<script src="demo-data.js?v=20260907-73"></script>
+<script src="bookmarklet.js?v=20260907-73"></script>
+<script src="sync.js?v=20260907-73"></script>
+<script src="qr.js?v=20260907-73"></script>
+<script src="challenge.js?v=20260907-73"></script>
+<script src="app.js?v=20260907-73"></script>
 </body>
 </html>

@@ -829,6 +829,28 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     }, 50);
   });
 
+  // ---- v73: tour di benvenuto ('il mio sito deve essere a prova di stupido, tutto facile da capire') ----
+  // Al primo accesso dell'insegnante (mai sulle rotte studente) e riapribile dal "?" in alto.
+  const TOUR_N = 4;
+  let tourIx = 0;
+  function tourPaint() {
+    $$('#dlg-tour .tour-slide').forEach(function (s, i) { s.hidden = i !== tourIx; });
+    $$('#tour-dots i').forEach(function (d, i) { d.classList.toggle('on', i === tourIx); });
+    $('#tour-prev').style.visibility = tourIx === 0 ? 'hidden' : '';
+    $('#tour-next').textContent = tourIx === TOUR_N - 1 ? 'Chiudi' : 'Avanti ▶';
+  }
+  function openTour() { tourIx = 0; tourPaint(); $('#dlg-tour').showModal(); }
+  $('#tour-prev').addEventListener('click', function () { if (tourIx > 0) { tourIx--; tourPaint(); } });
+  $('#tour-next').addEventListener('click', function () { if (tourIx < TOUR_N - 1) { tourIx++; tourPaint(); } else $('#dlg-tour').close(); });
+  $('#btn-tour').addEventListener('click', openTour);
+  $('#tour-demo').addEventListener('click', function () { $('#dlg-tour').close(); $('#btn-demo').click(); });
+  $('#tour-new').addEventListener('click', function () { $('#dlg-tour').close(); const b = document.querySelector('#nav [data-view=new]'); if (b) b.click(); });
+  function maybeTour() {
+    if (S.standalone || S.settings.tourSeen) return;
+    S.settings.tourSeen = true; saveSettings();   // segnato subito: il "?" resta per rivederlo
+    openTour();
+  }
+
   function newLesson(base) {
     const ls = Object.assign({ v: 1, id: uid(), title: '', videoId: '', videoUrl: '', lang: 'it', level: 'B1', duration: 0, lines: [], chunks: [], exercises: [], cuts: [],
       options: { strict: false, fx: true }, params: {}, ai: null, warnings: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, base);
@@ -6180,6 +6202,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       return q.get('mode') === 'student' ? openStudent(id) : openEditor(id);
     }
     renderHome();
+    maybeTour();
   }
   window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd };
   init();
