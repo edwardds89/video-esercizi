@@ -649,7 +649,8 @@
     const hide = (params.hide || []).map(function (w) { return String(w || '').trim(); }).filter(Boolean);
     const user = ['Translate the TEXT from ' + lang + ' into natural, idiomatic ' + target + ' (British spelling: colour, realise, organise; British idiom). Keep the register of the original. ' +
       (params.whole ? 'Translate the whole sentence.' : 'The TEXT is a fragment of the SENTENCE: translate only the fragment, as it works inside that sentence (not the whole sentence).') +
-      (params.literal ? ' Translate exactly what is written, word for word where possible: the sentence may contain a deliberate mistake or an extra word and you must NOT correct it, tidy it or leave it out.' : ''),
+      (params.literal ? ' Translate exactly what is written, word for word where possible: the sentence may contain a deliberate mistake or an extra word and you must NOT correct it, tidy it or leave it out.' : '') +
+      (params.omission ? ' The sentence is missing one word ON PURPOSE: the student must find WHERE. Translate it AS IT IS, without the missing word, and do NOT mark, hint at or punctuate the gap in any way — no "___", no brackets, no ellipsis, no note. The translation must read as one continuous sentence.' : ''),
       hide.length
         ? 'IMPORTANT — the student is doing a listening exercise and still has to produce these ' + lang + ' words: ' + hide.map(function (w) { return '"' + w + '"'; }).join(', ') + '. '
           + 'In your translation, replace whatever renders each of them with "___" (three underscores, one run per item, in the place where it belongs) and translate everything else normally, so the sentence still reads as a sentence with blanks. '

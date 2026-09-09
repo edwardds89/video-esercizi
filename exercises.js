@@ -303,8 +303,13 @@
     const d = exercise && exercise.data; if (!d) return [];
     switch (exercise.type) {
       case 'gap': case 'gapbank': return gapRuns(d).map(function (r) { return r.answer; });
-      case 'missing': return [d.answer];
-      case 'wrong': return [d.answer];
+      // 'missing': NIENTE "___" nella traduzione (9/9, Edoardo: "sotto c'e' un gap e non va bene perche' diventa
+      // un suggerimento") — il compito e' trovare DOVE manca la parola, e un segnaposto nella traduzione svela il
+      // posto. Si traduce la frase COME MOSTRATA (senza la parola), letteralmente: vedi il flag "omission".
+      // 'wrong': la parola giusta non sta nel testo mostrato; chiedere di mascherarla spinge il modello a mettere
+      // "___" sulla parola sbagliata, cioe' sulla risposta. Basta la traduzione letterale dell'errore.
+      case 'missing': return [];
+      case 'wrong': return [];
       case 'scramble': return d.words ? d.words.slice() : [];
       default: return [];
     }

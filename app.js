@@ -3652,14 +3652,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           return;
         }
         const hide = done || partial ? [] : EX.hiddenWords(ex);
+        // "Trova la parola mancante" (9/9, 'sotto c'e' un gap e non va bene perche' diventa un suggerimento'):
+        // niente "___" — svelerebbe DOVE manca la parola, che e' meta' della risposta. Si traduce la frase COME
+        // MOSTRATA (senza la parola), letteralmente, e il modello ha l'ordine di non segnalare il buco.
+        const missingShown = ex.type === 'missing' && !done && !partial;
+        const shownText = missingShown ? (ex.data.tokens || []).filter(function (t, j) { return j !== ex.data.missingIndex; }).join(' ') : null;
         const etichetta = trBtn.textContent;
         trBtn.disabled = true; trBtn.textContent = '… traduco';
-        AI.translateSentence({ text: partial ? sel : ex.sentence, whole: !partial, sentence: ex.sentence, lang: ls.lang, context: '', hide: hide, target: lang[3], literal: !done && (ex.type === 'extra' || ex.type === 'wrong'), apiKey: S.settings.apiKey, model: S.settings.model })
+        AI.translateSentence({ text: partial ? sel : (shownText || ex.sentence), whole: !partial, sentence: shownText || ex.sentence, lang: ls.lang, context: '', hide: hide, target: lang[3], literal: !done && (ex.type === 'extra' || ex.type === 'wrong' || ex.type === 'missing'), omission: missingShown, apiKey: S.settings.apiKey, model: S.settings.model })
           .then(function (r) {
             trBox.style.display = ''; trBox.innerHTML = '';
             trBox.appendChild(el('span', { class: 'hint', text: (partial ? '"' + sel + '" → ' : lang[1] + ' ') }));
             trBox.appendChild(el('b', { text: r.translation }));
             if (hide.length) trBox.appendChild(el('div', { class: 'hint', text: '___ = quello che devi trovare tu. Dopo la risposta la traduzione si vede per intero.' }));
+            else if (missingShown) trBox.appendChild(el('div', { class: 'hint', text: 'La traduzione segue la frase così com\'è, senza la parola che manca: trovarla resta compito tuo.' }));
           })
           .catch(function (e) { toast('AI: ' + e.message, 6000); })
           .then(function () { trBtn.disabled = false; trBtn.textContent = etichetta; });
