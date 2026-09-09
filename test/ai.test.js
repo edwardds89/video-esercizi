@@ -430,7 +430,19 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     const mc = { type: 'mc', data: { options: ['a', 'b'], correct: 0 } };
     assert.deepStrictEqual(EX.hiddenWords(mc), [], 'nella scelta multipla non c\'è niente da coprire nella frase');
     assert.deepStrictEqual(EX.hiddenWords({ type: 'extra', data: { extraWord: 'molto' } }), [], 'la parola di troppo è già sotto gli occhi');
-    assert.deepStrictEqual(EX.hiddenWords({ type: 'wrong', data: { wrongWord: 'caldo', answer: 'fresco' } }), ['fresco'], 'la parola giusta resta coperta');
+    // v75 (9/9, 'sotto c'e' un gap e non va bene perche' diventa un suggerimento'): niente ___ per missing e wrong —
+    // nel missing il segnaposto svelerebbe DOVE manca la parola; nel wrong la parola giusta non sta nel testo e
+    // l'ordine di mascherarla spinge il modello a marcare quella sbagliata, cioè la risposta.
+    assert.deepStrictEqual(EX.hiddenWords({ type: 'missing', data: { tokens: ['a', 'b'], missingIndex: 1, answer: 'per' } }), [], 'nel missing niente segnaposto: svelerebbe il posto');
+    assert.deepStrictEqual(EX.hiddenWords({ type: 'wrong', data: { wrongWord: 'caldo', answer: 'fresco' } }), [], 'nel wrong niente segnaposto: marcherebbe la parola sbagliata');
+  });
+  await test('trova la parola mancante: la traduzione non segnala il buco', async function () {
+    const calls = [];
+    await AI.translateSentence({ text: 'la clonazione fini domestici è diffusa', whole: true, lang: 'it', literal: true, omission: true, apiKey: 'sk', fetchImpl: trFetch(calls) });
+    const prompt = calls[0].messages[0].content;
+    assert.ok(/missing one word ON PURPOSE/.test(prompt), 'il modello sa che manca una parola apposta');
+    assert.ok(/do NOT mark, hint at or punctuate the gap/.test(prompt), 'e ha l\'ordine di non segnalare il punto');
+    assert.ok(prompt.indexOf('replace whatever renders') === -1, 'nessuna istruzione di mascheratura con ___');
   });
 
   console.log('Unita di conversazione (senza video)');
@@ -533,6 +545,48 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     let err = null;
     try { await AI.regenerateConvPart({ what: 'boh', unit: {}, apiKey: 'sk', fetchImpl: async function () { throw new Error('non deve chiamare'); } }); } catch (e) { err = e; }
     assert.ok(err && /sconosciuto/.test(err.message));
+  });
+
+  await test('esercizi da immagine (v70): la richiesta porta le immagini, la risposta viene normalizzata', async function () {
+    let sentBody = null;
+    const fakeFetch = async function (url, opts) {
+      sentBody = JSON.parse(opts.body);
+      const text = JSON.stringify({ items: [
+        { type: 'mc', q: ' Che cos\'è la fotosintesi? ', options: ['Un processo delle piante', 'Un animale', 'Un pianeta', ''], correct: 0 },
+        { type: 'gap', sentence: 'Le piante producono ossigeno grazie alla luce del sole e alla clorofilla.' },
+        { type: 'match', pairs: [{ a: 'foglia', b: 'leaf' }, { a: 'radice', b: 'root' }, { a: '', b: 'x' }] },
+        { type: 'wheel', items: ['la foglia', 'spiega la clorofilla', ''] },
+        { type: 'boh', sentence: 'tipo ignoto da scartare' },
+        { type: 'gap', sentence: 'corta' }
+      ] });
+      return { ok: true, status: 200, json: async function () { return { model: 'm', usage: { input_tokens: 2000, output_tokens: 300 }, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.itemsFromImage({ images: [{ media_type: 'image/jpeg', data: 'QUFB' }], n: 5, lang: 'Italian', level: 'A2', kinds: ['mc', 'gap', 'gapbank', 'extra', 'missing', 'wrong', 'match', 'wheel'], apiKey: 'k', fetchImpl: fakeFetch });
+    // la richiesta: contenuto multimodale con l'immagine PRIMA del testo, livello nel prompt
+    const content = sentBody.messages[0].content;
+    assert.ok(Array.isArray(content) && content[0].type === 'image', 'immagine nel messaggio');
+    assert.strictEqual(content[0].source.media_type, 'image/jpeg');
+    assert.strictEqual(content[0].source.data, 'QUFB');
+    assert.ok(content[1].type === 'text' && content[1].text.indexOf('A2') !== -1, 'livello nel prompt');
+    // la risposta: tipi ignoti e voci vuote scartati, testi ripuliti
+    assert.deepStrictEqual(r.items.map(function (i) { return i.type; }), ['mc', 'gap', 'match', 'wheel']);
+    assert.strictEqual(r.items[0].q, 'Che cos\'è la fotosintesi?');
+    assert.deepStrictEqual(r.items[0].options, ['Un processo delle piante', 'Un animale', 'Un pianeta']);
+    assert.strictEqual(r.items[2].pairs.length, 2, 'coppia incompleta scartata');
+    assert.deepStrictEqual(r.items[3].items, ['la foglia', 'spiega la clorofilla']);
+    assert.ok(r.ai.cost > 0);
+  });
+
+  await test('esercizi da immagine: kinds limita le forme richieste nel prompt', async function () {
+    let sentBody = null;
+    const fakeFetch = async function (url, opts) {
+      sentBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, json: async function () { return { model: 'm', usage: null, content: [{ type: 'text', text: '{"items":[]}' }] }; }, text: async function () { return ''; } };
+    };
+    await AI.itemsFromImage({ images: [{ media_type: 'image/png', data: 'x' }], kinds: ['mc'], apiKey: 'k', fetchImpl: fakeFetch });
+    const txt = sentBody.messages[0].content[1].text;
+    assert.ok(txt.indexOf('"type":"mc"') !== -1, 'mc richiesto');
+    assert.ok(txt.indexOf('"type":"match"') === -1 && txt.indexOf('wheel') === -1, 'gli altri tipi non compaiono');
   });
 
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
