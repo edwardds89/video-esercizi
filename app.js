@@ -3742,6 +3742,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         // larghezza uguale per tutti gli spazi di una parola (la lunghezza non si deve indovinare); più largo se le parole sono più di una
         const width = Math.min(11 * run.indices.length, 34);
         const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', style: 'width:' + width + 'ch', 'data-words': String(run.indices.length) });
+        // v77 ('che senso ha lasciare la funzione per rimuovere i caratteri se c'e' la x?'): nel gapbank la casella
+        // e' in sola lettura — le parole entrano col click sul chip, escono con la ✕; niente tastiera (nemmeno sul telefono).
+        if (ex.type === 'gapbank') inp.readOnly = true;
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
         inp.addEventListener('focus', function () { active = inp; });
         inp.addEventListener('click', function () { active = inp; });
