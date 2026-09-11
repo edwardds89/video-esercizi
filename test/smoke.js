@@ -332,6 +332,9 @@ async function noOverflow(page, where) {
   await page.click('#btn-start');
   await page.waitForSelector('#s-panel .match', { timeout: 5000 });
   assert.ok(await page.$('#s-stage.docked'), 'scheda nell\'area del video');
+  // v76: la consegna non parla piu' di "contrario" (era un 'viceversa' scritto male, letto come antonimo)
+  const matchInstr = await page.$eval('#s-panel .instr', function (x) { return x.textContent; });
+  assert.ok(!/contrario/.test(matchInstr), 'consegna dell\'abbinamento senza "contrario": ' + matchInstr.slice(0, 60));
   assert.ok(await page.$('#s-panel.vocab-act[data-theme="blackboard"] .vocab-wrap .match'), 'le schede vestono il template Lavagna');
   const vwords = await page.evaluate(function () { const v = window.VLApp.S.student.lesson.vocab; return v.words.filter(function (w) { return w.selected && (w.translation || w.image); }).map(function (w) { return { id: w.id, word: w.word, tr: w.translation }; }); });
   assert.strictEqual(vwords.length, 4, 'quattro parole nelle schede');
@@ -450,6 +453,13 @@ async function noOverflow(page, where) {
     }
     if (ex.type === 'gap' || ex.type === 'gapbank') {
       const inputs = await page.$$('#s-panel input.gap');
+      if (ex.type === 'gap') {
+        // v76: sopra ogni casella del fill the gaps normale c'e' 'scrivi N parole', vivo
+        const counts = await page.$$eval('#s-panel .gwrap .gcount', function (ls) { return ls.map(function (l) { return { t: l.textContent, h: l.hidden }; }); });
+        assert.strictEqual(counts.length, inputs.length, 'un contatore per casella (' + counts.length + ')');
+        const w0 = await inputs[0].getAttribute('data-words');
+        assert.ok(!counts[0].h && counts[0].t === 'scrivi ' + w0 + (w0 === '1' ? ' parola' : ' parole'), 'contatore iniziale: ' + counts[0].t);
+      }
       // "💡 Aiuto": una lettera alla volta nel primo spazio non giusto
       const run0 = await page.evaluate(function (id) { const e = window.VLApp.S.student.lesson.exercises.find(function (x) { return x.id === id; }); return window.VLEx.gapRuns(e.data)[0].answer; }, ex.id);
       await page.click('#s-panel button:has-text("Aiuto")');
@@ -466,14 +476,39 @@ async function noOverflow(page, where) {
           assert.ok(clicked2, 'chip "' + prima + '" presente nella banca');
           assert.strictEqual((await inputs[0].inputValue()).trim().toLowerCase(), prima.toLowerCase(), 'il chip sostituisce le lettere del suggerimento nella casella dell\'aiuto');
           if (inputs.length > 1) assert.strictEqual((await inputs[1].inputValue()).trim(), '', 'niente parola scappata nel gap successivo');
-          await inputs[0].fill('');
+          // v76: la casella piena mostra la ✕, che la svuota in un click e fa tornare il chip nella banca
+          const xb = await page.$('#s-panel .gwrap .gclear:not([hidden])');
+          assert.ok(xb, 'la ✕ compare sulla casella piena');
+          await xb.click();
+          assert.strictEqual((await inputs[0].inputValue()).trim(), '', 'la ✕ svuota la casella in un click');
+          const backChip = await page.$$eval('#s-panel .chips:not(.answer-row) .chip', function (cs, w) { return cs.some(function (c) { return c.textContent.trim() === w && !c.hidden; }); }, prima);
+          assert.ok(backChip, 'il chip "' + prima + '" e\' tornato nella banca');
         }
       }
       for (const inp of inputs) await inp.fill('zzz');
       await page.click('#s-panel button:has-text("Controlla")');
       assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })));
       for (let i = 0; i < inputs.length; i++) await inputs[i].fill(ex.data.answers[i]);
+      if (ex.type === 'gap') assert.ok(await page.$$eval('#s-panel .gcount', function (ls) { return ls.every(function (l) { return l.hidden; }); }), 'a caselle piene i contatori spariscono');
     } else if (ex.type === 'scramble') {
+      // v76 ('uno studente ha provato a trascinarla'): la parola si mette e si toglie anche col trascinamento
+      const pcs0 = await page.$$('#s-panel .chips:not(.answer-row) .chip');
+      const pb = await pcs0[0].boundingBox();
+      await page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(pb.x + pb.width / 2 + 14, pb.y + pb.height / 2 + 8, { steps: 3 });   // supera la soglia: compare il segnaposto
+      await page.waitForTimeout(120);   // fitStage puo' far scivolare il layout: la posizione della risposta si prende DOPO
+      const ansBox = await (await page.$('#s-panel .answer-row')).boundingBox();
+      await page.mouse.move(ansBox.x + 40, ansBox.y + ansBox.height / 2, { steps: 6 });
+      await page.waitForTimeout(60);
+      await page.mouse.up();
+      assert.strictEqual(await page.$$eval('#s-panel .answer-row .chip.sel', function (c) { return c.length; }), 1, 'parola trascinata dal pool alla risposta');
+      const scBox = await (await page.$('#s-panel .answer-row .chip.sel')).boundingBox();
+      await page.mouse.move(scBox.x + scBox.width / 2, scBox.y + scBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(scBox.x + scBox.width / 2, scBox.y + 240, { steps: 8 });
+      await page.mouse.up();
+      assert.strictEqual(await page.$$eval('#s-panel .answer-row .chip.sel', function (c) { return c.length; }), 0, 'trascinata fuori dalla risposta = tolta');
       for (const w of ex.data.words) {
         const chips = await page.$$('#s-panel .chips:not(.answer-row) .chip');
         let clicked = false;
