@@ -485,10 +485,24 @@ async function noOverflow(page, where) {
           assert.ok(backChip, 'il chip "' + prima + '" e\' tornato nella banca');
         }
       }
-      for (const inp of inputs) await inp.fill('zzz');
+      // v77: nel gapbank la casella e' in sola lettura (parole solo col click sul chip, via con la ✕) — il fill
+      // di Playwright fallirebbe: si riempie via JS con l'evento 'input' (stesso canale dei chip)
+      const setGap = async function (i, v) {
+        if (ex.type === 'gapbank') await page.evaluate(function (a) { const inp = document.querySelectorAll('#s-panel input.gap')[a.i]; inp.value = a.v; inp.dispatchEvent(new Event('input')); }, { i: i, v: v });
+        else await inputs[i].fill(v);
+      };
+      if (ex.type === 'gapbank') {
+        assert.ok(await page.$$eval('#s-panel input.gap', function (is) { return is.every(function (x) { return x.readOnly; }); }), 'caselle del gapbank in sola lettura');
+        await inputs[0].click();
+        await page.keyboard.type('qq');
+        assert.ok((await inputs[0].inputValue()).indexOf('qq') === -1, 'la tastiera non scrive nella casella del gapbank');
+      } else {
+        assert.ok(await page.$$eval('#s-panel input.gap', function (is) { return is.every(function (x) { return !x.readOnly; }); }), 'caselle del gap normale scrivibili');
+      }
+      for (let i = 0; i < inputs.length; i++) await setGap(i, 'zzz');
       await page.click('#s-panel button:has-text("Controlla")');
       assert.ok(/Non ancora/.test(await page.$eval('#s-panel .feedback', function (f) { return f.textContent; })));
-      for (let i = 0; i < inputs.length; i++) await inputs[i].fill(ex.data.answers[i]);
+      for (let i = 0; i < inputs.length; i++) await setGap(i, ex.data.answers[i]);
       if (ex.type === 'gap') assert.ok(await page.$$eval('#s-panel .gcount', function (ls) { return ls.every(function (l) { return l.hidden; }); }), 'a caselle piene i contatori spariscono');
     } else if (ex.type === 'scramble') {
       // v76 ('uno studente ha provato a trascinarla'): la parola si mette e si toglie anche col trascinamento
