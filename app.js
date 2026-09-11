@@ -1888,7 +1888,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const real = ls ? cardVocab(ls) : [];
     const words = (real.length >= 3 ? real : [{ word: 'il mare', translation: 'the sea' }, { word: 'la spiaggia', translation: 'the beach' }, { word: 'nuotare', translation: 'to swim' }, { word: 'la sabbia', translation: 'the sand' }, { word: 'il sole', translation: 'the sun' }]).slice(0, 5);
     cardHeader(wrap, 'Parole utili: abbina', '');
-    wrap.appendChild(el('div', { class: 'instr', text: 'Tocca una parola e poi la sua foto o traduzione (o il contrario): le coppie giuste salgono in alto, legate.' }));
+    wrap.appendChild(el('div', { class: 'instr', text: 'Tocca una parola e poi la sua foto o traduzione (puoi anche partire dalla foto): le coppie giuste salgono in alto, legate.' }));
     const done = el('div', { class: 'match-done' });
     const first = words[0];
     done.appendChild(el('div', { class: 'mpair' }, [
@@ -3717,6 +3717,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       inp.value = ans.slice(0, n);
       inp.classList.remove('bad'); inp.classList.add('hinted');
       if (n >= ans.length) inp.classList.add('ok');
+      inp.dispatchEvent(new Event('input'));   // v76: contatore parole e ✕ della casella seguono anche l'Aiuto
       inp.focus();
       try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { /* ignore */ }
       return true;
@@ -3744,7 +3745,33 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
         inp.addEventListener('focus', function () { active = inp; });
         inp.addEventListener('click', function () { active = inp; });
-        inputs.push(inp); sent.appendChild(inp);
+        inputs.push(inp);
+        const gwrap = el('span', { class: 'gwrap' });
+        gwrap.appendChild(inp);
+        if (ex.type === 'gap') {
+          // v76 ('sopra il gap scriverai in piccolo "scrivi 3 parole"... quando è scritta l'ultima, la scritta scompare'):
+          // il contatore dice quante parole MANCANO in quello spazio e si aggiorna mentre lo studente scrive.
+          const tot = run.indices.length;
+          const lbl = el('span', { class: 'gcount', 'aria-hidden': 'true' });
+          const updCount = function () {
+            const scritte = inp.value.trim().split(/\s+/).filter(Boolean).length;
+            const manca = tot - scritte;
+            lbl.hidden = manca <= 0;
+            if (manca > 0) lbl.textContent = 'scrivi ' + manca + (manca === 1 ? ' parola' : ' parole');
+          };
+          inp.addEventListener('input', updCount);
+          gwrap.appendChild(lbl); updCount();
+          sent.classList.add('counts');
+        } else {
+          // v76 ('metti una piccola x... così può eliminare la parola con un click'): la ✕ svuota la casella
+          // e il chip torna nella banca (l'evento input fa scattare refreshBank).
+          const xb = el('button', { class: 'gclear', type: 'button', title: 'Svuota la casella', text: '✕' });
+          const updX = function () { xb.hidden = !inp.value.trim(); };
+          inp.addEventListener('input', updX);
+          xb.addEventListener('click', function () { inp.value = ''; inp.dispatchEvent(new Event('input')); active = inp; inp.focus(); });
+          gwrap.appendChild(xb); updX();
+        }
+        sent.appendChild(gwrap);
         sent.appendChild(document.createTextNode((lastTok.post || '') + ' '));
       });
       body.appendChild(sent);
@@ -3785,7 +3812,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               parts[parts.length - 1] = w;   // via le lettere del suggerimento: il chip le completa
               target.value = parts.join(' ');
             } else target.value = (target.value.trim() + ' ' + w).trim();
-            refreshBank();
+            target.dispatchEvent(new Event('input'));   // v76: fa scattare refreshBank E la ✕ della casella
             const prossimo = manca(target) ? target : inputs.find(manca);
             active = prossimo || target;
             active.focus();
@@ -3807,8 +3834,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         inputs.forEach(function (inp, k) { inp.classList.toggle('ok', !!res.detail[k]); inp.classList.toggle('bad', !res.detail[k]); });
         if (res.correct) {
           sent.style.color = 'var(--ok)';
+          sent.classList.remove('counts');
           // le caselle lasciano il posto alle parole scritte, evidenziate e cliccabili per la stella: la frase sopra basta
-          inputs.forEach(function (inp) { const wrap = el('span', { class: 'filled' }); wrap.appendChild(starSpans(ls, inp.value.trim())); inp.replaceWith(wrap); });
+          // (si sostituisce il wrapper intero: via anche il contatore e la ✕ della v76)
+          inputs.forEach(function (inp) { const wrap = el('span', { class: 'filled' }); wrap.appendChild(starSpans(ls, inp.value.trim())); (inp.closest('.gwrap') || inp).replaceWith(wrap); });
           const bank = body.querySelector('.chips'); if (bank) bank.remove();
         }
       };
@@ -3823,9 +3852,49 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (shown.every(function (w, i) { return sameWord(w, d.words[i]); })) shown = d.words.slice().reverse();
       const render = function () {
         pool.innerHTML = ''; ans.innerHTML = '';
+        // v76 ('uno studente ha provato a trascinarla'): le parole del pool si METTONO anche trascinandole
+        // sulla riga della risposta, nel punto voluto; un tocco senza spostamento le mette in coda come prima.
         shown.forEach(function (w, i) {
           if (chosen.indexOf(i) !== -1) return;
-          pool.appendChild(el('span', { class: 'chip', text: w, onclick: function () { chosen.push(i); render(); } }));
+          const c = el('span', { class: 'chip', text: w, title: 'Tocca per aggiungere, o trascina dove vuoi' });
+          let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, activeP = false, ph = null;
+          c.addEventListener('pointerdown', function (e) { if (e.button && e.button !== 0) return; const r = c.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; dx = e.clientX - r.left; dy = e.clientY - r.top; dragging = false; activeP = true; try { c.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } });
+          c.addEventListener('pointermove', function (e) {
+            if (!activeP) return;
+            if (!dragging) {
+              if (Math.hypot(e.clientX - sx, e.clientY - sy) < 6) return;
+              dragging = true;
+              const r = c.getBoundingClientRect();
+              ph = el('span', { class: 'chip placeholder', style: 'width:' + r.width + 'px;height:' + r.height + 'px' });
+              ans.appendChild(ph);
+              c.classList.add('dragging'); c.style.position = 'fixed'; c.style.zIndex = '60'; c.style.pointerEvents = 'none'; c.style.width = r.width + 'px';
+            }
+            c.style.left = (e.clientX - dx) + 'px'; c.style.top = (e.clientY - dy) + 'px';
+            const ar = ans.getBoundingClientRect();
+            const dentro = e.clientY >= ar.top - 26 && e.clientY <= ar.bottom + 26 && e.clientX >= ar.left - 26 && e.clientX <= ar.right + 26;
+            ph.style.display = dentro ? '' : 'none';
+            if (!dentro) return;
+            const others = $$('.chip', ans).filter(function (x) { return x !== ph; });
+            let idx = others.length;
+            for (let j = 0; j < others.length; j++) { const r = others[j].getBoundingClientRect(); if (e.clientY < r.top - 4 || (e.clientY <= r.bottom + 4 && e.clientX < r.left + r.width / 2)) { idx = j; break; } }
+            const ref = others[idx] || null;
+            if (ref) { if (ph.nextSibling !== ref) ans.insertBefore(ph, ref); } else if (ans.lastElementChild !== ph) ans.appendChild(ph);
+          });
+          const fin = function (e) {
+            if (!activeP) return;
+            activeP = false;
+            try { c.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+            if (!dragging) { chosen.push(i); render(); return; }   // tocco senza spostamento: in coda
+            dragging = false;
+            if (ph && ph.style.display !== 'none') {   // mollata sulla risposta: entra nel punto del segnaposto
+              const order = $$('.chip', ans).map(function (x) { return x === ph ? i : parseInt(x.getAttribute('data-i'), 10); });
+              chosen.length = 0; order.forEach(function (x) { chosen.push(x); });
+            }
+            render();   // mollata altrove: resta nel pool
+          };
+          c.addEventListener('pointerup', fin);
+          c.addEventListener('pointercancel', function () { activeP = false; dragging = false; render(); });
+          pool.appendChild(c);
         });
         chosen.forEach(function (i, k) {
           const c = el('span', { class: 'chip sel', text: shown[i], 'data-i': String(i), title: 'Trascina per spostare, tocca per togliere' });
@@ -3845,6 +3914,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               c.classList.add('dragging'); c.style.position = 'fixed'; c.style.zIndex = '60'; c.style.pointerEvents = 'none'; c.style.width = r.width + 'px';
             }
             c.style.left = (e.clientX - dx) + 'px'; c.style.top = (e.clientY - dy) + 'px';
+            // v76: trascinata FUORI dalla riga della risposta (verso il pool) = si toglie; il segnaposto sparisce per dirlo
+            const ar = ans.getBoundingClientRect();
+            const dentro = e.clientY >= ar.top - 26 && e.clientY <= ar.bottom + 26 && e.clientX >= ar.left - 26 && e.clientX <= ar.right + 26;
+            ph.style.display = dentro ? '' : 'none';
+            if (!dentro) return;
             const others = $$('.chip', ans).filter(function (x) { return x !== c && x !== ph; });
             let idx = others.length;
             for (let j = 0; j < others.length; j++) { const r = others[j].getBoundingClientRect(); if (e.clientY < r.top - 4 || (e.clientY <= r.bottom + 4 && e.clientX < r.left + r.width / 2)) { idx = j; break; } }
@@ -3857,6 +3931,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             try { c.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
             if (!dragging) { chosen.splice(chosen.indexOf(i), 1); render(); return; }   // tocco senza spostamento: toglie
             dragging = false;
+            if (ph && ph.style.display === 'none') { chosen.splice(chosen.indexOf(i), 1); render(); return; }   // v76: mollata fuori = tolta
             const order = $$('.chip', ans).filter(function (x) { return x !== c; }).map(function (x) { return x === ph ? i : parseInt(x.getAttribute('data-i'), 10); });
             chosen.length = 0; order.forEach(function (x) { chosen.push(x); });
             render();
@@ -3865,7 +3940,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           c.addEventListener('pointercancel', function () { active = false; dragging = false; render(); });
           ans.appendChild(c);
         });
-        if (!chosen.length) ans.appendChild(el('span', { class: 'hint', text: 'Tocca le parole qui sotto nell\'ordine giusto (poi puoi trascinarle per spostarle)' }));
+        if (!chosen.length) ans.appendChild(el('span', { class: 'hint', text: 'Tocca o trascina qui le parole nell\'ordine giusto (per togliere: tocca, o trascina fuori)' }));
       };
       render();
       body.appendChild(ans); body.appendChild(pool);
@@ -4964,7 +5039,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       p.innerHTML = '';
       const words = all.slice(round * per, (round + 1) * per);
       cardHeader(p, 'Parole utili: abbina', rounds > 1 ? '(' + (round + 1) + ' di ' + rounds + ')' : '');
-      p.appendChild(el('div', { class: 'instr', text: 'Tocca una parola e poi la sua foto o traduzione (o il contrario): le coppie giuste salgono in alto, legate. La stella segna le parole da ripassare.' }));
+      p.appendChild(el('div', { class: 'instr', text: 'Tocca una parola e poi la sua foto o traduzione (puoi anche partire dalla foto): le coppie giuste salgono in alto, legate. La stella segna le parole da ripassare.' }));
       // le coppie abbinate si accumulano qui sopra, una riga per coppia, e non si toccano più
       const done = el('div', { class: 'match-done' });
       const grid = el('div', { class: 'match' });
