@@ -514,7 +514,15 @@ async function noOverflow(page, where) {
       await page.waitForTimeout(120);   // fitStage puo' far scivolare il layout: la posizione della risposta si prende DOPO
       const ansBox = await (await page.$('#s-panel .answer-row')).boundingBox();
       await page.mouse.move(ansBox.x + 40, ansBox.y + ansBox.height / 2, { steps: 6 });
-      await page.waitForTimeout(60);
+      // la riga puo' slittare ANCORA (fitStage): si molla solo quando l'app stessa dice "dentro" (segnaposto visibile),
+      // rimirando sulla posizione aggiornata se serve — senza questo il test e' flaky
+      for (let t = 0; t < 6; t++) {
+        const dentro = await page.evaluate(function () { const ph = document.querySelector('#s-panel .answer-row .chip.placeholder'); return !!ph && ph.style.display !== 'none'; });
+        if (dentro) break;
+        const ab = await (await page.$('#s-panel .answer-row')).boundingBox();
+        await page.mouse.move(ab.x + 40, ab.y + ab.height / 2, { steps: 4 });
+        await page.waitForTimeout(80);
+      }
       await page.mouse.up();
       assert.strictEqual(await page.$$eval('#s-panel .answer-row .chip.sel', function (c) { return c.length; }), 1, 'parola trascinata dal pool alla risposta');
       const scBox = await (await page.$('#s-panel .answer-row .chip.sel')).boundingBox();
@@ -574,9 +582,20 @@ async function noOverflow(page, where) {
       await chips[ex.data.wrongIndex].click();
       await page.fill('#s-panel input[type=text]', ex.data.answer);
     }
-    await page.click('#s-panel button:has-text("Controlla")');
+    // v78: riordino e semplificato con le parole si controllano DA SOLI quando la risposta completa e' giusta
+    // (autofeedback); negli altri tipi il Controlla resta e va cliccato
+    if (ex.type === 'scramble' || ex.type === 'gapbank') {
+      await page.waitForFunction(function () { const f = document.querySelector('#s-panel .feedback'); return f && /Giusto/.test(f.textContent); }, null, { timeout: 4000 });
+      assert.ok(!(await page.$('#s-panel button:has-text("Controlla"):visible')), 'autofeedback: niente Controlla da cliccare (' + ex.type + ')');
+    } else {
+      assert.ok(await page.$('#s-panel button:has-text("Controlla"):visible'), 'niente autofeedback dove si scrive o si sceglie (' + ex.type + ')');
+      await page.click('#s-panel button:has-text("Controlla")');
+    }
     const fb = await page.$eval('#s-panel .feedback', function (f) { return f.textContent; });
     assert.ok(/Giusto/.test(fb), 'esercizio ' + (k + 1) + ' (' + ex.type + '): ' + fb);
+    // v78 ('questa cosa vale sempre, non solo per questo esercizio'): a esercizio risolto NESSUNA evidenziazione
+    // dell'Aiuto sopravvive (zona gialla, parole/caselle segnate) — regola generale, vale per ogni tipo
+    assert.strictEqual(await page.$$eval('#s-panel .zone, #s-panel .zone-flash, #s-panel .hinted', function (x) { return x.length; }), 0, 'niente evidenziazioni dell\'Aiuto a esercizio risolto (' + ex.type + ')');
     if ((ex.type === 'gap' || ex.type === 'gapbank') && !filledStarTested) {
       // v66: le parole degli ex-gap (avvolte in .filled a risposta giusta) non sono piu' isole per la stella —
       // cliccando la parola dentro il gap e le vicine fuori, la sequenza diventa UNA voce ('un essere vivente che...')
@@ -727,6 +746,16 @@ async function noOverflow(page, where) {
   await page.evaluate(function () { window.VLApp.S.player.pause(); });
 
   console.log('4. link con dati inclusi');
+  // v78 ('nel mio portfolio voglio il tasto condividi'): dalla card della lezione, senza passare dall'editor
+  await page.evaluate(function () { window.VLApp.renderHome(); });
+  await page.waitForSelector('#view-home.active');
+  await page.click('.lesson-card .actions button:has-text("Condividi")');
+  await page.waitForSelector('#dlg-share[open]');
+  assert.ok(/#d=/.test(await page.$eval('#share-hash', function (x) { return x.textContent; })), 'il tasto Condividi della card apre il link studente');
+  await page.click('#share-close');
+  await page.waitForTimeout(200);
+  await page.evaluate(function () { const S = window.VLApp.S; window.VLApp.openStudent(Object.values(S.lessons).filter(function (l) { return Array.isArray(l.exercises) && l.exercises.length; })[0].id); });
+  await page.waitForSelector('#view-student.active');
   const link = await page.evaluate(function () {
     const ls = window.VLApp.S.student.lesson;
     const payload = JSON.stringify({ v: 1, id: ls.id, title: ls.title, videoId: ls.videoId, lang: ls.lang, duration: ls.duration, exercises: ls.exercises, cuts: ls.cuts, options: ls.options, lines: ls.lines });
@@ -1552,6 +1581,15 @@ async function noOverflow(page, where) {
   assert.ok(Math.abs(sync.chiesto - (sync.inizio + sync.offset)) < 0.01, 'il video parte spostato dell\'offset');
   await page.click('#e-sync-zero'); await page.waitForTimeout(200);
   assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].options.audioOffset; }), 0, 'e si azzera');
+  // v78 ('un pulsante "soluzioni" che a tutto schermo è una sorta di recap'): una riga per esercizio, con la risposta
+  await page.click('#btn-solutions');
+  await page.waitForSelector('#dlg-solutions[open]');
+  const nSol = await page.$$eval('#dlg-solutions .sol-row', function (r) { return r.length; });
+  const nExs = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises.length; });
+  assert.strictEqual(nSol, nExs, 'una riga per esercizio nel recap Soluzioni (' + nSol + ' su ' + nExs + ')');
+  assert.ok(await page.$eval('#dlg-solutions .sol-row .sol-ans', function (a) { return /Soluzione: .+/.test(a.textContent); }), 'ogni riga del recap ha la sua soluzione');
+  await page.click('#solutions-close');
+  await page.waitForTimeout(200);
   // il controllo delle traduzioni: l'avviso propone, non applica da solo
   await page.evaluate(function () {
     const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
