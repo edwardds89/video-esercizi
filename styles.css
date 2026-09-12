@@ -1224,3 +1224,10 @@ dialog.wide { max-width: 720px; }
 .gclear { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); background: #fff; color: #667; font-size: 10px; line-height: 1; padding: 0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.15); z-index: 2; }
 .gclear:hover { background: #feecec; color: #c0392b; border-color: #e8a2a2; }
 input.gap[readonly] { cursor: pointer; caret-color: transparent; }
+/* v78: recap Soluzioni nell'editor — lista grande e leggibile, a tutto schermo */
+#dlg-solutions { width: min(1100px, 96vw); }
+.sol-row { padding: 12px 4px; border-bottom: 1px solid var(--line); }
+.sol-row:last-child { border-bottom: 0; }
+.sol-head { font-size: 13px; color: var(--muted); letter-spacing: .02em; margin-bottom: 4px; }
+.sol-sent { font-size: 18px; line-height: 1.5; }
+.sol-ans { margin-top: 4px; font-size: 16px; font-weight: 600; color: var(--ok); }

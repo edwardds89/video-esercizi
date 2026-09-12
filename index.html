@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260911-77">
+<link rel="stylesheet" href="styles.css?v=20260912-78">
 </head>
 <body>
 <header class="topbar">
@@ -172,6 +172,7 @@
       <span class="undo-pair"><button id="btn-undo" disabled>↶ Annulla</button><button id="btn-redo" disabled aria-label="Ripeti">↷</button></span>
       <button id="btn-save" class="primary" title="Salva tutto e torna al portfolio">💾 Salva e torna al portfolio</button>
       <button id="btn-student">▶ Anteprima studente</button>
+      <button id="btn-solutions" title="Tutti gli esercizi con le risposte, in lista">✓ Soluzioni</button>
       <button id="btn-share">Link studente</button>
       <button id="btn-export">Esporta JSON</button>
       <button id="btn-regenerate">Rigenera bozza…</button>
@@ -600,6 +601,13 @@
   <div class="row" style="margin-top:10px"><button id="at-close">Chiudi</button></div>
 </dialog>
 
+<dialog id="dlg-solutions" class="wide">
+  <h2>Soluzioni</h2>
+  <p class="hint">Tutti gli esercizi della lezione con le risposte, in ordine di tempo. Solo per gli occhi dell'insegnante.</p>
+  <div id="solutions-body"></div>
+  <div class="row" style="margin-top:12px"><button id="solutions-close">Chiudi</button></div>
+</dialog>
+
 <dialog id="dlg-stars">
   <h2>★ Parole con la stella</h2>
   <p class="hint">Le parole segnate durante la lezione (schede iniziali e frasi degli esercizi). Le ritrovi anche nel riepilogo finale; da qui puoi già copiarle per Quizlet.</p>
@@ -702,16 +710,16 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260911-77"></script>
-<script src="exercises.js?v=20260911-77"></script>
-<script src="generator.js?v=20260911-77"></script>
-<script src="activities.js?v=20260911-77"></script>
-<script src="ai.js?v=20260911-77"></script>
-<script src="demo-data.js?v=20260911-77"></script>
-<script src="bookmarklet.js?v=20260911-77"></script>
-<script src="sync.js?v=20260911-77"></script>
-<script src="qr.js?v=20260911-77"></script>
-<script src="challenge.js?v=20260911-77"></script>
-<script src="app.js?v=20260911-77"></script>
+<script src="lang.js?v=20260912-78"></script>
+<script src="exercises.js?v=20260912-78"></script>
+<script src="generator.js?v=20260912-78"></script>
+<script src="activities.js?v=20260912-78"></script>
+<script src="ai.js?v=20260912-78"></script>
+<script src="demo-data.js?v=20260912-78"></script>
+<script src="bookmarklet.js?v=20260912-78"></script>
+<script src="sync.js?v=20260912-78"></script>
+<script src="qr.js?v=20260912-78"></script>
+<script src="challenge.js?v=20260912-78"></script>
+<script src="app.js?v=20260912-78"></script>
 </body>
 </html>

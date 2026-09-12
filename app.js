@@ -781,6 +781,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('div', { class: 'actions' },
             el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
+            el('button', { class: 'small', text: '🔗 Condividi', title: 'Link studente', onclick: function () { openShare(ls); } }),   // v78
             el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
             el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + ls.title + '"?')) deleteLesson(ls); } }))));
       list.appendChild(card);
@@ -1213,6 +1214,24 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#e-lock').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.lock = $('#e-lock').checked; touch(ls); } });
   $('#e-eatad').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.eatAd = $('#e-eatad').checked; touch(ls); } });
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
+  // v78 ('quando clicco su modifica, ci sia un pulsante "soluzioni"... un recap con tutti gli esercizi e le
+  // soluzioni in lista'): riepilogo per l'insegnante, in ordine di tempo, a schermo grande.
+  $('#btn-solutions').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    const box = $('#solutions-body'); box.innerHTML = '';
+    const exs = (ls.exercises || []).slice().sort(function (a, b) { return (a.markerTime || 0) - (b.markerTime || 0); });
+    if (!exs.length) box.appendChild(el('p', { class: 'hint', text: 'Questa lezione non ha ancora esercizi.' }));
+    exs.forEach(function (ex, i) {
+      const row = el('div', { class: 'sol-row' });
+      row.appendChild(el('div', { class: 'sol-head', text: (i + 1) + ' · ' + fmtMin(ex.markerTime || 0) + ' · ' + (EX.LABELS[ex.type] || ex.type) }));
+      const frase = ex.type === 'mc' ? (ex.data && ex.data.question || '') : (ex.sentence || '');
+      if (frase) row.appendChild(el('div', { class: 'sol-sent', text: frase }));
+      row.appendChild(el('div', { class: 'sol-ans', text: 'Soluzione: ' + EX.solution(ex) }));
+      box.appendChild(row);
+    });
+    $('#dlg-solutions').showModal();
+  });
+  $('#solutions-close').addEventListener('click', function () { $('#dlg-solutions').close(); });
   $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
   $('#btn-delete').addEventListener('click', function () { const ls = current(); if (ls && confirm('Eliminare "' + ls.title + '"?')) deleteLesson(ls); });
@@ -3139,9 +3158,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       .catch(function (e) { overlay(false); toast('Errore: ' + e.message); });
   });
 
-  // condivisione
-  $('#btn-share').addEventListener('click', function () {
-    const ls = current();
+  // condivisione (v78: apribile anche dalla card del portfolio col tasto Condividi, senza passare dall'editor)
+  function openShare(ls) {
+    if (!ls) return;
     const base = location.origin + location.pathname;
     const payload = JSON.stringify(studentPayload(ls));
     const hashLink = base + '#d=' + b64url(payload);
@@ -3152,7 +3171,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#share-copy-file').onclick = function () { copyText(fileLink); };
     $('#share-download').onclick = function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); };
     $('#dlg-share').showModal();
-  });
+  }
+  $('#btn-share').addEventListener('click', function () { openShare(current()); });
   $('#share-close').addEventListener('click', function () { $('#dlg-share').close(); });
 
   // impostazioni
@@ -3773,6 +3793,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           inp.addEventListener('input', updX);
           xb.addEventListener('click', function () { inp.value = ''; inp.dispatchEvent(new Event('input')); active = inp; inp.focus(); });
           gwrap.appendChild(xb); updX();
+          inp.addEventListener('input', function () { setTimeout(maybeAutoCheck, 60); });   // v78: ultima casella giusta = autofeedback
         }
         sent.appendChild(gwrap);
         sent.appendChild(document.createTextNode((lastTok.post || '') + ' '));
@@ -3944,6 +3965,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           ans.appendChild(c);
         });
         if (!chosen.length) ans.appendChild(el('span', { class: 'hint', text: 'Tocca o trascina qui le parole nell\'ordine giusto (per togliere: tocca, o trascina fuori)' }));
+        setTimeout(maybeAutoCheck, 120);   // v78: ultima parola al posto giusto = autofeedback
       };
       render();
       body.appendChild(ans); body.appendChild(pool);
@@ -4045,6 +4067,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       };
       markResult = function (res) {
         inp.classList.toggle('ok', res.correct); inp.classList.toggle('bad', !res.correct);
+        // v78 ('dopo che clicca su controlla le 5 parole rimangono gialle e non ha senso'): la zona dell'Aiuto
+        // ha finito il suo lavoro quando il posto e' trovato — a risposta giusta, o quando la correzione stessa
+        // dice 'il posto e' giusto'. Resta solo finche' il posto e' ancora da cercare.
+        if (res.correct || !(res.detail && res.detail.index === false)) {
+          $$('.w.zone', sdiv).forEach(function (w) { w.classList.remove('zone', 'zone-flash'); });
+          mzone = null;
+        }
         if (res.correct) {
           // la parola prende il posto dello spazio scelto, con l'animazione di ingresso; gli altri spazi diventano spazi normali
           const sl = slots[selected];
@@ -4145,8 +4174,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const c = all[selected];
         if (res.correct) {
           // tutte verdi tranne la parola in più / sbagliata: rossa e barrata (per "sbagliata" accanto compare quella giusta)
+          // v78: e la zona gialla dell'Aiuto si spegne — a esercizio risolto non indica piu' niente
           all.forEach(function (x, i) {
-            x.classList.remove('sel');
+            x.classList.remove('sel', 'zone', 'zone-flash');
             if (i === selected) {
               x.classList.add('struck');
               if (!x.querySelector('.bad-w')) { const bw = el('span', { class: 'bad-w', text: x.textContent }); x.textContent = ''; x.appendChild(bw); }   // barrata SOLO la parola sbagliata
@@ -4179,6 +4209,24 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const wrap = el('div', { class: 'fullwrap' }, [el('span', { class: 'hint', text: 'Frase completa (clicca una parola per la stella ★): ' }), starredSentence(ls, toks)]);
       body.appendChild(wrap);
     };
+    // v78, REGOLA di Edoardo ('questa cosa vale sempre, non solo per questo esercizio'): a esercizio risolto
+    // ogni evidenziazione dell'Aiuto (zona gialla, parole/caselle segnate) si spegne — non indica piu' niente.
+    // Vale per TUTTI i tipi, anche futuri: la pulizia sta qui nel percorso comune, non nei singoli markResult.
+    const clearHintMarks = function () {
+      $$('.zone, .zone-flash, .hinted', body).forEach(function (x) { x.classList.remove('zone', 'zone-flash', 'hinted'); });
+    };
+    // v78 ('quando si clicca l'ultima parola ci sia l'autofeedback come se si fosse gia' cliccato su controlla'):
+    // negli esercizi costruiti a CLICK (riordino, semplificato con le parole) la risposta completa e GIUSTA si
+    // controlla da sola. Solo quando e' giusta: a frase completa ma sbagliata niente spam di 'Non ancora' mentre
+    // lo studente sta ancora sistemando — il Controlla resta per farsi giudicare. NON vale per gli esercizi dove
+    // si scrive (il controllo mentre digiti diventerebbe un correttore gratuito; li' 'ho finito' = Invio) ne' per
+    // la scelta multipla (un tap partito male verrebbe giudicato subito).
+    function maybeAutoCheck() {
+      if (solved) return;
+      const a = getAnswer();
+      if (a == null || (Array.isArray(a) && !a.length)) return;
+      if (EX.check(ex, a, { strict: strict }).correct) checkBtn.click();
+    }
     checkBtn.addEventListener('click', function () {
       if (solved) return;
       const a = getAnswer();
@@ -4188,6 +4236,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       markResult(res);
       if (res.correct) {
         solved = true;
+        clearHintMarks();
         fb.textContent = '✓ Giusto!'; fb.style.color = 'var(--ok)';
         if (!ls.options || ls.options.fx !== false) celebrate(p, fb);
         if (opts.onDone) opts.onDone(true);
@@ -4203,6 +4252,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
     solBtn.addEventListener('click', function () {
       solved = true;
+      clearHintMarks();
       fb.textContent = 'Soluzione: ' + EX.solution(ex); fb.style.color = 'var(--muted)';
       if (opts.onDone) opts.onDone(false);
       checkBtn.style.display = 'none'; hintBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';
