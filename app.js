@@ -436,6 +436,7 @@
   function studentPayload(lesson) {
     const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, theme: lesson.vocab.theme, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }).map(function (w) { return { id: w.id, word: w.word, translation: w.translation, image: w.image, selected: true, inExercise: w.inExercise }; }) } : undefined;
     return { v: 1, id: lesson.id, title: lesson.title, videoId: lesson.videoId, lang: lesson.lang, duration: lesson.duration,
+      level: lesson.level || undefined, audience: lesson.audience || undefined,   // v79: livello e destinatari viaggiano con la lezione
       exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb,
       flow: lessonFlow(lesson),
       talks: (lesson.talks || []).map(function (sec) { return { id: sec.id, questions: sec.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help, kind: q.kind }; }) }; }),
@@ -777,7 +778,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('div', { class: 'thumb', style: thumbStyle, onclick: open, title: 'Apri la lezione' }, el('div', { class: 'play', text: '▶' })),
         el('div', { class: 'body' },
           el('div', { class: 'title', text: ls.title || '(senza titolo)', onclick: open }),
-          el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+          el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (LEVEL_LABELS[ls.level] ? ' · ' + LEVEL_LABELS[ls.level] : '') + (audienceLabel(ls.audience) ? ' · ' + audienceLabel(ls.audience) : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
           el('div', { class: 'actions' },
             el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
@@ -1133,8 +1134,23 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     renderEditorBody();
   }
   /** Campi della barra e opzioni della lezione (titolo, interruttori): all'apertura e dopo Annulla/Ripeti. */
+  // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): etichette della lezione
+  // per il portfolio e, domani, per la community. Viaggiano nello studentPayload.
+  const LEVEL_LABELS = { beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzato' };
+  function fillAudienceSelect() {
+    const sel = $('#e-audience'); if (!sel || sel.options.length) return;
+    sel.appendChild(el('option', { value: '', text: 'non indicato' }));
+    TR_LANGS.forEach(function (l) { sel.appendChild(el('option', { value: l[0], text: l[1] + ' ' + l[2] })); });
+  }
+  function audienceLabel(code) {
+    const l = TR_LANGS.find(function (x) { return x[0] === code; });
+    return l ? 'per chi parla ' + l[2].toLowerCase() : '';
+  }
   function editorHeader(ls) {
     $('#e-title').value = ls.title || '';
+    fillAudienceSelect();
+    $('#e-level').value = ls.level || '';
+    $('#e-audience').value = ls.audience || '';
     $('#e-strict').checked = !!ls.options.strict;
     $('#e-fx').checked = ls.options.fx !== false;
     $('#e-lock').checked = !!ls.options.lock;
@@ -1213,6 +1229,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#e-strict').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.strict = $('#e-strict').checked; touch(ls); } });
   $('#e-lock').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.lock = $('#e-lock').checked; touch(ls); } });
   $('#e-eatad').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.eatAd = $('#e-eatad').checked; touch(ls); } });
+  $('#e-level').addEventListener('change', function () { const ls = current(); if (ls) { ls.level = $('#e-level').value; touch(ls); } });
+  $('#e-audience').addEventListener('change', function () { const ls = current(); if (ls) { ls.audience = $('#e-audience').value; touch(ls); } });
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
   // v78 ('quando clicco su modifica, ci sia un pulsante "soluzioni"... un recap con tutti gli esercizi e le
   // soluzioni in lista'): riepilogo per l'insegnante, in ordine di tempo, a schermo grande.
