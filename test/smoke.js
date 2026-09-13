@@ -1590,6 +1590,20 @@ async function noOverflow(page, where) {
   assert.ok(await page.$eval('#dlg-solutions .sol-row .sol-ans', function (a) { return /Soluzione: .+/.test(a.textContent); }), 'ogni riga del recap ha la sua soluzione');
   await page.click('#solutions-close');
   await page.waitForTimeout(200);
+  // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
+  // salvataggio sulla lezione, etichette sulla card del portfolio, campi nello studentPayload
+  await page.selectOption('#e-level', 'intermediate');
+  await page.selectOption('#e-audience', 'en');
+  await page.waitForTimeout(400);
+  const meta79 = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return { level: ls.level, aud: ls.audience }; });
+  assert.deepStrictEqual(meta79, { level: 'intermediate', aud: 'en' }, 'livello e destinatari salvati sulla lezione');
+  const lsId79 = await page.evaluate(function () { return window.VLApp.S.currentId; });
+  await page.evaluate(function () { window.VLApp.renderHome(); });
+  await page.waitForSelector('#view-home.active');
+  assert.ok(await page.$$eval('.lesson-card .meta', function (ms) { return ms.some(function (m) { return /Intermedio/.test(m.textContent) && /per chi parla inglese/.test(m.textContent); }); }), 'etichette di livello e destinatari sulla card');
+  await page.evaluate(function (id) { window.VLApp.openEditor(id); }, lsId79);
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForTimeout(500);
   // il controllo delle traduzioni: l'avviso propone, non applica da solo
   await page.evaluate(function () {
     const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
