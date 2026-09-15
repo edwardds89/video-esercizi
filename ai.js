@@ -81,7 +81,7 @@
       },
       body: JSON.stringify({
         model: o.model || DEFAULT_MODEL,
-        max_tokens: o.maxTokens || 6000,
+        max_tokens: o.maxTokens || 16000,   // v83: 6000 troncava il piano dei video lunghi ('che significa?' con lo screenshot del giallo)
         system: o.system,
         // con o.images il contenuto diventa multimodale: prima le immagini, poi il testo (v70)
         messages: [{ role: 'user', content: Array.isArray(o.images) && o.images.length
@@ -97,7 +97,7 @@
     const j = await res.json();
     const text = (j.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
     // Risposta tagliata dal limite di token: il JSON e' incompleto e non si puo' usare. Meglio dirlo che 'Nessun JSON'.
-    if (j.stop_reason === 'max_tokens') throw new Error('Risposta del modello troncata (limite di ' + (o.maxTokens || 6000) + ' token): riduci il numero di esercizi o la durata e riprova');
+    if (j.stop_reason === 'max_tokens') throw new Error('Risposta del modello troncata (limite di ' + (o.maxTokens || 16000) + ' token): riduci il numero di esercizi o la durata e riprova');
     return { text: text, usage: j.usage || null, model: j.model || o.model, stop: j.stop_reason || null };
   }
 
@@ -548,8 +548,16 @@
     const n = params.n || 6;
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
     const system = 'You write engaging quiz questions for language students. Output ONLY a JSON object, no prose, no markdown fences.';
-    const src = text ? 'about the VIDEO TEXT below (comprehension of its ideas and vocabulary, not tiny details or exact numbers)' : 'about this topic: "' + String(params.topic || '') + '"';
-    let task = 'Write ' + n + ' multiple-choice question' + (n === 1 ? '' : 's') + ' in ' + lang + ' ' + src + '. Four short options each, exactly one correct ("correct" = its index). Wrong options plausible and of the same kind as the right one. Questions and options suited to a ' + level + ' student, short and clear. Vary what is asked (meaning, vocabulary, usage, true facts).';
+    // v83 ('quando l'AI genera le domande voglio poter scegliere su cosa focalizzarmi, sul contenuto o sulla grammatica'):
+    // il focus cambia COSA si chiede, sullo stesso testo.
+    const FOCI = {
+      content: 'comprehension of its ideas and facts (not tiny details or exact numbers)',
+      grammar: 'the grammar USED in the text: verb forms and tenses, prepositions, articles, agreement, word order — quote the relevant fragment of the text in the question when useful',
+      vocab: 'the vocabulary of the text: meaning, usage and register of its words and expressions'
+    };
+    const focus = FOCI[params.focus] ? params.focus : 'content';
+    const src = text ? 'about the VIDEO TEXT below, focused on ' + FOCI[focus] : 'about this topic: "' + String(params.topic || '') + '"';
+    let task = 'Write ' + n + ' multiple-choice question' + (n === 1 ? '' : 's') + ' in ' + lang + ' ' + src + '. Four short options each, exactly one correct ("correct" = its index). Wrong options plausible and of the same kind as the right one. Questions and options suited to a ' + level + ' student, short and clear.' + (focus === 'content' ? ' Vary what is asked (meaning, vocabulary, usage, true facts).' : '');
     // rigenerazione di UNA domanda: non ripetere quelle già nel quiz
     const avoid = (params.avoid || []).map(function (a) { return String(a || '').trim(); }).filter(Boolean);
     if (avoid.length) task += ' Do NOT repeat or paraphrase these questions, already in the quiz: ' + avoid.map(function (a) { return '"' + a + '"'; }).join('; ') + '. Ask about something else.';
@@ -822,5 +830,28 @@
     return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage };
+  /** "Chiedi all'AI" dell'editor (v82): dalla richiesta dell'insegnante ("metti un esercizio sul fatto che il
+   *  vaccino si chiama così perché viene dalle vacche") alla frase giusta della trascrizione. L'AI sceglie SOLO
+   *  la frase (per numero) e il tipo di esercizio: il testo lo costruisce il motore a regole, niente invenzioni.
+   *  params: { sentences: [{n, text}], request, lang, apiKey, model, fetchImpl } → { index, type, ai } */
+  async function askExercise(params) {
+    const lang = params.lang || 'it';
+    const list = (params.sentences || []).map(function (s) { return s.n + '. ' + s.text; }).join('\n').slice(0, 16000);
+    const system = 'You help a language teacher place an exercise in a video lesson. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = ['LANGUAGE: ' + lang,
+      'TEACHER\'S REQUEST: "' + String(params.request || '') + '"',
+      'Below are the numbered sentences of the video transcript. Pick the ONE sentence that best matches the request (the fact, the words or the moment the teacher describes).',
+      'Pick also the exercise type that fits that sentence best, from: gap (student writes missing words), gapbank (missing words with a word bank), scramble (reorder the words), missing (find where a word is missing), extra (find the added word), wrong (find and correct the changed word). If the request names a type, respect it.',
+      'SCHEMA: {"index": 12, "type": "gap"}',
+      'SENTENCES:\n' + list].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, fetchImpl: params.fetchImpl });
+    const plan = extractJSON(res.text);
+    const index = parseInt(plan && plan.index, 10);
+    const types = ['gap', 'gapbank', 'scramble', 'missing', 'extra', 'wrong'];
+    if (!(index >= 1)) throw new Error('l\'AI non ha indicato una frase');
+    return { index: index, type: types.indexOf(plan && plan.type) !== -1 ? plan.type : 'gap',
+      ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, askExercise: askExercise };
 });

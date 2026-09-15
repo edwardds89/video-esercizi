@@ -1233,3 +1233,10 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .sol-sent .sol-hit { background: #d8f5df; color: #14682c; font-weight: 700; border-radius: 4px; padding: 0 3px; }
 .sol-sent .sol-strike { color: #c0392b; text-decoration: line-through; text-decoration-thickness: 2px; }
 .sol-sent .sol-fix { color: var(--ok); font-weight: 700; }
+.theme-chip.more { border-style: dashed; color: var(--muted); }
+.theme-chip.more:hover { color: var(--ink); }
+/* v83: espulsione dalla sfida — ✕ a due passi sulla riga della classifica */
+.chal-row:not(.final) { grid-template-columns: 2.4em 1fr minmax(60px, 180px) auto auto; }
+.chal-kick { padding: 2px 8px; font-size: 12px; border-radius: 8px; color: var(--muted); border-color: var(--line); background: #fff; }
+.chal-kick:hover { color: #c0392b; border-color: #e8a2a2; background: #feecec; }
+.chal-kick.arm { color: #fff; background: var(--bad); border-color: var(--bad); font-weight: 700; }

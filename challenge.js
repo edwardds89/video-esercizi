@@ -41,9 +41,10 @@
   }
 
   /** Stato dell'host: un record per studente, aggiornato dai messaggi. Puro e testabile. */
-  function newState() { return { players: {}, ended: false }; }
+  function newState() { return { players: {}, banned: {}, ended: false }; }
   function reduce(state, event, p) {
     if (!p || !p.id) return state;
+    if (state.banned && state.banned[p.id]) return state;   // v83: espulso dal docente — hello e punteggi ignorati
     var cur = state.players[p.id];
     if (event === 'hello') {
       if (!cur) state.players[p.id] = { id: p.id, nick: String(p.nick || 'Studente').slice(0, 20), score: 0, right: 0, at: 0, total: 0, done: false };
@@ -59,6 +60,17 @@
       cur.done = cur.done || !!p.done;
       if (p.nick) cur.nick = String(p.nick).slice(0, 20);
     }
+    return state;
+  }
+  /** v83 ('se uno studente scrive un nickname stupido voglio poter cliccare su una x'): espulsione dal docente.
+   *  Il giocatore sparisce dalla classifica e i suoi messaggi futuri (hello, score, risposte) vengono ignorati:
+   *  senza il ban, il primo 'score' lo ricreerebbe. Vale per entrambe le modalità (reduce è il canale comune). */
+  function kick(state, id) {
+    if (!state || !id) return state;
+    state.banned = state.banned || {};
+    state.banned[id] = true;
+    delete state.players[id];
+    if (state.answers) delete state.answers[id];
     return state;
   }
   /** Classifica: punti, poi risposte giuste, poi ordine alfabetico. rank 1-based, pari punti = pari rank. */
@@ -223,6 +235,7 @@
     if (st.phase !== 'question' || !msg || msg.i !== st.i || !msg.id || st.answers[msg.id]) return null;
     reduce(st, 'hello', { id: msg.id, nick: msg.nick });   // upsert del giocatore (rientri compresi)
     var pl = st.players[msg.id];
+    if (!pl) return null;   // v83: espulso — reduce non lo ricrea, la risposta cade nel vuoto
     var res = checkItem(item, msg.value, pub);
     var pts = 0;
     if (res.frac === 1) { pts = pointsFor(mode)(pl.streak || 0, msg.ms); pl.streak = (pl.streak || 0) + 1; pl.right++; }
@@ -244,7 +257,7 @@
     return { perPlayer: per, top: leaderboard(st).slice(0, 5) };
   }
 
-  return { makePin: makePin, validPin: validPin, MODES: MODES, pointsFor: pointsFor, newState: newState, reduce: reduce, leaderboard: leaderboard, memBus: memBus, localBus: localBus,
+  return { makePin: makePin, validPin: validPin, MODES: MODES, pointsFor: pointsFor, newState: newState, reduce: reduce, kick: kick, leaderboard: leaderboard, memBus: memBus, localBus: localBus,
     ITEM_KINDS: ITEM_KINDS, itemLabel: itemLabel, buildItem: buildItem, pubItem: pubItem, checkItem: checkItem, gapText: gapText, solutionText: solutionText, shuffleArr: shuffleArr, wire: wire,
     tpNew: tpNew, tpJoin: tpJoin, tpOpen: tpOpen, tpAnswer: tpAnswer, tpAllAnswered: tpAllAnswered, tpReveal: tpReveal };
 });

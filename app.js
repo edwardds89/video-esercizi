@@ -436,7 +436,7 @@
   function studentPayload(lesson) {
     const vb = lesson.vocab ? { support: lesson.vocab.support, cards: lesson.vocab.cards, theme: lesson.vocab.theme, words: (lesson.vocab.words || []).filter(function (w) { return w.selected && w.word; }).map(function (w) { return { id: w.id, word: w.word, translation: w.translation, image: w.image, selected: true, inExercise: w.inExercise }; }) } : undefined;
     return { v: 1, id: lesson.id, title: lesson.title, videoId: lesson.videoId, lang: lesson.lang, duration: lesson.duration,
-      level: lesson.level || undefined, audience: lesson.audience || undefined,   // v79: livello e destinatari viaggiano con la lezione
+      levelBand: lesson.levelBand || undefined, audience: lesson.audience || undefined,   // v79/v83: etichette community (ls.level resta il CEFR della generazione!)
       exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb,
       flow: lessonFlow(lesson),
       talks: (lesson.talks || []).map(function (sec) { return { id: sec.id, questions: sec.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help, kind: q.kind }; }) }; }),
@@ -778,7 +778,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('div', { class: 'thumb', style: thumbStyle, onclick: open, title: 'Apri la lezione' }, el('div', { class: 'play', text: '▶' })),
         el('div', { class: 'body' },
           el('div', { class: 'title', text: ls.title || '(senza titolo)', onclick: open }),
-          el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (LEVEL_LABELS[ls.level] ? ' · ' + LEVEL_LABELS[ls.level] : '') + (audienceLabel(ls.audience) ? ' · ' + audienceLabel(ls.audience) : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+          el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (LEVEL_LABELS[ls.levelBand] ? ' · ' + LEVEL_LABELS[ls.levelBand] : '') + (audienceLabel(ls.audience) ? ' · ' + audienceLabel(ls.audience) : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
           el('div', { class: 'actions' },
             el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
@@ -1151,7 +1151,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function editorHeader(ls) {
     $('#e-title').value = ls.title || '';
     fillAudienceSelect();
-    $('#e-level').value = ls.level || '';
+    // v83: MIGRAZIONE dal pasticcio v79 — ls.level è il CEFR della generazione (A1-C1, dal form Nuova lezione)
+    // e NON va toccato; l'etichetta community sta in ls.levelBand. Se la v79 ha scritto la fascia dentro level,
+    // la si sposta (il CEFR originario è perso: resta vuoto, la generazione usa il default B1).
+    if (!ls.levelBand && LEVEL_LABELS[ls.level]) { ls.levelBand = ls.level; delete ls.level; }
+    $('#e-level').value = ls.levelBand || '';
     $('#e-audience').value = ls.audience || '';
     $('#e-strict').checked = !!ls.options.strict;
     $('#e-fx').checked = ls.options.fx !== false;
@@ -1231,7 +1235,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#e-strict').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.strict = $('#e-strict').checked; touch(ls); } });
   $('#e-lock').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.lock = $('#e-lock').checked; touch(ls); } });
   $('#e-eatad').addEventListener('change', function () { const ls = current(); if (ls) { ls.options.eatAd = $('#e-eatad').checked; touch(ls); } });
-  $('#e-level').addEventListener('change', function () { const ls = current(); if (ls) { ls.level = $('#e-level').value; touch(ls); } });
+  $('#e-level').addEventListener('change', function () { const ls = current(); if (ls) { ls.levelBand = $('#e-level').value; touch(ls); } });
   $('#e-audience').addEventListener('change', function () { const ls = current(); if (ls) { ls.audience = $('#e-audience').value; touch(ls); } });
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
   // v78 ('quando clicco su modifica, ci sia un pulsante "soluzioni"... un recap con tutti gli esercizi e le
@@ -2005,17 +2009,33 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function themeChips(current, onPick, spec) {
     hideThemePreview();
     const box = el('div', { class: 'chips', style: 'gap:8px' });
-    ACT.THEMES.forEach(function (t) {
-      const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), title: t.name + ' — passa il mouse per l\'anteprima' },
-        el('span', { class: 'sw', style: 'background:' + t.sw }),
-        t.emoji + ' ' + t.name);
-      c.addEventListener('click', function () { hideThemePreview(); onPick(t.id); });
-      c.addEventListener('mouseenter', function () { showThemePreview(c, t.id, spec); });
-      c.addEventListener('mouseleave', hideThemePreview);
-      c.addEventListener('focus', function () { showThemePreview(c, t.id, spec); });
-      c.addEventListener('blur', hideThemePreview);
-      box.appendChild(c);
-    });
+    // v82 ('i template mostra solo la prima riga, poi un tasto tipo "mostra tutti"'): chiusi = il template scelto
+    // + i primi altri, su una riga; "Mostra tutti" apre l'elenco completo, "Mostra meno" lo richiude.
+    let expanded = false;
+    const build = function () {
+      box.innerHTML = '';
+      const themes = ACT.THEMES.slice();
+      let vis = themes;
+      if (!expanded) {
+        const sel = themes.find(function (t) { return t.id === current; });
+        vis = (sel ? [sel] : []).concat(themes.filter(function (t) { return !sel || t.id !== sel.id; })).slice(0, 4);
+      }
+      vis.forEach(function (t) {
+        const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), title: t.name + ' — passa il mouse per l\'anteprima' },
+          el('span', { class: 'sw', style: 'background:' + t.sw }),
+          t.emoji + ' ' + t.name);
+        c.addEventListener('click', function () { hideThemePreview(); onPick(t.id); });
+        c.addEventListener('mouseenter', function () { showThemePreview(c, t.id, spec); });
+        c.addEventListener('mouseleave', hideThemePreview);
+        c.addEventListener('focus', function () { showThemePreview(c, t.id, spec); });
+        c.addEventListener('blur', hideThemePreview);
+        box.appendChild(c);
+      });
+      const more = el('button', { type: 'button', class: 'theme-chip more', text: expanded ? 'Mostra meno ▴' : 'Mostra tutti (' + themes.length + ') ▾' });
+      more.addEventListener('click', function () { expanded = !expanded; hideThemePreview(); build(); });
+      box.appendChild(more);
+    };
+    build();
     return box;
   }
   /** Pulsante 🎨 dentro una scena già resa: cambia il template AL VOLO, il gioco continua da dove è (niente reset).
@@ -2191,7 +2211,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       r.appendChild(el('button', { class: 'small', text: '+ Domanda', onclick: function () { d.questions.push({ q: '', options: ['', '', '', ''], correct: 0 }); changed(); redraw(); } }));
       r.appendChild(el('button', { class: 'small', text: '\ud83d\udcf7 Da immagine (AI)', title: 'Domande generate da una foto o screenshot', onclick: function () { openImgGen({ kinds: ['mc'], onAccept: function (items) { let n = 0; items.forEach(function (it) { if (it.type === 'mc') { const o4 = it.options.slice(0, 4); while (o4.length < 4) o4.push(''); d.questions.push({ q: it.q, options: o4, correct: Math.min(it.correct, o4.length - 1) }); n++; } }); changed(); redraw(); toast(n + ' domande aggiunte dall\u2019immagine'); } }); } }));
       const aiBtn = el('button', { class: 'small', text: '✨ Proponi con l\'AI' });
-      if (!S.settings.apiKey) aiBtn.style.display = 'none';
+      // v83 ('voglio poter scegliere su cosa focalizzarmi, sul contenuto o sulla grammatica'): il focus delle domande
+      const focusSel = el('select', { style: 'width:auto', title: 'Su cosa vertono le domande generate' });
+      [['content', 'sul contenuto'], ['grammar', 'sulla grammatica'], ['vocab', 'sul lessico']].forEach(function (o) { focusSel.appendChild(el('option', { value: o[0], text: o[1] })); });
+      if (!S.settings.apiKey) { aiBtn.style.display = 'none'; focusSel.style.display = 'none'; }
       const st = el('span', { class: 'hint' });
       aiBtn.addEventListener('click', function () {
         if (!S.settings.apiKey) return toast('Serve la chiave API (Impostazioni AI)');
@@ -2202,7 +2225,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         }
         st.textContent = 'Chiedo al modello…';
         const chunks = ctx.lesson ? (ctx.lesson.chunks && ctx.lesson.chunks.length ? ctx.lesson.chunks : G.annotate(G.buildChunks(ctx.lesson.lines || [], { duration: ctx.lesson.duration, lang: ctx.lesson.lang }), { lang: ctx.lesson.lang, duration: ctx.lesson.duration })) : null;
-        AI.generateQuizSet({ topic: topic, chunks: chunks, lang: ctx.lesson ? ctx.lesson.lang : (act.lang || 'it'), level: ctx.lesson ? ctx.lesson.level : 'B1', n: 6, apiKey: S.settings.apiKey, model: S.settings.model })
+        AI.generateQuizSet({ topic: topic, chunks: chunks, focus: focusSel.value, lang: ctx.lesson ? ctx.lesson.lang : (act.lang || 'it'), level: ctx.lesson ? ctx.lesson.level : 'B1', n: 6, apiKey: S.settings.apiKey, model: S.settings.model })
           .then(function (r2) {
             r2.questions.forEach(function (q) { d.questions.push(q); });
             changed(); redraw();
@@ -2210,7 +2233,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           })
           .catch(function (e) { st.textContent = ''; toast('AI: ' + e.message, 6000); });
       });
-      r.appendChild(aiBtn); r.appendChild(st);
+      r.appendChild(aiBtn); r.appendChild(focusSel); r.appendChild(st);
       box.appendChild(r);
     }
     if (act.type === 'anagram') {
@@ -2731,21 +2754,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const typeSel = el('select', { style: 'width:auto', title: 'Tipo di esercizio' });
     G.ALL_TYPES.forEach(function (t) { typeSel.appendChild(el('option', { value: t, text: EX.LABELS[t], selected: t === ex.type ? 'selected' : null })); });
     typeSel.addEventListener('change', function () {
+      // v83 ('se ho già selezionato la frase e i secondi, perché mi cambia la frase quando voglio solo cambiare
+      // il tipo?'): il cambio di TIPO non tocca MAI frase e tempi. Si ricostruisce l'esercizio sulla STESSA frase;
+      // se lì il tipo non è costruibile si avvisa e si resta com'era. La frase la cambiano solo "Altra frase",
+      // il menu della lunghezza e l'Helper: mai il tipo. (Prima, fuori dalla lunghezza consigliata, cercava
+      // una frase "adatta" vicino: era una sorpresa, non un aiuto.)
       const newType = typeSel.value;
-      const r = G.resolveRange('smart', newType);
-      const wc = L.words(ex.sentence || '').length;
-      // se la frase attuale non è della lunghezza giusta per il nuovo tipo (o il tipo non è applicabile), si cerca una frase adatta vicino allo stesso punto
-      const fits = wc >= r[0] - 4 && wc <= r[1] + 4;
-      if (fits && rebuildExercise(ls, ex, newType)) { touch(ls); renderEditorBody(); return; }
       if (newType === 'mc') { ex.type = 'mc'; ex.data = { question: '', options: ['', '', '', ''], correct: 0, tricky: null }; touch(ls); renderEditorBody(); autoMC(ls, ex); return; }
-      const used = usedChunkIds(ls, ex);
-      const near = G.passagesNear(ls.chunks || [], ex.markerTime, { exclude: used, type: newType, lang: ls.lang, window: 90, range: 'smart' }).filter(function (p) { return !p.cta; });
-      const complete = near.filter(function (p) { return p.startsSentence && p.endsSentence; });
-      const best = (complete.length ? complete : near)[0];
-      if (!best) { toast('Nessuna frase adatta a "' + EX.LABELS[newType] + '" vicino a questo punto'); typeSel.value = ex.type; return; }
-      ex.type = newType; ex.range = 'smart';
-      applyCandidate(ls, ex, best);
-      toast('Frase adattata al tipo scelto (' + best.wordCount + ' parole)');
+      if (rebuildExercise(ls, ex, newType)) {
+        touch(ls); renderEditorBody();
+        const r = G.resolveRange('smart', newType);
+        const wc = L.words(ex.sentence || '').length;
+        if (r && (wc < r[0] || wc > r[1])) toast('Fatto. Occhio: per "' + EX.LABELS[newType] + '" si consigliano ' + r[0] + '-' + r[1] + ' parole, questa frase ne ha ' + wc, 4000);
+        return;
+      }
+      toast('"' + EX.LABELS[newType] + '" non si può costruire su questa frase: resta tutto com\'è. Per cambiare frase usa "Altra frase" o l\'Helper', 4500);
+      typeSel.value = ex.type;
     });
     const rangeSel = el('select', { style: 'width:auto', title: 'Lunghezza della frase (parole)' });
     [['smart', 'lunghezza consigliata'], ['auto', 'frase singola'], ['5-10', '5-10 parole'], ['10-15', '10-15 parole'], ['15-20', '15-20 parole'], ['20-30', '20-30 parole'], ['30-40', '30-40 parole'], ['40-60', '40-60 parole']].forEach(function (o) {
@@ -3081,6 +3105,36 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     toast('Esercizio ' + (ls.exercises.indexOf(ex) + 1) + ' aggiunto a ' + fmt(ex.markerTime));
     autoMC(ls, ex);
   }
+  // v82 ('voglio una funzione tipo "chiedi all'AI"... se sento una frase che mi piace e voglio metterci un esercizio'):
+  // l'AI cerca nella trascrizione la frase che corrisponde alla richiesta e sceglie il tipo; l'esercizio lo
+  // costruisce il motore a REGOLE su quella frase (l'AI non scrive testo: niente invenzioni).
+  $('#e-ask').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#btn-ask').click(); } });
+  $('#btn-ask').addEventListener('click', function () {
+    const ls = current(); if (!ls) return;
+    const req = $('#e-ask').value.trim();
+    if (!req) { $('#e-ask').focus(); return toast('Scrivi cosa cerchi: la frase che hai sentito, o l\'argomento'); }
+    if (!S.settings.apiKey) return toast('Serve la chiave API: "Impostazioni AI" in alto', 4000);
+    const units = G.cutUnits(ls.chunks || []).filter(function (u) { return !u.silence; });
+    if (!units.length) return toast('Questa lezione non ha la trascrizione');
+    const textOf = function (u) { return u.ids.map(function (id) { const c = (ls.chunks || []).find(function (x) { return x.id === id; }); return c ? c.text : ''; }).filter(Boolean).join(' '); };
+    const btn = $('#btn-ask'); const old = btn.textContent; btn.disabled = true; busyMsg(btn, 'Cerco la frase…');
+    AI.askExercise({ sentences: units.map(function (u, i) { return { n: i + 1, text: textOf(u) }; }), request: req, lang: ls.lang, apiKey: S.settings.apiKey, model: S.settings.model })
+      .then(function (r) {
+        const u = units[r.index - 1];
+        if (!u) throw new Error('l\'AI non ha trovato una frase adatta');
+        const text = textOf(u);
+        const p = { start: u.start, end: u.end, text: text, chunkIds: u.ids.slice(), wordCount: L.words(text).length, startsSentence: true, endsSentence: true };
+        const ex = G.makeExerciseFromPassage(p, r.type, { lang: ls.lang, seed: Date.now() % 1000, vocab: lessonVocab(ls), distractors: 2, source: 'rules' });
+        if (!ex) throw new Error('su quella frase non riesco a costruire un esercizio');
+        ls.exercises.push(ex); sortExercises(ls); touch(ls); renderEditorBody();
+        $('#e-ask').value = '';
+        const card = $('#ex-' + ex.id);
+        if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(function () { card.classList.remove('flash'); }, 1500); }
+        toast('Esercizio ' + (ls.exercises.indexOf(ex) + 1) + ' (' + (EX.LABELS[ex.type] || ex.type) + ') a ' + fmt(ex.markerTime) + ' su: «' + text.slice(0, 60) + (text.length > 60 ? '…' : '') + '»', 4500);
+      })
+      .catch(function (e) { toast('Non ci sono riuscito: ' + e.message, 4500); })
+      .finally(function () { btn.disabled = false; btn.textContent = old; });
+  });
   function usedChunkIds(ls, except) {
     const used = new Set();
     ls.exercises.forEach(function (e) { if (e === except) return; (e.chunkIds || [e.chunkId]).forEach(function (id) { used.add(id); }); });
@@ -5545,7 +5599,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
    *  G.selectPassages (a regole, gratis) per spazi/semplificato/riordino; scelta multipla dal modello
    *  (AI.generateQuizSet sui chunk, serve la chiave); abbina dalle parole utili tradotte della lezione.
    *  Ritorna una Promise con gli item (senza src: sono nuovi, si modificano e si cancellano nel set). */
-  function chalGenFromLesson(lsSrc, kinds, n) {
+  function chalGenFromLesson(lsSrc, kinds, n, focus) {
     const chunks = lsSrc.chunks && lsSrc.chunks.length ? lsSrc.chunks : G.annotate(G.buildChunks(lsSrc.lines || [], { duration: lsSrc.duration, lang: lsSrc.lang }), { lang: lsSrc.lang, duration: lsSrc.duration });
     const items = [], notes = [];
     const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'scramble'].indexOf(k) !== -1; });
@@ -5574,7 +5628,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     }
     if (!wantMc || !nMc) return Promise.resolve({ items: items, notes: notes });
     if (!S.settings.apiKey) { notes.push('scelta multipla saltata: serve la chiave API (Impostazioni AI)'); return Promise.resolve({ items: items, notes: notes }); }
-    return AI.generateQuizSet({ chunks: chunks, lang: lsSrc.lang || 'it', level: lsSrc.level || 'B1', n: nMc, apiKey: S.settings.apiKey, model: S.settings.model })
+    return AI.generateQuizSet({ chunks: chunks, focus: focus, lang: lsSrc.lang || 'it', level: lsSrc.level || 'B1', n: nMc, apiKey: S.settings.apiKey, model: S.settings.model })
       .then(function (r) {
         (r.questions || []).forEach(function (q) { const it = VLChal.buildItem('mc', { q: q.q, options: q.options, correct: q.correct }); if (it) items.push(it); });
         return { items: items, notes: notes };
@@ -5633,8 +5687,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         gen.appendChild(krow);
         const nSel = el('select', {});
         [3, 5, 8].forEach(function (x) { nSel.appendChild(el('option', { value: String(x), text: String(x), selected: x === 5 ? 'selected' : null })); });
+        // v83: focus delle domande a scelta multipla generate (contenuto / grammatica / lessico)
+        const fSel = el('select', { title: 'Su cosa vertono le domande a scelta multipla' });
+        [['content', 'sul contenuto'], ['grammar', 'sulla grammatica'], ['vocab', 'sul lessico']].forEach(function (o) { fSel.appendChild(el('option', { value: o[0], text: o[1] })); });
         const goBtn = el('button', { class: 'small primary', text: '✨ Genera' });
-        gen.appendChild(el('div', { class: 'row' }, nSel, goBtn));
+        gen.appendChild(el('div', { class: 'row' }, nSel, fSel, goBtn));
         const gmsg = el('div', { class: 'ci-gmsg hint' });
         goBtn.addEventListener('click', function () {
           const kinds = Object.keys(kboxes).filter(function (k) { return kboxes[k].checked; });
@@ -5642,7 +5699,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           const target = current(); if (!target || !target.chal) return;
           goBtn.disabled = true;
           busyMsg(gmsg, 'Leggo la trascrizione…');
-          chalGenFromLesson(srcLs, kinds, +nSel.value || 5).then(function (r) {
+          chalGenFromLesson(srcLs, kinds, +nSel.value || 5, fSel.value).then(function (r) {
             goBtn.disabled = false;
             r.items.forEach(function (it) { target.chal.items.push(it); });
             gmsg.textContent = (r.items.length ? r.items.length + ' esercizi aggiunti al set (li modifichi con ✎ nella pagina del set)' : 'Non sono uscite frasi adatte: prova altri tipi') + (r.notes.length ? ' · ' + r.notes.join(' · ') : '');
@@ -6059,11 +6116,27 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     rows.forEach(function (r) {
       const tot = CHAL.play === 'tp' ? CHAL.items.length : r.total;
       const pct = tot ? Math.round(r.at / tot * 100) : 0;
+      // v83 ('se uno studente scrive un nickname stupido voglio poter cliccare su una x e poi su conferma'):
+      // ✕ a due passi (niente confirm(): bloccherebbe il bridge, stessa regola del Termina v68)
+      const kb = el('button', { class: 'chal-kick', type: 'button', title: 'Togli "' + r.nick + '" dalla sfida', text: '✕' });
+      kb.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (kb.dataset.arm) {
+          VLChal.kick(CHAL.state, r.id);
+          if (CHAL.conn) { try { CHAL.conn.send('kick', { id: r.id }); } catch (err) { /* ignora */ } }
+          renderChalBoard(); chalBoardOut();
+          toast('"' + r.nick + '" tolto dalla sfida');
+        } else {
+          kb.dataset.arm = '1'; kb.textContent = 'conferma?'; kb.classList.add('arm');
+          setTimeout(function () { delete kb.dataset.arm; kb.textContent = '✕'; kb.classList.remove('arm'); }, 2500);
+        }
+      });
       box.appendChild(el('div', { class: 'chal-row' + (r.done ? ' done' : '') },
         el('span', { class: 'rk', text: r.rank + '°' }),
         el('span', { class: 'nick', text: r.nick }),
         el('span', { class: 'bar' }, el('i', { style: 'width:' + pct + '%' })),
-        el('span', { class: 'pts', text: r.score + ' pt' + (r.done ? ' ✓' : '') })));
+        el('span', { class: 'pts', text: r.score + ' pt' + (r.done ? ' ✓' : '') }),
+        kb));
     });
   }
   $('#chal-start').addEventListener('click', function () { if (CHAL && CHAL.play === 'tp' && CHAL.state.phase === 'lobby') chalOpenQuestion(0); });
@@ -6116,6 +6189,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           chpQuestion(me, p);
         });
         conn.on('reveal', function (p) { if (me.onReveal) me.onReveal(p); });
+        // v83: il docente ti ha tolto dalla sfida — schermata chiara e stop (il suo id resta bandito lato host)
+        conn.on('kick', function (p) {
+          if (!p || p.id !== id) return;
+          me.started = true;   // niente più hello automatici
+          const w = $('#chp-wrap');
+          w.innerHTML = '';
+          w.appendChild(el('div', { class: 'card chp-card' },
+            el('h2', { text: 'Il docente ti ha tolto dalla sfida' }),
+            el('p', { class: 'hint', text: 'Chiedi al docente se puoi rientrare.' })));
+          try { conn.close(); } catch (e) { /* ignora */ }
+        });
         conn.on('end', function (p) { chpFinal($('#chp-wrap'), p && p.rows, id); try { conn.close(); } catch (e) { /* ignora */ } });
         let tries = 0;
         const hello = function () {

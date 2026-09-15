@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260915-81">
+<link rel="stylesheet" href="styles.css?v=20260915-83">
 </head>
 <body>
 <header class="topbar">
@@ -261,6 +261,11 @@
         <div class="card" id="e-video-card">
           <div class="row"><h2 style="margin:0">Esercizi</h2>
             <button id="btn-add-ex" class="small right">+ Esercizio al tempo corrente</button></div>
+          <div class="row" style="margin-top:6px">
+            <input id="e-ask" type="text" class="grow" placeholder="✨ Chiedi all'AI: es. «un esercizio sulla frase dove spiega perché si chiama vaccino»">
+            <button id="btn-ask" class="small primary">Chiedi all'AI</button>
+          </div>
+          <p class="hint">Hai sentito una frase che ti piace? Descrivila (o incollane un pezzo): l'AI la trova nella trascrizione e ci mette l'esercizio. Puoi anche dire il tipo («un riordino su…»). Serve la chiave in Impostazioni AI.</p>
           <p class="hint">Clicca un numero sulla linea del tempo (o "Anteprima" nella scheda) per vedere l'esercizio come lo vedrà lo studente, nell'area del video. "▶" accanto ai tempi riproduce esattamente la frase da inizio a fine; nei campi tempo le frecce ↑↓ spostano di 0,1 s (con Maiusc di 1 s). "Altra frase" propone la successiva migliore vicino allo stesso punto.</p>
           <div id="e-exercises"></div>
         </div>
@@ -725,16 +730,16 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260915-81"></script>
-<script src="exercises.js?v=20260915-81"></script>
-<script src="generator.js?v=20260915-81"></script>
-<script src="activities.js?v=20260915-81"></script>
-<script src="ai.js?v=20260915-81"></script>
-<script src="demo-data.js?v=20260915-81"></script>
-<script src="bookmarklet.js?v=20260915-81"></script>
-<script src="sync.js?v=20260915-81"></script>
-<script src="qr.js?v=20260915-81"></script>
-<script src="challenge.js?v=20260915-81"></script>
-<script src="app.js?v=20260915-81"></script>
+<script src="lang.js?v=20260915-83"></script>
+<script src="exercises.js?v=20260915-83"></script>
+<script src="generator.js?v=20260915-83"></script>
+<script src="activities.js?v=20260915-83"></script>
+<script src="ai.js?v=20260915-83"></script>
+<script src="demo-data.js?v=20260915-83"></script>
+<script src="bookmarklet.js?v=20260915-83"></script>
+<script src="sync.js?v=20260915-83"></script>
+<script src="qr.js?v=20260915-83"></script>
+<script src="challenge.js?v=20260915-83"></script>
+<script src="app.js?v=20260915-83"></script>
 </body>
 </html>
