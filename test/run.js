@@ -454,4 +454,27 @@ test('riordino: le parole che differiscono solo per l\'accento non si confondono
 });
 
 
+test('v80: l\'appello al pubblico si taglia sempre quando un taglio è richiesto, anche nei primi 40 s protetti', function () {
+  const lines = [];
+  let t = 0;
+  const add = function (text, dur) { lines.push({ start: t, end: t + dur, text: text }); t += dur; };
+  add('Oggi parliamo dei vulcani italiani e di come funzionano davvero.', 6);
+  add('Il magma risale dalla profondità della terra attraverso le fratture.', 6);
+  add('Se volete vederci nelle scuole iscrivetevi al canale e fate una donazione.', 8);
+  for (let i = 0; i < 40; i++) add('La frase numero ' + i + ' racconta un dettaglio interessante del fenomeno naturale.', 6);
+  const D = t;
+  const chunks = G.annotate(G.buildChunks(lines, { duration: D, lang: 'it' }), { lang: 'it', duration: D });
+  assert.ok(chunks.some(function (c) { return c.cta; }), 'appello riconosciuto');
+  // durata già dentro la tolleranza: prima non si tagliava NIENTE e l'appello (dentro i 40 s protetti) restava
+  const r = G.planCuts(chunks, { duration: D, target: D - 5, tolerance: 30, protect: [] });
+  const cta = r.cuts.find(function (c) { return c.reason === 'sponsor / appello al pubblico'; });
+  assert.ok(cta, 'appello tagliato lo stesso: ' + JSON.stringify(r.cuts));
+  assert.ok(cta.start <= 13 && cta.end >= 19, 'il taglio copre l\'appello (12-20 s): ' + cta.start.toFixed(1) + '-' + cta.end.toFixed(1));
+  assert.ok(!G.inCut(r.cuts, 3) && !G.inCut(r.cuts, 25), 'l\'introduzione del tema resta');
+  // con "Tutto il video (nessun taglio)" la promessa vale: nemmeno l'appello si tocca
+  const r2 = G.planCuts(chunks, { duration: D, target: D, tolerance: 30, protect: [] });
+  assert.strictEqual(r2.cuts.length, 0, 'durata piena: niente tagli');
+});
+
+
 console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));

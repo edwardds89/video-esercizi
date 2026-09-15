@@ -1587,7 +1587,19 @@ async function noOverflow(page, where) {
   const nSol = await page.$$eval('#dlg-solutions .sol-row', function (r) { return r.length; });
   const nExs = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises.length; });
   assert.strictEqual(nSol, nExs, 'una riga per esercizio nel recap Soluzioni (' + nSol + ' su ' + nExs + ')');
-  assert.ok(await page.$eval('#dlg-solutions .sol-row .sol-ans', function (a) { return /Soluzione: .+/.test(a.textContent); }), 'ogni riga del recap ha la sua soluzione');
+  // v81 ('la parola la barri... voglio ogni frase una sola volta'): la soluzione sta DENTRO la frase, niente doppioni
+  const sol81 = await page.evaluate(function () {
+    return [].slice.call(document.querySelectorAll('#dlg-solutions .sol-row')).map(function (r) {
+      return { head: r.querySelector('.sol-head').textContent, hit: !!r.querySelector('.sol-hit'), strike: !!r.querySelector('.sol-strike'), fix: !!r.querySelector('.sol-fix'), dup: /Soluzione:/.test(r.textContent), nSent: r.querySelectorAll('.sol-sent').length };
+    });
+  });
+  assert.ok(sol81.every(function (r) { return !r.dup && r.nSent === 1; }), 'ogni frase una sola volta, niente riga "Soluzione:"');
+  sol81.forEach(function (r) {
+    if (/Completa gli spazi/.test(r.head)) assert.ok(r.hit, 'parole del gap evidenziate: ' + r.head);
+    if (/parola in più/.test(r.head)) assert.ok(r.strike, 'parola in più barrata: ' + r.head);
+    if (/sbagliata/.test(r.head)) assert.ok(r.strike && r.fix, 'parola sbagliata barrata con la correzione: ' + r.head);
+    if (/mancante/.test(r.head)) assert.ok(r.hit, 'parola mancante evidenziata: ' + r.head);
+  });
   await page.click('#solutions-close');
   await page.waitForTimeout(200);
   // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
