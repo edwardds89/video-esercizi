@@ -36,12 +36,13 @@
       'nei commenti', 'seguitemi', 'seguimi', 'telegram', 'instagram', 'prossimo video', 'video precedente', 'ci vediamo', 'alla prossima',
       'buona visione', 'benvenuti', 'bentornati', 'grazie per', 'abbonarvi', 'abbonatevi',
       'abbonamento', 'mecenati', 'meccenati', 'sostenerci', 'sosteneteci', 'membri del canale', 'iscriversi al canale', 'torniamo al video',
-      'vi ringrazio', 'ringrazio anche', 'appuntamento qui', 'per il supporto'],
+      'vi ringrazio', 'ringrazio anche', 'appuntamento qui', 'per il supporto',
+      'fate una donazione', 'fare una donazione', 'con una donazione', 'donazione libera', 'sostenete il nostro', 'sostenete questo', 'vederci nelle scuole'],
     en: ['subscribe', 'subscribing', 'sponsor', 'sponsored', 'promo code', 'discount code', 'link in the description', 'description below',
       'in the description', 'description of the video', 'patreon', 'like button', 'hit the bell', 'notifications', 'comment below', 'in the comments', 'follow me',
       'next video', 'previous video', 'see you', 'thanks for watching', 'stay tuned', 'merch', 'giveaway', 'welcome back', 'welcome to',
       'join the channel', 'become a member', 'support us', 'back to the video',
-      'thank you for watching', 'thanks to our']
+      'thank you for watching', 'thanks to our', 'make a donation', 'donate to', 'donating', 'support this channel']
   };
 
   // Coppie di parole funzionali plausibili per "find the wrong word"

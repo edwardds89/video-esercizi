@@ -729,7 +729,13 @@
     const existing = params.existing || [];
     const tol = Math.max(0, params.tolerance || 0);
     let need = D - T - existing.reduce(function (s, c) { return s + (c.end - c.start); }, 0);
-    if (!(need > tol)) return { cuts: [], removed: 0, shortfall: 0 };
+    // v80 (Edoardo: '"iscrivetevi, fate una donazione"... non viene mai tagliata questa parte, e questa regola vale
+    // per tutti i video'): gli appelli al pubblico si tagliano SEMPRE quando un taglio e' richiesto (target sotto la
+    // durata), anche se la durata e' gia' dentro la tolleranza. Prima sfuggivano per due vie: la finestra protetta
+    // dell'introduzione copriva anche l'appello infilato nei primi ~40 s, e il pianificatore si ferma appena la
+    // durata torna, quindi l'appello poteva non essere mai raggiunto. Con target = durata piena niente tagli, come promesso.
+    const wantCta = params.cutCta !== false && T < D - 0.5;
+    if (!(need > tol) && !wantCta) return { cuts: [], removed: 0, shortfall: 0 };
 
     // Unità sulla linea del tempo con copertura completa 0..D: frasi intere (mai pezzi di frase), silenzi
     const units = [];
@@ -741,11 +747,39 @@
     const introKeep = params.keepIntro === false ? 0 : (params.introSeconds || 40);
     const outroKeep = params.keepOutro === false ? 0 : (params.outroSeconds || 25);
     const contentUnits = units.filter(function (u) { return !u.silence && !u.cta; });
-    if (contentUnits.length && introKeep) protect.push({ start: contentUnits[0].start, end: Math.min(D, contentUnits[0].start + introKeep) });
-    if (contentUnits.length && outroKeep) { const last = contentUnits[contentUnits.length - 1]; protect.push({ start: Math.max(0, last.end - outroKeep), end: last.end }); }
+    // v80: intro e chiusura protette stanno in una lista A PARTE, cosi' un appello al pubblico dentro quelle
+    // finestre resta tagliabile (le protezioni dell'insegnante e gli esercizi restano invalicabili per tutti)
+    const autoProtect = [];
+    if (contentUnits.length && introKeep) autoProtect.push({ start: contentUnits[0].start, end: Math.min(D, contentUnits[0].start + introKeep) });
+    if (contentUnits.length && outroKeep) { const last = contentUnits[contentUnits.length - 1]; autoProtect.push({ start: Math.max(0, last.end - outroKeep), end: last.end }); }
     units.forEach(function (u, i) {
-      u.free = !protect.some(function (p) { return overlaps(u, p); }) && !existing.some(function (p) { return overlaps(u, p); });
+      const hard = protect.some(function (p) { return overlaps(u, p); }) || existing.some(function (p) { return overlaps(u, p); });
+      u.free = !hard && (u.cta || !autoProtect.some(function (p) { return overlaps(u, p); }));
     });
+
+    const cuts = [];
+    let removed = 0;
+    // v80: prima di tutto, via gli appelli al pubblico (sequenze di frasi cta, coi silenzi brevi in mezzo)
+    if (wantCta) {
+      let k = 0;
+      while (k < units.length) {
+        if (!(units[k].free && units[k].cta)) { k++; continue; }
+        let j = k;
+        while (j + 1 < units.length) {
+          const nx = units[j + 1];
+          if (nx.free && nx.cta) { j++; continue; }
+          if (nx.free && nx.silence && nx.end - nx.start <= 3 && units[j + 2] && units[j + 2].free && units[j + 2].cta) { j += 2; continue; }
+          break;
+        }
+        const len = units[j].end - units[k].start;
+        if (len >= 3) {
+          cuts.push({ start: units[k].start, end: units[j].end, reason: 'sponsor / appello al pubblico', startExact: units[k].startExact, endExact: units[j].endExact });
+          removed += len;
+          for (let q = k; q <= j; q++) units[q].free = false;
+        }
+        k = j + 1;
+      }
+    }
 
     // Sequenze consecutive di unità libere
     const runs = [];
@@ -774,9 +808,8 @@
     });
     runs.sort(function (a, b) { return a.priority - b.priority; });
 
-    const cuts = [];
-    let removed = 0;
     for (const r of runs) {
+      if (!(need > tol)) break;   // v80: si era qui solo per gli appelli, la durata era gia' a posto
       if (removed >= need - 2) break;
       if (removed >= need - tol && r.priority >= 0.3) break;   // dentro la tolleranza: non tagliare contenuto vero
       const remaining = need - removed;

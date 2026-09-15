@@ -1230,4 +1230,6 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .sol-row:last-child { border-bottom: 0; }
 .sol-head { font-size: 13px; color: var(--muted); letter-spacing: .02em; margin-bottom: 4px; }
 .sol-sent { font-size: 18px; line-height: 1.5; }
-.sol-ans { margin-top: 4px; font-size: 16px; font-weight: 600; color: var(--ok); }
+.sol-sent .sol-hit { background: #d8f5df; color: #14682c; font-weight: 700; border-radius: 4px; padding: 0 3px; }
+.sol-sent .sol-strike { color: #c0392b; text-decoration: line-through; text-decoration-thickness: 2px; }
+.sol-sent .sol-fix { color: var(--ok); font-weight: 700; }

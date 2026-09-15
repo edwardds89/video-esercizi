@@ -940,7 +940,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     let d = N.duration;
     if (!d) { const pt = G.parseTranscript($('#f-transcript').value); if (pt.lines.length) d = pt.lines[pt.lines.length - 1].end + 2; }
     const t = d > 0 ? selectedTarget(d) : NaN;
-    h.textContent = t > 0 ? '≈ ' + G.autoCount(t) + ' esercizi per ' + fmtMin(t) + ' di video, dove c\'è una frase di senso compiuto' : '';
+    // v80: niente coda "dove c'è una frase di senso compiuto" — faceva andare la riga a capo nella colonna
+    // stretta, e la spiegazione sta già nel tooltip della spunta "Automatico"
+    h.textContent = t > 0 ? '≈ ' + G.autoCount(t) + ' esercizi per ' + fmtMin(t) + ' di video' : '';
   }
   function showFormError(msg) {
     const box = $('#f-error'); box.innerHTML = '';
@@ -1239,12 +1241,37 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const box = $('#solutions-body'); box.innerHTML = '';
     const exs = (ls.exercises || []).slice().sort(function (a, b) { return (a.markerTime || 0) - (b.markerTime || 0); });
     if (!exs.length) box.appendChild(el('p', { class: 'hint', text: 'Questa lezione non ha ancora esercizi.' }));
+    // v81 ('metti la frase direttamente con l'errore e la parola la barri... trova soluzioni simili per tutte le
+    // tipologie... voglio ogni frase una sola volta'): OGNI esercizio = UNA frase, con la soluzione DENTRO —
+    // parole dei gap evidenziate, parola in più barrata, parola sbagliata barrata + correzione accanto,
+    // parola mancante evidenziata, riordino = la frase giusta e basta. Niente riga "Soluzione:" doppione.
     exs.forEach(function (ex, i) {
+      const d = ex.data || {};
       const row = el('div', { class: 'sol-row' });
       row.appendChild(el('div', { class: 'sol-head', text: (i + 1) + ' · ' + fmtMin(ex.markerTime || 0) + ' · ' + (EX.LABELS[ex.type] || ex.type) }));
-      const frase = ex.type === 'mc' ? (ex.data && ex.data.question || '') : (ex.sentence || '');
-      if (frase) row.appendChild(el('div', { class: 'sol-sent', text: frase }));
-      row.appendChild(el('div', { class: 'sol-ans', text: 'Soluzione: ' + EX.solution(ex) }));
+      const sent = el('div', { class: 'sol-sent' });
+      const addTok = function (t, cls) {
+        sent.appendChild(cls ? el('span', { class: cls, text: t }) : document.createTextNode(t));
+        sent.appendChild(document.createTextNode(' '));
+      };
+      if ((ex.type === 'gap' || ex.type === 'gapbank') && Array.isArray(d.tokens)) {
+        const inGap = new Set(d.gapIndices || []);
+        d.tokens.forEach(function (t, k) { addTok(t, inGap.has(k) ? 'sol-hit' : null); });
+      } else if (ex.type === 'missing' && Array.isArray(d.tokens)) {
+        d.tokens.forEach(function (t, k) { addTok(t, k === d.missingIndex ? 'sol-hit' : null); });
+      } else if ((ex.type === 'extra' || ex.type === 'wrong') && Array.isArray(d.shown)) {
+        const bad = ex.type === 'extra' ? d.extraIndex : d.wrongIndex;
+        d.shown.forEach(function (t, k) {
+          addTok(t, k === bad ? 'sol-strike' : null);
+          if (ex.type === 'wrong' && k === bad) addTok(d.answer, 'sol-fix');
+        });
+      } else if (ex.type === 'mc') {
+        sent.appendChild(document.createTextNode(d.question || ''));
+        sent.appendChild(el('div', {}, el('span', { class: 'sol-fix', text: '✓ ' + ((d.options && d.options[d.correct]) || '') })));
+      } else {
+        sent.appendChild(document.createTextNode(ex.sentence || ''));
+      }
+      row.appendChild(sent);
       box.appendChild(row);
     });
     $('#dlg-solutions').showModal();
