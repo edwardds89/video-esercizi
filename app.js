@@ -825,7 +825,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const parsed = G.parseTranscript(window.VL_DEMO.transcript);
     const ls = newLesson({ title: window.VL_DEMO.title, videoId: 'demo', videoUrl: '', lang: 'it', level: 'B1', lines: parsed.lines, duration: window.VL_DEMO.duration, transcriptRaw: window.VL_DEMO.transcript });
     ls.params = { n: 8, target: 600, types: G.ALL_TYPES.slice(), range: 'smart', contextBefore: 25, ai: false, focus: '' };
-    overlay(true, 'loading');
+    overlay(true);
     setTimeout(function () {
       generate(ls, false).then(function () { overlay(false); openEditor(ls.id); });
     }, 50);
@@ -877,7 +877,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const warnings = [];
     let promise;
     if (useAI && S.settings.apiKey) {
-      overlay(true, 'loading');
+      overlay(true);
       const auto = p.n === 'auto' || !(p.n > 0);
       const nEff = auto ? G.autoCount(p.target && p.target > 0 ? Math.min(p.target, duration) : duration) : p.n;
       promise = AI.generateWithAI({ chunks: chunks, duration: duration, target: p.target, n: nEff, auto: auto, types: p.types, range: p.range, lang: ls.lang, level: ls.level, focus: p.focus, support: vocabState(ls).support, tricky: !!p.tricky, apiKey: S.settings.apiKey, model: S.settings.model })
@@ -1060,7 +1060,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       videoId: id, videoUrl: url, lang: $('#f-lang').value, level: $('#f-level').value, lines: parsed.lines, duration: duration, transcriptRaw: $('#f-transcript').value
     });
     ls.params = { tricky: $('#f-tricky').checked, n: $('#f-nauto').checked ? 'auto' : Math.max(1, parseInt($('#f-n').value, 10) || 10), target: target, tolerance: $('#f-range').value === 'custom' ? 0 : Math.round(target * 0.1), types: types, range: G.RANGES[$('#f-words').value] || null, contextBefore: parseInt($('#f-ctx').value, 10) || 25, ai: $('#f-ai').checked, focus: $('#f-focus').value.trim() };
-    overlay(true, 'loading');
+    overlay(true);
     generate(ls, ls.params.ai).then(function () { overlay(false); openEditor(ls.id); })
       .catch(function (e) { overlay(false); toast('Errore: ' + e.message); console.error(e); });
   });
@@ -3252,7 +3252,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (isNaN(target) || target <= 0 || target > ls.duration) target = ls.duration;
     ls.params = Object.assign({}, ls.params, { tricky: $('#r-tricky').checked, n: $('#r-nauto').checked ? 'auto' : Math.max(1, parseInt($('#r-n').value, 10) || 10), target: target, types: types, range: G.RANGES[$('#r-words').value] || null, ai: $('#r-ai').checked, focus: $('#r-focus').value.trim() });
     $('#dlg-regen').close();
-    overlay(true, 'loading');
+    overlay(true);
     generate(ls, ls.params.ai).then(function () { overlay(false); renderEditorBody(); toast('Bozza rigenerata'); })
       .catch(function (e) { overlay(false); toast('Errore: ' + e.message); });
   });
@@ -5933,7 +5933,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function startChal(setLs, cfg) {
     const pin = VLChal.makePin();
     const items = JSON.parse(JSON.stringify(setLs.chal.items, function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; }));
-    overlay(true, 'loading');
+    overlay(true);
     chalJoin(pin, function (conn) {
       overlay(false);
       CHAL = { pin: pin, title: setLs.title || 'Sfida', play: cfg.play, items: items, mode: cfg.mode, secs: cfg.secs, showQ: cfg.showQ,

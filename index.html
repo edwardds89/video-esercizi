@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260915-83">
+<link rel="stylesheet" href="styles.css?v=20260915-84">
 </head>
 <body>
 <header class="topbar">
@@ -726,20 +726,42 @@
   <div class="row" style="margin-top:14px"><button id="r-go" class="primary">Rigenera</button><button id="r-close">Annulla</button></div>
 </dialog>
 
-<div id="overlay"><div><div class="loader-box"><img class="loader" src="https://cdn.dribbble.com/userupload/22076800/file/original-8e7ce77dec0edaf0105e8287038f6e60.gif" alt="" onerror="this.classList.add('off')"><div class="spinner"></div></div><div id="overlay-text">loading</div></div></div>
+<!-- v84: Pausa e Play, le mascotte del caricamento — ognuna lotta per mettersi davanti all'altra.
+     Disegnate in SVG qui dentro: niente immagini esterne, funzionano anche offline. -->
+<div id="overlay"><div>
+  <div class="pp-stage" aria-hidden="true">
+    <div class="pp-ombra a"></div>
+    <div class="pp-ombra b"></div>
+    <svg class="pp-char pp-play" width="86" height="86" viewBox="0 0 100 100">
+      <path d="M30 26 L74 50 L30 74 Z" fill="#1f6feb" stroke="#1f6feb" stroke-width="22" stroke-linejoin="round"/>
+      <g class="pp-eye"><circle cx="34" cy="42" r="8" fill="#fff"/><circle cx="37" cy="42" r="3.6" fill="#1c2330"/></g>
+      <g class="pp-eye"><circle cx="54" cy="48" r="8" fill="#fff"/><circle cx="57" cy="48" r="3.6" fill="#1c2330"/></g>
+      <path d="M30 62 Q37 67 44 62" fill="none" stroke="#0c2f6b" stroke-width="3.4" stroke-linecap="round"/>
+    </svg>
+    <svg class="pp-char pp-pausa" width="82" height="86" viewBox="0 0 100 100">
+      <rect x="18" y="16" width="26" height="70" rx="13" fill="#ff8a00"/>
+      <rect x="56" y="16" width="26" height="70" rx="13" fill="#ff8a00"/>
+      <g class="pp-eye"><circle cx="31" cy="34" r="7.5" fill="#fff"/><circle cx="29" cy="34" r="3.4" fill="#1c2330"/></g>
+      <g class="pp-eye"><circle cx="69" cy="34" r="7.5" fill="#fff"/><circle cx="67" cy="34" r="3.4" fill="#1c2330"/></g>
+      <path d="M26 52 Q31 48 36 52" fill="none" stroke="#8a4a00" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M64 52 Q69 48 74 52" fill="none" stroke="#8a4a00" stroke-width="3.2" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div id="overlay-text">Un attimo…</div>
+</div></div>
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260915-83"></script>
-<script src="exercises.js?v=20260915-83"></script>
-<script src="generator.js?v=20260915-83"></script>
-<script src="activities.js?v=20260915-83"></script>
-<script src="ai.js?v=20260915-83"></script>
-<script src="demo-data.js?v=20260915-83"></script>
-<script src="bookmarklet.js?v=20260915-83"></script>
-<script src="sync.js?v=20260915-83"></script>
-<script src="qr.js?v=20260915-83"></script>
-<script src="challenge.js?v=20260915-83"></script>
-<script src="app.js?v=20260915-83"></script>
+<script src="lang.js?v=20260915-84"></script>
+<script src="exercises.js?v=20260915-84"></script>
+<script src="generator.js?v=20260915-84"></script>
+<script src="activities.js?v=20260915-84"></script>
+<script src="ai.js?v=20260915-84"></script>
+<script src="demo-data.js?v=20260915-84"></script>
+<script src="bookmarklet.js?v=20260915-84"></script>
+<script src="sync.js?v=20260915-84"></script>
+<script src="qr.js?v=20260915-84"></script>
+<script src="challenge.js?v=20260915-84"></script>
+<script src="app.js?v=20260915-84"></script>
 </body>
 </html>

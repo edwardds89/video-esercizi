@@ -277,11 +277,41 @@ body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barr
 .app-bar .later { background: transparent; color: rgba(255,255,255,.85); border: 1px solid rgba(255,255,255,.4); border-radius: 8px; padding: 5px 10px; font-size: 13px; white-space: nowrap; }
 #overlay { position: fixed; inset: 0; background: #fff; display: none; align-items: center; justify-content: center; z-index: 40; font-size: 18px; text-align: center; padding: 20px; }
 #overlay.show { display: flex; }
-.loader-box { position: relative; width: 120px; height: 120px; overflow: hidden; margin: 0 auto 6px; }
-.loader-box .loader { position: absolute; left: 50%; top: 50%; width: 300px; height: 225px; transform: translate(-50%, -50%); mix-blend-mode: multiply; }
-.loader-box .loader.off { display: none; }
-.loader-box .spinner { display: none; position: absolute; left: 50%; top: 50%; margin: -17px 0 0 -17px; }
-.loader-box .loader.off + .spinner { display: block; }
+/* v84: Pausa e Play — le mascotte del caricamento (SVG animato, niente asset esterni) */
+.pp-stage { position: relative; width: 190px; height: 120px; margin: 0 auto 6px; }
+.pp-char { position: absolute; bottom: 10px; transform-origin: 50% 100%; will-change: transform; }
+.pp-play { left: 18px; animation: pp-play 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
+.pp-pausa { right: 18px; animation: pp-pausa 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
+.pp-ombra { position: absolute; bottom: 2px; width: 70px; height: 10px; border-radius: 50%; background: rgba(28,35,48,.10); }
+.pp-ombra.a { left: 24px; animation: pp-ombra-a 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
+.pp-ombra.b { right: 24px; animation: pp-ombra-b 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
+.pp-eye { animation: pp-blink 3.2s linear infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes pp-play {
+  0%, 8%   { transform: translateX(42px) scale(1.08); z-index: 3; }
+  38%      { transform: translateX(42px) scale(1.08) rotate(0deg); z-index: 3; }
+  46%      { transform: translateX(6px) scale(.94, 1.02) rotate(-12deg); z-index: 1; }
+  52%, 86% { transform: translateX(0) translateY(-4px) scale(.9); z-index: 1; }
+  90%      { transform: translateX(8px) scale(1.12, .88) rotate(8deg); z-index: 3; }
+  100%     { transform: translateX(42px) scale(1.08); z-index: 3; }
+}
+@keyframes pp-pausa {
+  0%, 8%   { transform: translateX(0) translateY(-4px) scale(.9); z-index: 1; }
+  38%      { transform: translateX(-6px) scale(1.1, .9) rotate(-8deg); z-index: 1; }
+  46%      { transform: translateX(-44px) scale(1.06, 1.02) rotate(6deg); z-index: 3; }
+  52%, 86% { transform: translateX(-42px) scale(1.08); z-index: 3; }
+  92%      { transform: translateX(-34px) scale(.96) rotate(10deg); z-index: 1; }
+  100%     { transform: translateX(0) translateY(-4px) scale(.9); z-index: 1; }
+}
+@keyframes pp-ombra-a {
+  0%, 8% { transform: translateX(42px) scale(1.05); } 38% { transform: translateX(42px); }
+  52%, 86% { transform: translateX(0) scale(.85); } 100% { transform: translateX(42px) scale(1.05); }
+}
+@keyframes pp-ombra-b {
+  0%, 8% { transform: translateX(0) scale(.85); } 38% { transform: translateX(-6px) scale(.9); }
+  52%, 86% { transform: translateX(-42px) scale(1.05); } 100% { transform: translateX(0) scale(.85); }
+}
+@keyframes pp-blink { 0%, 91%, 100% { transform: scaleY(1); } 93%, 95% { transform: scaleY(.12); } }
+@media (prefers-reduced-motion: reduce) { .pp-char, .pp-ombra, .pp-eye { animation: none; } }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
 /* Spinner piccolo accanto a un messaggio di stato (v66, 'quando clicca su genera unità non appare nessun logo di
    caricamento'): il testo da solo non dice che il lavoro STA andando avanti. */
