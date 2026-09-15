@@ -39,6 +39,11 @@ async function noOverflow(page, where) {
   const errors = [];
   page.on('pageerror', function (e) { errors.push('pageerror: ' + e.message); });
   page.on('console', function (m) { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  // v82: i template sono chiusi su una riga — prima di cliccare/hoverare un tema nascosto si apre l'elenco
+  const showAllThemes = async function (scope) {
+    const btn = await page.$(scope + ' .theme-chip.more:has-text("Mostra tutti")');
+    if (btn) { await btn.click(); await page.waitForTimeout(120); }
+  };
 
   console.log('1. home + demo');
   await page.goto(BASE + '?mock=1&speed=8');
@@ -69,9 +74,13 @@ async function noOverflow(page, where) {
   console.log('2. editor: cambio tipo, toggle gap, altra frase, aggiungi/rimuovi taglio');
   const firstType = await page.$eval('#e-exercises .ex-card:first-child select', function (s) { return s.value; });
   const newType = firstType === 'missing' ? 'gap' : 'missing';
+  // v83 ('perché mi cambia la frase quando voglio solo cambiare il tipo?'): frase e tempi NON si toccano
+  const ex0Before = await page.evaluate(function () { const e = Object.values(window.VLApp.S.lessons)[0].exercises[0]; return { sentence: e.sentence, start: e.segment.start, end: e.segment.end }; });
   await page.selectOption('#e-exercises .ex-card:first-child select', newType);
   await page.waitForTimeout(150);
   assert.strictEqual(await page.$eval('#e-exercises .ex-card:first-child select', function (s) { return s.value; }), newType);
+  const ex0After = await page.evaluate(function () { const e = Object.values(window.VLApp.S.lessons)[0].exercises[0]; return { sentence: e.sentence, start: e.segment.start, end: e.segment.end }; });
+  assert.deepStrictEqual(ex0After, ex0Before, 'cambio tipo: stessa frase e stessi tempi');
   // trova una card gap e togli/aggiungi uno spazio
   const gapCard = await page.$('#e-exercises .ex-card:has(.chip.gap)');
   assert.ok(gapCard, 'una card gap');
@@ -264,11 +273,15 @@ async function noOverflow(page, where) {
   await page.waitForSelector('#view-editor.active');
   assert.strictEqual(await page.$$eval('#e-exercises .ex-card', function (els) { return els.length; }), 8);
 
-  // template delle schede Parole utili: stessi 18 delle attività; scelgo Lavagna
-  assert.strictEqual(await page.$$eval('#v-theme .theme-chip', function (c) { return c.length; }), 18, '18 template per le schede');
+  // template delle schede Parole utili: stessi 18 delle attività; chiusi su UNA riga (v82), "Mostra tutti" li apre
+  assert.ok(await page.$$eval('#v-theme .theme-chip:not(.more)', function (c) { return c.length <= 4; }), 'chiusi: una riga sola di template');
+  await showAllThemes('#v-theme');
+  assert.strictEqual(await page.$$eval('#v-theme .theme-chip:not(.more)', function (c) { return c.length; }), 18, '18 template per le schede');
   await page.click('#v-theme .theme-chip:has-text("Lavagna")');
   await page.waitForSelector('#v-theme .theme-chip.sel:has-text("Lavagna")');
   assert.strictEqual(await page.evaluate(function () { return Object.values(window.VLApp.S.lessons)[0].vocab.theme; }), 'blackboard');
+  // v82: la riga "Chiedi all'AI" nella card Esercizi (senza chiave avvisa e basta)
+  assert.ok((await page.$('#e-ask')) && (await page.$('#btn-ask')), 'campo e pulsante "Chiedi all\'AI" nell\'editor');
 
   // "Parliamone" (dopo il video): due domande scritte a mano nella card della sezione t1
   await page.click('.talk-card[data-tid="t1"] button:has-text("+ Domanda")');
@@ -947,6 +960,7 @@ async function noOverflow(page, where) {
   await noOverflow(page, 'editor attività');
   assert.strictEqual(await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].activity.theme; }), 'classic', 'template scelto alla creazione');
   // anteprima grande al passaggio del mouse sui chip del selettore
+  await showAllThemes('#a-themes');
   await page.hover('#a-themes .theme-chip:has-text("Spazio")');
   await page.waitForSelector('.theme-preview.show .act[data-theme="space"]');
   await page.mouse.move(5, 5);
@@ -964,6 +978,7 @@ async function noOverflow(page, where) {
   };
   await fillQ(qcards[0], 'Come si dice "hello"?', 'ciao', 'pane');
   await fillQ(qcards[1], 'Come si dice "thanks"?', 'grazie', 'scusa');
+  await showAllThemes('#a-themes');
   await page.click('#a-themes .theme-chip:has-text("Natale")');
   await page.waitForSelector('#a-themes .theme-chip.sel:has-text("Natale")');
   await page.click('#a-try');
@@ -1012,17 +1027,20 @@ async function noOverflow(page, where) {
   assert.ok(pairsN >= 3, 'coppie importate dalle Parole utili: ' + pairsN);
   assert.deepStrictEqual(await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return ls.flow.map(function (s) { return s.kind + (s.id ? ':' + s.id : ''); }); }), ['vocab', 'talk:t2', 'video', 'act:a1', 'talk:t1'], 'attività subito dopo il video');
   // l'anteprima del template mostra QUESTA attività: un memory con le coppie vere, non un quiz d'esempio
+  await showAllThemes('.act-card');
   await page.hover('.act-card .theme-chip:has-text("Giungla")');
   await page.waitForSelector('.theme-preview.show .act[data-theme="jungle"][data-type="memory"]');
   assert.strictEqual(await page.$$eval('.theme-preview.show .mem-card', function (c) { return c.length; }), pairsN * 2, 'anteprima memory con le coppie vere');
   await page.mouse.move(5, 5);
   await page.waitForFunction(function () { const p = document.querySelector('.theme-preview'); return !p || !p.classList.contains('show'); });
   // …e per le Parole utili mostra le schede di abbinamento vestite del template
+  await showAllThemes('#v-theme');
   await page.hover('#v-theme .theme-chip:has-text("Caffè")');
   await page.waitForSelector('.theme-preview.show .pop.vocab-act[data-theme="coffee"] .match .mchip');
   assert.ok(!(await page.$('.theme-preview.show .quiz-q')), 'schede, non quiz, nell\'anteprima delle Parole utili');
   await page.mouse.move(5, 5);
   await page.waitForFunction(function () { const p = document.querySelector('.theme-preview'); return !p || !p.classList.contains('show'); });
+  await showAllThemes('.act-card');
   await page.click('.act-card .theme-chip:has-text("Estate")');
   await page.waitForSelector('.act-card .theme-chip.sel:has-text("Estate")');
   await page.click('.act-card button:has-text("▶ Prova")');
@@ -1607,8 +1625,8 @@ async function noOverflow(page, where) {
   await page.selectOption('#e-level', 'intermediate');
   await page.selectOption('#e-audience', 'en');
   await page.waitForTimeout(400);
-  const meta79 = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return { level: ls.level, aud: ls.audience }; });
-  assert.deepStrictEqual(meta79, { level: 'intermediate', aud: 'en' }, 'livello e destinatari salvati sulla lezione');
+  const meta79 = await page.evaluate(function () { const ls = window.VLApp.S.lessons[window.VLApp.S.currentId]; return { band: ls.levelBand, aud: ls.audience, cefrIntatto: ls.level !== 'intermediate' }; });
+  assert.deepStrictEqual(meta79, { band: 'intermediate', aud: 'en', cefrIntatto: true }, 'fascia in levelBand, ls.level (CEFR) non toccato');
   const lsId79 = await page.evaluate(function () { return window.VLApp.S.currentId; });
   await page.evaluate(function () { window.VLApp.renderHome(); });
   await page.waitForSelector('#view-home.active');

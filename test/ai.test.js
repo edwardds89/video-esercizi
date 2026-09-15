@@ -589,5 +589,25 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(txt.indexOf('"type":"match"') === -1 && txt.indexOf('wheel') === -1, 'gli altri tipi non compaiono');
   });
 
+  await test('v82 askExercise: frase numerata + richiesta dell\'insegnante → indice e tipo, con validazione', async function () {
+    let sentBody = null;
+    const fakeFetch = async function (url, opts) {
+      sentBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, json: async function () { return { model: sentBody.model, usage: { input_tokens: 800, output_tokens: 30 }, content: [{ type: 'text', text: '{"index":2,"type":"scramble"}' }] }; }, text: async function () { return ''; } };
+    };
+    const sentences = [{ n: 1, text: 'Oggi parliamo di vaccini.' }, { n: 2, text: 'Il vaccino si chiama così perché viene dalle vacche.' }, { n: 3, text: 'Grazie e alla prossima.' }];
+    const r = await AI.askExercise({ sentences: sentences, request: 'un esercizio sul fatto che il vaccino viene dalle vacche', lang: 'it', apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(r.index, 2, 'frase scelta');
+    assert.strictEqual(r.type, 'scramble', 'tipo scelto');
+    const prompt = sentBody.messages[0].content;
+    assert.ok(prompt.indexOf('2. Il vaccino si chiama così') !== -1, 'frasi numerate nel prompt');
+    assert.ok(prompt.indexOf('viene dalle vacche') !== -1, 'la richiesta dell\'insegnante viaggia testuale');
+    // tipo sconosciuto → gap; niente indice → errore chiaro
+    const fetchBad = function (text) { return async function () { return { ok: true, status: 200, json: async function () { return { model: 'm', usage: {}, content: [{ type: 'text', text: text }] }; }, text: async function () { return ''; } }; }; };
+    const r2 = await AI.askExercise({ sentences: sentences, request: 'x', lang: 'it', apiKey: 'k', fetchImpl: fetchBad('{"index":1,"type":"karaoke"}') });
+    assert.strictEqual(r2.type, 'gap', 'tipo sconosciuto → gap');
+    await assert.rejects(function () { return AI.askExercise({ sentences: sentences, request: 'x', lang: 'it', apiKey: 'k', fetchImpl: fetchBad('{"type":"gap"}') }); }, /frase/, 'senza indice: errore parlante');
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();

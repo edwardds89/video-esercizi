@@ -243,4 +243,28 @@ ok('match parziale in teacher-paced: punti proporzionali, la serie si spezza', f
   assert.strictEqual(st.players.a.streak, 0, 'serie azzerata senza il pieno');
 });
 
+ok('v83 kick: l\'espulso sparisce dalla classifica e i suoi messaggi vengono ignorati (sp e tp)', function () {
+  // student-paced: hello + score, poi kick — via dalla classifica e lo score dopo NON lo ricrea
+  const st = C.newState();
+  C.reduce(st, 'hello', { id: 'a', nick: 'Anna' });
+  C.reduce(st, 'hello', { id: 'b', nick: 'Nickstupido' });
+  C.reduce(st, 'score', { id: 'b', score: 200, at: 2 });
+  C.kick(st, 'b');
+  assert.deepStrictEqual(C.leaderboard(st).map(function (r) { return r.id; }), ['a'], 'via dalla classifica');
+  C.reduce(st, 'score', { id: 'b', score: 900, at: 3 });
+  C.reduce(st, 'hello', { id: 'b', nick: 'Nickstupido' });
+  assert.ok(!st.players.b, 'né score né hello lo ricreano');
+  C.reduce(st, 'score', { id: 'a', score: 100, at: 1 });
+  assert.strictEqual(st.players.a.score, 100, 'gli altri continuano normalmente');
+  // teacher-paced: dopo il kick la risposta cade nel vuoto, senza errori
+  const tp = C.tpNew();
+  C.tpJoin(tp, { id: 'x', nick: 'X' });
+  C.kick(tp, 'x');
+  const mc = C.buildItem('mc', { q: 'Q?', options: ['a', 'b', 'c', 'd'], correct: 0 });
+  const pub = C.pubItem(mc, { rand: function () { return 0; } });
+  C.tpOpen(tp, 0, 0);
+  assert.strictEqual(C.tpAnswer(tp, { id: 'x', nick: 'X', i: 0, value: pub._map ? 0 : 0, ms: 50 }, mc, 'streak', pub), null, 'risposta dell\'espulso ignorata');
+  assert.ok(!tp.players.x, 'espulso anche in teacher-paced');
+});
+
 console.log('\n' + n + ' test superati');
