@@ -344,7 +344,10 @@ test('tagli: l\'introduzione del tema e la conclusione restano, i saluti inizial
   assert.ok(!G.inCut(d.cuts, first.start + 5) && !G.inCut(d.cuts, first.start + 30), 'i primi 40 s di contenuto non sono tagliati');
   const last = d.chunks.filter(function (c) { return !c.silence && !c.cta; }).slice(-1)[0];
   assert.ok(!G.inCut(d.cuts, last.end - 5), 'la conclusione resta');
-  assert.ok(Math.abs(d.stats.effective - 420) <= 25, 'target rispettato: ' + Math.round(d.stats.effective));
+  // v85: la comprensione vince sul minutaggio. Il target si avvicina, ma non si scende MAI sotto tagliando
+  // frasi che reggono il discorso: qui il pianificatore si ferma a ~7:40 invece di 7:00 e lo dichiara.
+  assert.ok(d.stats.effective >= 420 - 25, 'mai tagliato oltre il necessario: ' + Math.round(d.stats.effective));
+  assert.ok(d.stats.effective <= 420 + 60, 'comunque vicino al target: ' + Math.round(d.stats.effective));
   // saluto iniziale della demo (CTA) tagliato quando serve spazio
   const yt = F.youtubeTranscript(); const l2 = G.parseTranscript(yt.text).lines;
   const d2 = G.generateDraft({ lines: l2, duration: yt.duration, n: 'auto', target: 420, lang: 'it', range: 'smart' });
@@ -453,6 +456,44 @@ test('riordino: le parole che differiscono solo per l\'accento non si confondono
   assert.deepStrictEqual(esatta.map(function (i) { return shown[i]; }), w, 'con la corrispondenza esatta il mucchio mescolato torna giusto');
 });
 
+
+test('v85: i tagli non rompono il senso (definizione, riferimento, domanda-risposta)', function () {
+  const lines = [];
+  let t = 0;
+  const add = function (text, dur) { lines.push({ start: t, end: t + dur, text: text }); t += dur; };
+  add('Oggi parliamo dei vaccini e di come sono nati davvero.', 6);
+  add('La storia comincia nel Settecento in Inghilterra con una scoperta strana.', 6);
+  add('Il vaccino si chiama cosi perche viene dalle vacche, dal latino vacca.', 8);       // SPIEGA "vaccino"
+  for (let i = 0; i < 12; i++) add('Una frase di contorno numero ' + i + ' che racconta un dettaglio minore della vicenda.', 6);
+  add('Il vaccino moderno usa lo stesso principio scoperto allora.', 6);                   // riusa "vaccino" DOPO
+  for (let i = 0; i < 12; i++) add('Un altro dettaglio secondario numero ' + i + ' senza grande importanza per il tema.', 6);
+  add('Ma come funziona il sistema immunitario?', 5);                                      // domanda
+  add('Riconosce il nemico e prepara le difese in anticipo.', 6);                          // risposta
+  for (let i = 0; i < 10; i++) add('Ancora un dettaglio di passaggio numero ' + i + ' che si puo anche saltare.', 6);
+  add('Questo processo rende il corpo pronto prima del contagio.', 6);
+  const D = t;
+  const ch = G.annotate(G.buildChunks(lines, { duration: D, lang: 'it' }), { lang: 'it', duration: D });
+  const units = G.cutUnits(ch);
+  const sense = G.senseInfo(units, 'it');
+  const spiega = units.findIndex(function (u) { return /si chiama cosi/.test(u.text || ''); });
+  assert.ok(spiega > 0, 'trovata la frase che spiega');
+  assert.ok(/prima spiegazione/.test(G.cutBreaksSense(units, spiega, spiega + 1, sense) || ''), 'la definizione non si puo togliere');
+  const dom = units.findIndex(function (u) { return /come funziona il sistema/.test(u.text || ''); });
+  assert.ok(G.cutBreaksSense(units, dom + 1, dom + 1, sense), 'la risposta non si toglie da sola');
+  // il pianificatore vero, con un target aggressivo: taglia, ma non tocca la definizione
+  const r = G.planCuts(ch, { duration: D, target: D * 0.55, tolerance: 10, protect: [], lang: 'it' });
+  assert.ok(r.cuts.length >= 1, 'qualche taglio lo fa comunque');
+  const mid = function (u) { return (u.start + u.end) / 2; };
+  assert.ok(!G.inCut(r.cuts, mid(units[spiega])), 'la frase che spiega il vaccino resta');
+  // ogni taglio prodotto supera il controllo del senso
+  r.cuts.forEach(function (c) {
+    const i2 = units.findIndex(function (u) { return Math.abs(u.start - c.start) <= 0.35; });
+    let j2 = -1;
+    units.forEach(function (u, k) { if (Math.abs(u.end - c.end) <= 0.35) j2 = k; });
+    if (i2 === -1 || j2 === -1) return;
+    assert.strictEqual(G.cutBreaksSense(units, i2, j2, sense), null, 'taglio sensato: ' + Math.round(c.start) + '-' + Math.round(c.end));
+  });
+});
 
 test('v80: l\'appello al pubblico si taglia sempre quando un taglio è richiesto, anche nei primi 40 s protetti', function () {
   const lines = [];
