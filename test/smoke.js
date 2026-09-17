@@ -1620,6 +1620,27 @@ async function noOverflow(page, where) {
   });
   await page.click('#solutions-close');
   await page.waitForTimeout(200);
+  // v87 ('sta caricando da troppo tempo'): l'attesa dice a che punto e', quanto dura, e si puo' interrompere
+  const att87 = await page.evaluate(async function () {
+    let annullato = false;
+    window.VLApp.overlay(true);
+    window.VLApp.overlayStep('sto provando');
+    window.VLApp.overlayCancel(function () { annullato = true; });
+    const btn = document.querySelector('#overlay-cancel');
+    const visibile = !btn.hidden;
+    // il cronometro parte solo dopo qualche secondo: lo si forza indietro nel tempo
+    await new Promise(function (r) { setTimeout(r, 1100); });
+    const subito = document.querySelector('#overlay-time').textContent;
+    btn.click();
+    await new Promise(function (r) { setTimeout(r, 50); });
+    const dopo = { nascosto: btn.hidden, step: document.querySelector('#overlay-step').textContent };
+    window.VLApp.overlay(false);
+    return { visibile: visibile, subito: subito, annullato: annullato, dopo: dopo, pulito: document.querySelector('#overlay-step').textContent, chiuso: !document.querySelector('#overlay').classList.contains('show') };
+  });
+  assert.ok(att87.visibile, 'il pulsante Annulla compare quando c\'e\' qualcosa da annullare');
+  assert.strictEqual(att87.subito, '', 'il cronometro non parte subito (sotto gli 8 secondi resta muto)');
+  assert.ok(att87.annullato && att87.dopo.nascosto, 'il clic annulla davvero e il pulsante sparisce');
+  assert.ok(att87.pulito === '' && att87.chiuso, 'chiudendo l\'attesa si ripulisce tutto');
   // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
   // salvataggio sulla lezione, etichette sulla card del portfolio, campi nello studentPayload
   await page.selectOption('#e-level', 'intermediate');

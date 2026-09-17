@@ -640,5 +640,42 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(err && err.truncated === true && /31000 token/.test(err.message), 'errore marcato e con i token veri: ' + (err && err.message));
   });
 
+  await test('v87 attesa: la chiamata scade da sola e si puo\' annullare', async function () {
+    // fetch che non risponde mai, ma rispetta il signal: e' il caso peggiore reale (rete appesa)
+    let chiamate = 0;
+    const appeso = function (url, opts) {
+      chiamate++;
+      return new Promise(function (_res, rej) {
+        if (opts && opts.signal) opts.signal.addEventListener('abort', function () { const e = new Error('The operation was aborted'); e.name = 'AbortError'; rej(e); });
+      });
+    };
+    // 1) timeout: scade, si riprova piu' leggeri come col troncamento, poi l'errore esce marcato
+    let err = null;
+    try { await AI.generateWithAI({ chunks: chunks, duration: D, target: 600, n: 10, types: ['gap'], lang: 'it', apiKey: 'k', timeoutMs: 40, fetchImpl: appeso }); } catch (e) { err = e; }
+    assert.ok(err && err.timedOut === true, 'errore di scadenza marcato: ' + (err && err.message));
+    assert.strictEqual(chiamate, 3, 'ha provato tutti i ripieghi prima di arrendersi');
+    // 2) annullamento dell'insegnante: si smette subito, senza ripieghi
+    chiamate = 0; err = null;
+    const ctl = new AbortController();
+    const pr = AI.generateWithAI({ chunks: chunks, duration: D, target: 600, n: 10, types: ['gap'], lang: 'it', apiKey: 'k', timeoutMs: 60000, signal: ctl.signal, fetchImpl: appeso });
+    setTimeout(function () { ctl.abort(); }, 20);
+    try { await pr; } catch (e) { err = e; }
+    assert.ok(err && err.aborted === true, 'errore di annullamento marcato: ' + (err && err.message));
+    assert.strictEqual(chiamate, 1, 'annullato vuol dire basta, non "riprova piu\' leggero"');
+    // 3) onStep racconta i passaggi a chi disegna l'attesa
+    const passi = [];
+    let n = 0;
+    const troncoPoiOk = async function (url, opts) {
+      const body = JSON.parse(opts.body); n++;
+      if (n === 1) return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { output_tokens: 32000 }, content: [{ type: 'text', text: '{' }], stop_reason: 'max_tokens' }; }, text: async function () { return ''; } };
+      const c = chunks.find(function (x) { return !x.silence && x.wordCount > 12; });
+      const piano = { title: 'x', exercises: [{ chunk: c.id, type: 'gap', sentence: c.text, gaps: L.words(c.text).filter(function (w) { return w.length > 5; }).slice(0, 3) }], cuts: [], vocab: [] };
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { output_tokens: 400 }, content: [{ type: 'text', text: JSON.stringify(piano) }], stop_reason: 'end_turn' }; }, text: async function () { return ''; } };
+    };
+    await AI.generateWithAI({ chunks: chunks, duration: D, target: 600, n: 10, types: ['gap'], lang: 'it', apiKey: 'k', fetchImpl: troncoPoiOk, onStep: function (st) { passi.push(st); } });
+    assert.strictEqual(passi.length, 2, 'un avviso per tentativo');
+    assert.ok(passi[1].retry === true && passi[1].total === 3, 'il secondo si presenta come ripiego: ' + JSON.stringify(passi[1]));
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();
