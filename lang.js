@@ -105,6 +105,47 @@
     it: ['per esempio', 'ad esempio', "tra l'altro", 'a proposito', 'piccola parentesi', 'parentesi', 'curiosita', 'per inciso', 'detto questo', 'nota a margine', 'piccola nota', 'per la cronaca', 'tra parentesi', 'un esempio', 'facciamo un esempio', 'immaginate', 'pensate che'],
     en: ['for example', 'for instance', 'by the way', 'side note', 'fun fact', 'incidentally', 'as an aside', 'imagine', 'think about it', 'let me give you an example']
   };
+  // ---------- v85: CAPIRE QUALI FRASI NON SI POSSONO TOGLIERE ----------
+  // Segnalato da Edoardo (17/9): "a volte vengono tagliate delle frasi che sono fondamentali per la comprensione".
+  // Tre marcatori, usati dal pianificatore dei tagli in generator.js:
+  //  - DEFINES: la frase SPIEGA qualcosa (definizione, causa, riformulazione) -> se il termine torna dopo, non si taglia
+  //  - REFBACK: la frase INIZIA rimandando a quella prima ("questo", "per questo", "ma") -> il video non puo' RIPARTIRE
+  //    da qui dopo un taglio: il riferimento resterebbe nel vuoto
+  //  - FILLER: frasi di servizio, ripetizioni del gia' detto: i primi candidati al taglio
+  const DEFINES = {
+    it: ['si chiama', 'si chiamano', 'lo chiamiamo', 'la chiamiamo', 'chiamato', 'chiamata', 'cioe', 'significa', 'vuol dire', 'in altre parole', 'ovvero', 'si definisce', 'e definito', 'in pratica', 'in sostanza', 'consiste', 'il motivo', 'per questo motivo', 'succede perche', 'accade perche', 'serve a', 'serve per', 'funziona cosi', 'immagina che', 'la differenza'],
+    en: ['is called', 'are called', 'we call', 'called', 'that is', 'it means', 'means that', 'in other words', 'is defined', 'basically', 'consists of', 'the reason', 'thats because', 'is used to', 'works like this', 'the difference']
+  };
+  // Solo marcatori FORTI: puntano a una cosa precisa appena detta ("Questo processo...", "Per questo...").
+  // I connettivi deboli (quindi, ma, allora, infatti) NON bloccano un taglio: una frase che riparte con "Quindi"
+  // resta comprensibile, e trattarli da anafore impediva qualunque taglio su una trascrizione vera.
+  const REFBACK = {
+    it: ['questo', 'questa', 'questi', 'queste', 'cosi', 'per questo', 'tutto questo', 'il che', 'da qui', 'lo stesso', 'la stessa', 'entrambi', 'entrambe', 'anzi', 'ecco perche'],
+    en: ['this', 'these', 'those', 'thats why', 'which is why', 'the same', 'both', 'because of this', 'as a result']
+  };
+  const FILLER = {
+    it: ['come dicevo', 'come abbiamo visto', 'come vi dicevo', 'torniamo', 'dicevamo', 'ripeto', 'insomma', 'diciamo', 'praticamente niente', 'eh niente', 'vabbe'],
+    en: ['as i said', 'as we saw', 'like i said', 'anyway', 'back to', 'so yeah', 'i mean']
+  };
+  /** La frase spiega/definisce qualcosa (una definizione tolta lascia lo studente senza la chiave). */
+  function defines(text, lang) {
+    const t = normalize(text, { accents: true });
+    return (DEFINES[lang] || DEFINES.it).some(function (k) { return t.indexOf(k) !== -1; });
+  }
+  /** La frase RIPRENDE quella precedente: il video non puo' ripartire da qui dopo un taglio.
+   *  Si guardano solo le prime due parole: "Ma" a inizio frase rimanda indietro, in mezzo no. */
+  function refsBack(text, lang) {
+    const t = normalize(text, { accents: true }).split(/\s+/).filter(Boolean).slice(0, 2);
+    if (!t.length) return false;
+    const list = REFBACK[lang] || REFBACK.it;
+    return list.indexOf(t[0]) !== -1 || (t.length > 1 && list.indexOf(t[0] + ' ' + t[1]) !== -1);
+  }
+  function isFiller(text, lang) {
+    const t = normalize(text, { accents: true });
+    return (FILLER[lang] || FILLER.it).some(function (k) { return t.indexOf(k) !== -1; });
+  }
+  function isQuestion(text) { return /\?\s*$/.test(String(text || '').trim()); }
+
   function isDigression(text, lang) {
     const t = normalize(text);
     const list = DIGRESSION[lang] || DIGRESSION.it;
@@ -277,7 +318,7 @@
   }
 
   return {
-    STOPWORDS: STOPWORDS, CTA: CTA, SWAPS: SWAPS, EXTRA: EXTRA, isDigression: isDigression, isCognate: isCognate, isBasic: isBasic, guessLemmas: guessLemmas,
+    STOPWORDS: STOPWORDS, CTA: CTA, SWAPS: SWAPS, EXTRA: EXTRA, isDigression: isDigression, defines: defines, refsBack: refsBack, isFiller: isFiller, isQuestion: isQuestion, isCognate: isCognate, isBasic: isBasic, guessLemmas: guessLemmas,
     stopwords: stopwords, normalize: normalize, tokenize: tokenize, words: words, isContent: isContent,
     hasCTA: hasCTA, isNoise: isNoise, endsBadly: endsBadly, startsSoftly: startsSoftly, endsWithPunct: endsWithPunct, swapFor: swapFor,
     extraCandidates: extraCandidates, rng: rng, fmtTime: fmtTime, parseTime: parseTime

@@ -897,7 +897,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     return promise.then(function (r) {
       if (!r) {
         const d = G.generateDraft({ chunks: chunks, lines: ls.lines, duration: duration, n: p.n, target: p.target, tolerance: p.tolerance, types: p.types, range: p.range, lang: ls.lang, contextBefore: p.contextBefore, seed: (Date.now() % 100000) + 1 });
-        r = { exercises: d.exercises, cuts: d.cuts, stats: d.stats, warnings: d.stats.shortfall > Math.max(5, p.tolerance || 0) ? ['Durata target non raggiungibile senza tagliare gli esercizi: mancano ' + Math.round(d.stats.shortfall) + 's.'] : [] };
+        // v85: se il pianificatore si e' fermato per non rompere il senso, lo si dice chiaro (la comprensione
+        // vince sul minutaggio: meglio 40 secondi in piu' che una frase che serviva a capire, tolta di nascosto)
+        const corto = d.stats.shortfall > Math.max(5, p.tolerance || 0);
+        const perSenso = corto && d.stats.senseBlocked > 0;
+        r = { exercises: d.exercises, cuts: d.cuts, stats: d.stats, warnings: corto
+          ? [perSenso
+            ? 'Durata ' + fmtMin(d.stats.effective) + ' invece di ' + fmtMin(d.stats.target) + ': per arrivarci avrei dovuto togliere frasi che servono a capire il video (spiegazioni, domande con la risposta, riferimenti). Se vuoi scendere ancora, aggiungi un taglio a mano.'
+            : 'Durata target non raggiungibile senza tagliare gli esercizi: mancano ' + Math.round(d.stats.shortfall) + 's.']
+          : [] };
         if ((p.types || []).indexOf('mc') !== -1) r.warnings.push('Scelta multipla: le regole non sanno scrivere domande, quindi nella bozza non c\'è; nell\'editor cambia il tipo di un esercizio in "Scelta multipla" (con la chiave AI domanda e risposte arrivano da sole).');
         ls.ai = null;
       }

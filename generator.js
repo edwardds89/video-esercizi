@@ -668,7 +668,7 @@
   function cutUnits(chunks) {
     const units = [];
     let cur = null;
-    const close = function () { if (cur) { cur.value = cur.tot ? cur.wv / cur.tot : 0; delete cur.wv; delete cur.tot; delete cur.ctaDur; units.push(cur); cur = null; } };
+    const close = function () { if (cur) { cur.value = cur.tot ? cur.wv / cur.tot : 0; cur.text = cur.texts.join(' ').trim(); delete cur.wv; delete cur.tot; delete cur.ctaDur; delete cur.texts; units.push(cur); cur = null; } };
     for (let i = 0; i < chunks.length; i++) {
       const c = chunks[i];
       if (c.silence) {
@@ -679,9 +679,9 @@
         if (cur && prevSpoken && nextSpoken && prevSpoken.mode === 'sentences' && !endsSentence(prevSpoken, nextSpoken)) { cur.end = c.end; cur.endExact = true; cur.ids.push(c.id); continue; }
         close(); units.push({ start: c.start, end: c.end, value: 0, silence: true, ids: [c.id], startExact: true, endExact: true }); continue;
       }
-      if (!cur) cur = { start: c.start, end: c.end, wv: 0, tot: 0, ctaDur: 0, cta: false, ids: [], startExact: !!c.startExact, endExact: false, silence: false };
+      if (!cur) cur = { start: c.start, end: c.end, wv: 0, tot: 0, ctaDur: 0, cta: false, ids: [], texts: [], startExact: !!c.startExact, endExact: false, silence: false };
       const d = Math.max(0.1, c.end - c.start);
-      cur.tot += d; cur.wv += d * (c.value || 0); if (c.cta) cur.ctaDur += d; cur.end = c.end; cur.endExact = !!c.endExact; cur.ids.push(c.id);
+      cur.tot += d; cur.wv += d * (c.value || 0); if (c.cta) cur.ctaDur += d; cur.end = c.end; cur.endExact = !!c.endExact; cur.ids.push(c.id); cur.texts.push(c.text || '');
       cur.cta = cur.ctaDur >= cur.tot / 2;   // frase "promozionale" se lo è per più di metà della sua durata
       if (c.mode !== 'sentences' || endsSentence(c, chunks[i + 1])) close();
     }
@@ -721,6 +721,138 @@
     return o.margins ? refineCutBounds(snapped, D) : snapped;
   }
 
+  /**
+   * v85 — CAPIRE IL SENSO PRIMA DI TAGLIARE (Edoardo, 17/9: "a volte vengono tagliate delle frasi che sono
+   * fondamentali per la comprensione... devi analizzare tutta la trascrizione e fare dei tagli dove ha senso farli").
+   * Legge TUTTE le frasi del video e segna, per ognuna: se riprende la precedente (il video non puo' ripartire da
+   * li'), se spiega/definisce qualcosa, se e' una domanda, e quali termini-chiave introduce per primo.
+   * Un "termine-chiave" e' una parola piena che torna in almeno 3 frasi del video: se la frase che la introduce
+   * viene tagliata ma la parola ricompare dopo, lo studente sente parlare di una cosa che non gli e' stata spiegata.
+   */
+  function senseInfo(units, lang) {
+    const lg = lang || 'it';
+    const docFreq = {};
+    const info = units.map(function (u) {
+      const text = u.text || '';
+      const terms = u.silence ? [] : Array.from(new Set(L.words(text).filter(function (w) { return w.length >= 4 && L.isContent(w, lg); })));
+      terms.forEach(function (t) { docFreq[t] = (docFreq[t] || 0) + 1; });
+      return {
+        terms: terms,
+        refsBack: !u.silence && L.refsBack(text, lg),
+        defines: !u.silence && L.defines(text, lg),
+        question: !u.silence && L.isQuestion(text),
+        filler: !u.silence && (L.isFiller(text, lg) || L.isDigression(text, lg))
+      };
+    });
+    // prima comparsa di ogni termine-chiave (ricorrente in >= 3 frasi)
+    const firstAt = {};
+    info.forEach(function (it, i) {
+      // >= 2 frasi: basta che il termine TORNI dopo (il vincolo scatta solo sulle frasi che spiegano, vedi cutBreaksSense)
+      it.terms.forEach(function (t) { if (firstAt[t] == null && docFreq[t] >= 2) firstAt[t] = i; });
+    });
+    return { info: info, docFreq: docFreq, firstAt: firstAt };
+  }
+  /** L'indice della prossima unita' parlata dopo j (i silenzi non "riprendono" niente). */
+  function nextSpoken(units, j) {
+    for (let k = j + 1; k < units.length; k++) if (!units[k].silence) return k;
+    return -1;
+  }
+  function prevSpoken(units, i) {
+    for (let k = i - 1; k >= 0; k--) if (!units[k].silence) return k;
+    return -1;
+  }
+  /**
+   * Il taglio [i..j] lascia il video comprensibile? Tre controlli, tutti sul CONFINE del taglio:
+   *  1. dove il video RIPARTE non ci dev'essere una frase che rimanda a quella tolta ("Questo significa che...");
+   *  2. dentro il taglio non ci dev'essere la PRIMA spiegazione di un termine che si sente ancora dopo;
+   *  3. non si taglia la risposta lasciando la domanda (ne' viceversa).
+   * Ritorna null se va bene, altrimenti il motivo (utile nei test e per spiegarlo all'insegnante).
+   */
+  function cutBreaksSense(units, i, j, sense) {
+    const info = sense.info;
+    const before = prevSpoken(units, i);
+    const after = nextSpoken(units, j);
+    if (after !== -1 && info[after].refsBack) {
+      // "Questo processo...", "Per questo...": rimanda a qualcosa. Rompe solo se quel qualcosa sta DENTRO il taglio
+      // e non c'e' piu' nella frase che rimane prima (altrimenti il riferimento regge lo stesso).
+      const dentro = new Set();
+      for (let k = i; k <= j; k++) if (!units[k].silence) info[k].terms.forEach(function (t) { dentro.add(t); });
+      const prima = before !== -1 ? info[before].terms : [];
+      const orfano = info[after].terms.some(function (t) { return dentro.has(t) && prima.indexOf(t) === -1; });
+      if (orfano || !info[after].terms.length) return 'la frase dopo il taglio riprende quella tolta';
+    }
+    if (before !== -1 && info[before].question) return 'toglierebbe la risposta lasciando la domanda';
+    for (let k = i; k <= j; k++) {
+      if (units[k].silence) continue;
+      // domanda dentro il taglio la cui RISPOSTA resta fuori (la domanda e' l'ultima frase tolta):
+      // lo studente sentirebbe la risposta senza sapere a cosa
+      if (info[k].question && nextSpoken(units, k) > j) return 'toglierebbe la domanda lasciando la risposta';
+      // Il vincolo vale per le frasi che SPIEGANO ("si chiama cosi' perche'...", "significa che..."): se qui c'e'
+      // la prima spiegazione di un termine che si sente ancora dopo, toglierla lascia lo studente senza la chiave.
+      // Senza questo filtro (solo "prima comparsa") quasi ogni frase risultava intoccabile e non si tagliava piu' niente.
+      if (!info[k].defines) continue;
+      for (const t of info[k].terms) {
+        if (sense.firstAt[t] !== k) continue;                 // qui il termine compare per la prima volta
+        for (let m = after; m !== -1 && m < units.length; m++) {
+          if (units[m].silence) continue;
+          if (info[m].terms.indexOf(t) !== -1) return 'toglierebbe la prima spiegazione di "' + t + '", che si sente ancora dopo';
+        }
+      }
+    }
+    return null;
+  }
+  /**
+   * Da un taglio "voluto" [i..j] al piu' grande taglio VICINO che non rompe il senso: prima si prova ad allungarlo
+   * in avanti (se la frase dopo riprende quella tolta, la si porta dentro), poi lo si accorcia dalla fine.
+   * Ritorna { i, j } oppure null se non resta niente di tagliabile.
+   */
+  function carveCut(units, i, j, sense, canCut) {
+    let a = i, b = j;
+    // 1. il taglio comincia subito dopo una domanda? si tiene la prima frase di risposta e si parte da quella dopo
+    for (let k = 0; k < 2; k++) {
+      const pv = prevSpoken(units, a);
+      if (pv === -1 || !sense.info[pv].question) break;
+      const nx = nextSpoken(units, a);
+      if (nx === -1 || nx > b) break;
+      a = nx;
+    }
+    // 2. la frase dove il video riparte rimanda a quella tolta? la si porta dentro al taglio
+    for (let grow = 0; grow < 3; grow++) {
+      if (!cutBreaksSense(units, a, b, sense)) return { i: a, j: b };
+      const nx = nextSpoken(units, b);
+      if (nx === -1 || !canCut(nx) || !sense.info[nx].refsBack) break;
+      b = nx;
+    }
+    // 3. ultima risorsa: si accorcia il taglio dalla fine finche' il video torna comprensibile
+    while (b >= a) {
+      if (!cutBreaksSense(units, a, b, sense)) return { i: a, j: b };
+      b--;
+      while (b > a && units[b] && units[b].silence) b--;   // non finire un taglio su un silenzio
+    }
+    return null;
+  }
+
+  /**
+   * v85 — lo stesso guardiano applicato a UN taglio qualsiasi (proposto dal modello o messo a mano): lo restringe
+   * finche' il video resta comprensibile. Ritorna il taglio corretto, oppure null se non ne resta niente.
+   */
+  function sensibleCut(chunks, cut, opts) {
+    const o = opts || {};
+    const units = cutUnits(chunks);
+    if (!units.length) return cut;
+    const sense = senseInfo(units, o.lang || 'it');
+    let i = -1, j = -1;
+    units.forEach(function (u, k) {
+      if (i === -1 && u.end > cut.start + 0.2) i = k;
+      if (u.start < cut.end - 0.2) j = k;
+    });
+    if (i === -1 || j === -1 || j < i) return cut;
+    const r = carveCut(units, i, j, sense, function () { return false; });
+    if (!r) return null;
+    if (r.i === i && r.j === j) return cut;
+    return Object.assign({}, cut, { start: units[r.i].start, end: units[r.j].end });
+  }
+
   function planCuts(chunks, params) {
     const D = params.duration || chunks[chunks.length - 1].end;
     const T = params.target;
@@ -753,12 +885,34 @@
     if (contentUnits.length && introKeep) autoProtect.push({ start: contentUnits[0].start, end: Math.min(D, contentUnits[0].start + introKeep) });
     if (contentUnits.length && outroKeep) { const last = contentUnits[contentUnits.length - 1]; autoProtect.push({ start: Math.max(0, last.end - outroKeep), end: last.end }); }
     units.forEach(function (u, i) {
+      u.ix = i;
       const hard = protect.some(function (p) { return overlaps(u, p); }) || existing.some(function (p) { return overlaps(u, p); });
       u.free = !hard && (u.cta || !autoProtect.some(function (p) { return overlaps(u, p); }));
     });
 
     const cuts = [];
     let removed = 0;
+    // v85: prima di decidere QUALSIASI taglio si legge tutta la trascrizione e si capisce cosa regge cosa
+    const keepSense = params.keepSense !== false;
+    const sense = senseInfo(units, params.lang || 'it');
+    const canCut = function (k) { return !!(units[k] && units[k].free); };
+    let blocked = 0;   // quante volte il senso ha impedito (o accorciato) un taglio: serve a spiegarlo all'insegnante
+    /** Taglia [iIdx..jIdx] SOLO se il video resta comprensibile; se serve accorcia il taglio. Ritorna i secondi tolti. */
+    const tryCut = function (iIdx, jIdx, reason, minLen) {
+      if (iIdx == null || jIdx == null || jIdx < iIdx) return 0;
+      let range = { i: iIdx, j: jIdx };
+      if (keepSense) {
+        range = carveCut(units, iIdx, jIdx, sense, canCut);
+        if (!range) { blocked++; return 0; }
+        if (range.j !== jIdx || range.i !== iIdx) blocked++;
+      }
+      const a = units[range.i], b = units[range.j];
+      const len = b.end - a.start;
+      if (len < (minLen || 0)) return 0;
+      cuts.push({ start: a.start, end: b.end, reason: reason, startExact: a.startExact, endExact: b.endExact });
+      for (let q = range.i; q <= range.j; q++) units[q].free = false;
+      return len;
+    };
     // v80: prima di tutto, via gli appelli al pubblico (sequenze di frasi cta, coi silenzi brevi in mezzo)
     if (wantCta) {
       let k = 0;
@@ -771,12 +925,7 @@
           if (nx.free && nx.silence && nx.end - nx.start <= 3 && units[j + 2] && units[j + 2].free && units[j + 2].cta) { j += 2; continue; }
           break;
         }
-        const len = units[j].end - units[k].start;
-        if (len >= 3) {
-          cuts.push({ start: units[k].start, end: units[j].end, reason: 'sponsor / appello al pubblico', startExact: units[k].startExact, endExact: units[j].endExact });
-          removed += len;
-          for (let q = k; q <= j; q++) units[q].free = false;
-        }
+        removed += tryCut(k, j, 'sponsor / appello al pubblico', 3);
         k = j + 1;
       }
     }
@@ -817,8 +966,7 @@
       if (r.length < minForRun) continue;
       const reason = r.silence ? 'silenzio' : r.ctaShare > 0.5 ? 'sponsor / appello al pubblico' : (r.intro && r.length < 60) ? 'introduzione' : (r.outro && r.length < 90) ? 'chiusura' : r.mean < 0.35 ? 'bassa densità' : 'parte secondaria';
       if (r.length <= remaining + minCut / 2) {
-        cuts.push({ start: r.start, end: r.end, reason: reason, startExact: r.units[0].startExact, endExact: r.units[r.units.length - 1].endExact });
-        removed += r.length;
+        removed += tryCut(r.units[0].ix, r.units[r.units.length - 1].ix, reason, minForRun);
         continue;
       }
       // Sotto-sequenza: finestra di lunghezza >= remaining con valore medio minimo, senza eccedere troppo
@@ -833,7 +981,7 @@
           if (len >= remaining) {
             if (len <= remaining + 15) {
               const mean = wv / tot;
-              if (!best || mean < best.mean) best = { start: r.units[i].start, end: u.end, mean: mean, len: len, startExact: r.units[i].startExact, endExact: u.endExact };
+              if (!best || mean < best.mean) best = { iIdx: r.units[i].ix, jIdx: u.ix, mean: mean, len: len };
             }
             break;
           }
@@ -843,12 +991,29 @@
         // nessuna finestra ammissibile: prendi dall'inizio della sequenza una lunghezza ~remaining
         let j = 0;
         while (j < r.units.length - 1 && r.units[j].end - r.start < remaining) j++;
-        best = { start: r.start, end: r.units[j].end, len: r.units[j].end - r.start, startExact: r.units[0].startExact, endExact: r.units[j].endExact };
+        best = { iIdx: r.units[0].ix, jIdx: r.units[j].ix, len: r.units[j].end - r.start };
       }
-      if (best.len >= minCut) {
-        cuts.push({ start: best.start, end: best.end, reason: reason, startExact: best.startExact, endExact: best.endExact });
-        removed += best.len;
-      }
+      if (best.len >= minCut) removed += tryCut(best.iIdx, best.jIdx, reason, minCut);
+    }
+
+    // v85: seconda passata. La prima puo' aver lasciato secondi per strada quando il guardiano del senso ha
+    // accorciato un taglio: si ripassano le sequenze ancora libere (ricalcolate) accettando tagli piu' corti,
+    // sempre con lo stesso guardiano. Meglio due tagli onesti che uno che rompe il discorso.
+    if (need - removed > tol) {
+      const rest = [];
+      let cur = null;
+      units.forEach(function (u) {
+        if (u.free) { if (!cur) { cur = []; rest.push(cur); } cur.push(u); }
+        else cur = null;
+      });
+      rest.map(function (seq) {
+        let tot = 0, wv = 0;
+        seq.forEach(function (u) { const d = Math.max(0.1, u.end - u.start); tot += d; wv += d * u.value; });
+        return { seq: seq, mean: tot ? wv / tot : 0, len: seq[seq.length - 1].end - seq[0].start };
+      }).sort(function (a, b) { return a.mean - b.mean; }).forEach(function (r) {
+        if (need - removed <= tol || r.len < 6) return;
+        removed += tryCut(r.seq[0].ix, r.seq[r.seq.length - 1].ix, r.mean < 0.35 ? 'bassa densità' : 'parte secondaria', 6);
+      });
     }
 
     cuts.sort(function (a, b) { return a.start - b.start; });
@@ -860,7 +1025,7 @@
     }
     const finalCuts = mergedCuts.map(function (c) { return refineCutBounds(c, D); });
     removed = finalCuts.reduce(function (s, c) { return s + (c.end - c.start); }, 0);
-    return { cuts: finalCuts, removed: removed, shortfall: Math.max(0, need - tol - removed) };
+    return { cuts: finalCuts, removed: removed, shortfall: Math.max(0, need - tol - removed), senseBlocked: blocked };
   }
 
   function keepRanges(cuts, duration) {
@@ -948,7 +1113,7 @@
     const result = fitCuts(chunks, exercises, { duration: duration, target: target, tolerance: params.tolerance, contextBefore: params.contextBefore, lang: lang });
     return {
       chunks: chunks, exercises: exercises, cuts: result.cuts,
-      stats: { duration: duration, target: target, removed: result.removed, effective: effectiveDuration(result.cuts, duration), shortfall: result.shortfall, contextUsed: result.contextUsed, n: exercises.length }
+      stats: { duration: duration, target: target, removed: result.removed, effective: effectiveDuration(result.cuts, duration), shortfall: result.shortfall, senseBlocked: result.senseBlocked || 0, contextUsed: result.contextUsed, n: exercises.length }
     };
   }
 
@@ -990,7 +1155,7 @@
     passages: passages, selectPassages: selectPassages, passagesNear: passagesNear, makeExerciseFromPassage: makeExerciseFromPassage,
     parseTranscript: parseTranscript, buildChunks: buildChunks, wordTimes: wordTimes, annotate: annotate, wordFreq: wordFreq,
     typeFit: typeFit, selectChunks: selectChunks, alternatives: alternatives, nearestChunk: nearestChunk,
-    planCuts: planCuts, cutUnits: cutUnits, endsSentence: endsSentence, snapCutToSentences: snapCutToSentences, refineCutBounds: refineCutBounds, keepRanges: keepRanges, effectiveDuration: effectiveDuration, inCut: inCut,
+    planCuts: planCuts, cutUnits: cutUnits, senseInfo: senseInfo, cutBreaksSense: cutBreaksSense, sensibleCut: sensibleCut, endsSentence: endsSentence, snapCutToSentences: snapCutToSentences, refineCutBounds: refineCutBounds, keepRanges: keepRanges, effectiveDuration: effectiveDuration, inCut: inCut,
     makeExercise: makeExercise, generateDraft: generateDraft, fitCuts: fitCuts, validateLesson: validateLesson, autoCount: autoCount
   };
 });

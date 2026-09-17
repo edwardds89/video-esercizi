@@ -51,7 +51,13 @@
       'Work from the TEXT: the shortened video must still make sense on its own, like a good abridgement. ALWAYS KEEP the opening that introduces the topic (what the video is about), the main line of explanation, and the conclusion. ' +
       'CUT, in this order: greetings/sponsor/calls to action, digressions and asides, repeated examples, overly detailed or technical passages (numbers, lists, minor specifics), long silences. ' +
       'Every cut must start at the beginning of a sentence and end at the end of a sentence, never mid-sentence: a chunk whose text starts with "…" continues the previous chunk\'s sentence, so a cut can neither start at it nor end right before it. Never cut a chunk that contains an exercise sentence, nor the 20 seconds before it. ' +
-      'Prefer few long cuts (at least 8 seconds each) over many short ones; give a short "reason" for each. If the target is not reachable without harming coherence, do your best and say so in "notes".');
+      'Prefer few long cuts (at least 8 seconds each) over many short ones; give a short "reason" for each. ' +
+      // v85 (Edoardo, 17/9: "a volte vengono tagliate delle frasi fondamentali per la comprensione... analizza
+      // tutta la trascrizione e fai i tagli dove ha senso farli"). Il modello legge tutto il testo: qui gli si dice
+      // cosa NON si tocca mai. Le stesse tre regole sono applicate anche dal motore (G.sensibleCut).
+      'NEVER cut: a sentence that explains or defines something used later ("X is called Y because...", "this means that..."); a sentence whose answer or consequence stays in the video; the first mention of a key term that keeps coming back. ' +
+      'And where the video RESUMES after a cut, the first kept sentence must stand on its own: never resume on a sentence that points back ("This process...", "That is why...") to something you removed. ' +
+      'Comprehension wins over duration: if you cannot reach the target without breaking the thread, cut LESS, keep the video longer, and say it in "notes".');
     lines.push('4. Give a short lesson "title" in the transcript language.');
     const sup = p.support || (p.lang === 'en' ? 'it' : 'en');
     lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student whose own language is "' + sup + '" must learn to understand the video, in "vocab". ' +
@@ -266,7 +272,11 @@
       pieces.forEach(function (pc2) {
         // a frasi intere: il modello (o il ritaglio attorno agli esercizi) può lasciare confini a metà frase
         const snapped = G.snapCutToSentences(pc2, chunks, { min: 5, duration: D });
-        if (snapped) cuts.push({ start: snapped.start, end: snapped.end, reason: pc.reason, source: 'ai' });
+        // v85: anche i tagli proposti dal modello passano dal guardiano del senso (definizioni, riferimenti,
+        // domanda-risposta): se rompono il discorso vengono accorciati, o scartati.
+        const sensato = snapped ? G.sensibleCut(chunks, snapped, { lang: lang }) : null;
+        if (sensato && sensato.end - sensato.start >= 3) cuts.push({ start: sensato.start, end: sensato.end, reason: pc.reason, source: 'ai' });
+        else if (snapped) warnings.push('Un taglio proposto dall\'AI toglieva una frase che serve a capire il video: l\'ho lasciata.');
       });
     });
     cuts.sort(function (a, b) { return a.start - b.start; });
