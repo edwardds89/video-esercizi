@@ -60,7 +60,8 @@
       'Comprehension wins over duration: if you cannot reach the target without breaking the thread, cut LESS, keep the video longer, and say it in "notes".');
     lines.push('4. Give a short lesson "title" in the transcript language.');
     const sup = p.support || (p.lang === 'en' ? 'it' : 'en');
-    lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student whose own language is "' + sup + '" must learn to understand the video, in "vocab". ' +
+    if (p.noVocab) lines.push('5. Do NOT propose useful words: leave "vocab" as an empty list.');
+    else lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student whose own language is "' + sup + '" must learn to understand the video, in "vocab". ' +
       'Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (e.g. Italian "globale" ≈ English "global", "informazione" ≈ "information"), basic words a ' + (p.level || 'B1') + ' student already knows, proper names and numbers. ' +
       'Prioritize words that occur in the exercise sentences you chose (mark them with "inExercise": true), then other key words of the video. Use the dictionary form as it appears in the video (singular noun, infinitive verb, masculine adjective) ' +
       'and give the translation in language "' + sup + '" ("translation").');
@@ -68,6 +69,8 @@
     lines.push('OUTPUT SCHEMA (JSON only):');
     lines.push('{"title":"...","exercises":[{"chunk":"c12","type":"gap","sentence":"...","gaps":["word1","word2","word3"],"distractors":["w1","w2"],"missing":"word","extra":{"word":"di","after":"word"},"wrong":{"word":"il","replacement":"la"},"why":"short reason"}],"cuts":[{"from":"c1","to":"c3","reason":"intro"}],"vocab":[{"word":"smalto","translation":"enamel","inExercise":true}],"notes":"..."}');
     lines.push('Include only the fields relevant to each exercise type.');
+    // v86: quando la risposta precedente si e' troncata si chiede il minimo indispensabile
+    if (p.terse) lines.push('BE TERSE: omit "why" and "notes" entirely, keep "reason" under 4 words, do not repeat the transcript, no comments.');
     lines.push('');
     lines.push('TRANSCRIPT CHUNKS (id|start|end|text; a leading "…" means the chunk continues the previous sentence):');
     lines.push(fmtChunks(p.chunks));
@@ -87,7 +90,7 @@
       },
       body: JSON.stringify({
         model: o.model || DEFAULT_MODEL,
-        max_tokens: o.maxTokens || 16000,   // v83: 6000 troncava il piano dei video lunghi ('che significa?' con lo screenshot del giallo)
+        max_tokens: o.maxTokens || 32000,   // v86: 6000 -> 16000 -> 32000. Alzare non basta da solo: vedi la scaletta di ripieghi in generateWithAI
         system: o.system,
         // con o.images il contenuto diventa multimodale: prima le immagini, poi il testo (v70)
         messages: [{ role: 'user', content: Array.isArray(o.images) && o.images.length
@@ -103,7 +106,14 @@
     const j = await res.json();
     const text = (j.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
     // Risposta tagliata dal limite di token: il JSON e' incompleto e non si puo' usare. Meglio dirlo che 'Nessun JSON'.
-    if (j.stop_reason === 'max_tokens') throw new Error('Risposta del modello troncata (limite di ' + (o.maxTokens || 16000) + ' token): riduci il numero di esercizi o la durata e riprova');
+    if (j.stop_reason === 'max_tokens') {
+      // v86: l'errore dice quanto ha scritto davvero il modello (serve a capire se e' il piano a essere lungo
+      // o se il modello si e' perso). Il flag `truncated` fa scattare il ripiego automatico in generateWithAI.
+      const out = (j.usage && j.usage.output_tokens) || 0;
+      const err = new Error('Risposta del modello troncata dopo ' + out + ' token (limite ' + (o.maxTokens || 32000) + ')');
+      err.truncated = true; err.outputTokens = out;
+      throw err;
+    }
     return { text: text, usage: j.usage || null, model: j.model || o.model, stop: j.stop_reason || null };
   }
 
@@ -772,12 +782,33 @@
     const duration = params.duration;
     const chunks = params.chunks || G.annotate(G.buildChunks(params.lines, { duration: duration, lang: lang }), { lang: lang, duration: duration });
     const target = params.target && params.target > 0 ? Math.min(params.target, duration) : duration;
-    const msgs = buildMessages({ chunks: chunks, n: params.n, auto: params.auto, types: params.types, lang: lang, level: params.level, focus: params.focus, duration: duration, target: target, range: params.range, support: params.support, nVocab: params.nVocab, tricky: params.tricky });
-    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: msgs.system, user: msgs.user, maxTokens: params.maxTokens, fetchImpl: params.fetchImpl });
-    const plan = extractJSON(res.text);
+    // v86 (Edoardo, 17/9: "vedo ancora questo problema" con la risposta troncata): alzare il tetto non basta.
+    // Se il modello sfonda il limite si RIPROVA da soli, chiedendo meno roba, invece di buttare via tutto e
+    // ripiegare sulle regole: prima senza parole utili e in versione stringata, poi con meta' degli esercizi.
+    const base = { chunks: chunks, auto: params.auto, types: params.types, lang: lang, level: params.level, focus: params.focus, duration: duration, target: target, range: params.range, support: params.support, nVocab: params.nVocab, tricky: params.tricky };
+    const nWanted = params.n;
+    const scaletta = [
+      { n: nWanted },
+      { n: nWanted, noVocab: true, terse: true, nota: 'video lungo: le parole utili non sono nel piano (le proponi con il pulsante AI nella card "Parole utili")' },
+      { n: Math.max(4, Math.round((typeof nWanted === 'number' ? nWanted : 10) / 2)), noVocab: true, terse: true, nota: 'video lungo: l\'AI ha preparato meno esercizi del richiesto (aggiungine altri dall\'editor)' }
+    ];
+    let res = null, plan = null, downgraded = '';
+    for (let k = 0; k < scaletta.length; k++) {
+      const step = scaletta[k];
+      const msgs = buildMessages(Object.assign({}, base, step));
+      try {
+        res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: msgs.system, user: msgs.user, maxTokens: params.maxTokens, fetchImpl: params.fetchImpl });
+        plan = extractJSON(res.text);
+        downgraded = step.nota || '';
+        break;
+      } catch (e) {
+        if (!e.truncated || k === scaletta.length - 1) throw e;   // non e' un troncamento (o ripieghi finiti): l'errore sale
+      }
+    }
     const applied = applyPlan(plan, { chunks: chunks, lang: lang, duration: duration, target: target, n: params.n, types: params.types, auto: params.auto, level: params.level });
     applied.chunks = chunks;
     applied.ai = { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL), raw: res.text };
+    if (downgraded) applied.warnings = (applied.warnings || []).concat(['AI: ' + downgraded + '.']);
     return applied;
   }
 

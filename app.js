@@ -887,7 +887,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           return { exercises: r.exercises, cuts: r.cuts, stats: r.stats, warnings: r.warnings, vocab: r.vocab };
         })
         .catch(function (e) {
-          warnings.push('AI non usata: ' + e.message + ' — bozza generata con le regole.');
+          // v86: il troncamento ha un messaggio suo, con il numero vero di token scritti dal modello e cosa fare
+          warnings.push(e.truncated
+            ? 'Il modello ha scritto ' + (e.outputTokens || '?') + ' token senza chiudere il piano, anche riprovando con meno esercizi: bozza generata con le regole. Gli esercizi ci sono; per la scelta multipla e le parole utili usa i pulsanti AI nell\'editor.'
+            : 'AI non usata: ' + e.message + '. Bozza generata con le regole.');
           return null;
         });
     } else {
