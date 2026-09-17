@@ -609,5 +609,36 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     await assert.rejects(function () { return AI.askExercise({ sentences: sentences, request: 'x', lang: 'it', apiKey: 'k', fetchImpl: fetchBad('{"type":"gap"}') }); }, /frase/, 'senza indice: errore parlante');
   });
 
+  await test('v86 troncamento: si riprova da soli con meno roba invece di arrendersi alle regole', async function () {
+    const inviati = [];
+    let chiamate = 0;
+    const fakeFetch = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      inviati.push(body.messages[0].content);
+      chiamate++;
+      if (chiamate === 1) {
+        // prima risposta: il modello sfonda il tetto
+        return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 9000, output_tokens: 32000 }, content: [{ type: 'text', text: '{"title":"a","exer' }], stop_reason: 'max_tokens' }; }, text: async function () { return ''; } };
+      }
+      const c = chunks.find(function (x) { return !x.silence && x.wordCount > 12; });
+      const piano = { title: 'Il cervello', exercises: [{ chunk: c.id, type: 'gap', sentence: c.text, gaps: L.words(c.text).filter(function (w) { return w.length > 5; }).slice(0, 3) }], cuts: [], vocab: [] };
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { input_tokens: 9000, output_tokens: 400 }, content: [{ type: 'text', text: JSON.stringify(piano) }], stop_reason: 'end_turn' }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.generateWithAI({ chunks: chunks, duration: D, target: 600, n: 10, types: ['gap'], lang: 'it', apiKey: 'k', fetchImpl: fakeFetch });
+    assert.strictEqual(chiamate, 2, 'ha riprovato una volta sola');
+    assert.ok(inviati[0].indexOf('USEFUL WORDS') !== -1, 'la prima richiesta chiedeva anche le parole utili');
+    assert.ok(/Do NOT propose useful words/.test(inviati[1]) && /BE TERSE/.test(inviati[1]), 'la seconda chiede meno roba');
+    assert.ok(r.exercises.length >= 1, 'la bozza AI arriva lo stesso');
+    assert.ok((r.warnings || []).some(function (w) { return /parole utili/.test(w); }), 'e lo dice all\'insegnante: ' + JSON.stringify(r.warnings));
+    // se si tronca SEMPRE, l'errore che esce e' parlante e marcato
+    let err = null;
+    const sempreTronco = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { output_tokens: 31000 }, content: [{ type: 'text', text: '{' }], stop_reason: 'max_tokens' }; }, text: async function () { return ''; } };
+    };
+    try { await AI.generateWithAI({ chunks: chunks, duration: D, target: 600, n: 10, types: ['gap'], lang: 'it', apiKey: 'k', fetchImpl: sempreTronco }); } catch (e) { err = e; }
+    assert.ok(err && err.truncated === true && /31000 token/.test(err.message), 'errore marcato e con i token veri: ' + (err && err.message));
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();
