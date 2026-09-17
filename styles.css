@@ -317,6 +317,11 @@ body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barr
    caricamento'): il testo da solo non dice che il lavoro STA andando avanti. */
 .spinner.inline { display: inline-block; width: 16px; height: 16px; border-width: 2px; margin: 0 8px 0 0; vertical-align: -3px; }
 #overlay-text { font-size: 17px; color: var(--muted); letter-spacing: .02em; }
+/* v87: la riga di stato, il cronometro e la via d'uscita */
+#overlay-step { margin-top: 8px; font-size: 14px; color: var(--muted); max-width: 30em; line-height: 1.45; }
+#overlay-time { margin-top: 4px; font-size: 13px; color: #9aa3b2; font-variant-numeric: tabular-nums; }
+#overlay-cancel { margin-top: 14px; }
+#overlay-cancel[hidden] { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .linkbox { background: var(--chip); padding: 8px 10px; border-radius: 8px; word-break: break-all; font-size: 13px; max-height: 90px; overflow: auto; }
 .sr { position: absolute; left: -9999px; }

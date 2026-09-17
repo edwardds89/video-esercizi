@@ -80,7 +80,23 @@
   async function callAnthropic(o) {
     const f = o.fetchImpl || (typeof fetch === 'function' ? fetch : null);
     if (!f) throw new Error('fetch non disponibile');
-    const res = await f('https://api.anthropic.com/v1/messages', {
+    // v87 (Edoardo, 17/9: "sta caricando da troppo tempo"): nessuna chiamata puo' restare appesa per sempre.
+    // Timeout proprio (err.timedOut, fa scattare il ripiego come il troncamento) e annullamento da fuori
+    // (o.signal -> err.aborted, che invece NON si ripiega: se l'utente annulla, si smette).
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const limit = o.timeoutMs || 120000;
+    let scaduto = false, timer = null;
+    if (ctl) {
+      timer = setTimeout(function () { scaduto = true; ctl.abort(); }, limit);
+      if (o.signal) {
+        if (o.signal.aborted) ctl.abort();
+        else o.signal.addEventListener('abort', function () { ctl.abort(); });
+      }
+    }
+    let res;
+    try {
+      res = await f('https://api.anthropic.com/v1/messages', {
+      signal: ctl ? ctl.signal : undefined,
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -98,6 +114,11 @@
           : o.user }]
       })
     });
+    } catch (e) {
+      if (scaduto) { const err = new Error('l\'AI non ha risposto entro ' + Math.round(limit / 1000) + ' secondi'); err.timedOut = true; throw err; }
+      if (o.signal && o.signal.aborted) { const err = new Error('richiesta annullata'); err.aborted = true; throw err; }
+      throw e;
+    } finally { if (timer) clearTimeout(timer); }
     if (!res.ok) {
       let t = '';
       try { t = await res.text(); } catch (e) { /* ignore */ }
@@ -793,16 +814,20 @@
       { n: Math.max(4, Math.round((typeof nWanted === 'number' ? nWanted : 10) / 2)), noVocab: true, terse: true, nota: 'video lungo: l\'AI ha preparato meno esercizi del richiesto (aggiungine altri dall\'editor)' }
     ];
     let res = null, plan = null, downgraded = '';
+    // v87: chi chiama sa a che punto siamo (onStep) e puo' fermare tutto (signal)
+    const avvisa = typeof params.onStep === 'function' ? params.onStep : function () {};
     for (let k = 0; k < scaletta.length; k++) {
       const step = scaletta[k];
+      avvisa({ step: k + 1, total: scaletta.length, retry: k > 0, n: step.n });
       const msgs = buildMessages(Object.assign({}, base, step));
       try {
-        res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: msgs.system, user: msgs.user, maxTokens: params.maxTokens, fetchImpl: params.fetchImpl });
+        res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: msgs.system, user: msgs.user, maxTokens: params.maxTokens, timeoutMs: params.timeoutMs || 180000, signal: params.signal, fetchImpl: params.fetchImpl });
         plan = extractJSON(res.text);
         downgraded = step.nota || '';
         break;
       } catch (e) {
-        if (!e.truncated || k === scaletta.length - 1) throw e;   // non e' un troncamento (o ripieghi finiti): l'errore sale
+        // annullato dall'insegnante: si smette subito. Troncato o scaduto: si riprova piu' leggeri, finche' ce n'e'.
+        if (e.aborted || (!e.truncated && !e.timedOut) || k === scaletta.length - 1) throw e;
       }
     }
     const applied = applyPlan(plan, { chunks: chunks, lang: lang, duration: duration, target: target, n: params.n, types: params.types, auto: params.auto, level: params.level });

@@ -55,7 +55,35 @@
     document.removeEventListener('pointerdown', dismissUndoBar, true);
     setTimeout(function () { if (undoBarEl.classList.contains('show')) document.addEventListener('pointerdown', dismissUndoBar, true); }, 500);
   }
-  function overlay(show, text) { $('#overlay').classList.toggle('show', !!show); if (text) $('#overlay-text').textContent = text; }
+  // v87 (Edoardo, 17/9: "sta caricando da troppo tempo"): l'attesa dev'essere leggibile e interrompibile.
+  // L'overlay dice a che punto e', da quanto aspetta, e offre una via d'uscita quando chi chiama ne registra una.
+  let ovT0 = 0, ovTimer = null, ovCancel = null;
+  function overlay(show, text) {
+    $('#overlay').classList.toggle('show', !!show);
+    if (text) $('#overlay-text').textContent = text;
+    const step = $('#overlay-step'), time = $('#overlay-time'), btn = $('#overlay-cancel');
+    if (ovTimer) { clearInterval(ovTimer); ovTimer = null; }
+    if (step) step.textContent = '';
+    if (time) time.textContent = '';
+    if (btn) btn.hidden = true;
+    if (!show) { ovCancel = null; $('#overlay-text').textContent = 'Un attimo…'; return; }
+    ovT0 = Date.now();
+    ovTimer = setInterval(function () {
+      const s = Math.round((Date.now() - ovT0) / 1000);
+      const t = $('#overlay-time'); if (!t) return;
+      if (s < 8) { t.textContent = ''; return; }   // sotto gli 8 secondi il cronometro e' solo ansia
+      t.textContent = (s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's')
+        + (s > 90 ? ' · un video lungo può richiedere qualche minuto' : '');
+    }, 1000);
+  }
+  /** Riga sotto le mascotte: cosa sta succedendo davvero. */
+  function overlayStep(msg) { const e = $('#overlay-step'); if (e) e.textContent = msg || ''; }
+  /** Registra (o toglie) la via d'uscita: il pulsante compare solo se c'e' qualcosa da annullare. */
+  function overlayCancel(fn) { ovCancel = fn || null; const b = $('#overlay-cancel'); if (b) b.hidden = !fn; }
+  function bindOverlayCancel() {
+    const b = $('#overlay-cancel'); if (!b) return;
+    b.onclick = function () { const f = ovCancel; if (!f) return; ovCancel = null; b.hidden = true; overlayStep('Annullo…'); f(); };
+  }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function slugify(s) { return L.normalize(s || 'lezione').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'lezione'; }
   function fmt(t) { return L.fmtTime(t); }
@@ -878,15 +906,26 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     let promise;
     if (useAI && S.settings.apiKey) {
       overlay(true);
+      overlayStep('L\'AI sta leggendo la trascrizione e preparando esercizi e tagli.');
+      // v87: si puo' annullare e tenersi la bozza fatta con le regole, invece di restare a guardare le mascotte
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      if (ctl) overlayCancel(function () { ctl.abort(); });
       const auto = p.n === 'auto' || !(p.n > 0);
       const nEff = auto ? G.autoCount(p.target && p.target > 0 ? Math.min(p.target, duration) : duration) : p.n;
-      promise = AI.generateWithAI({ chunks: chunks, duration: duration, target: p.target, n: nEff, auto: auto, types: p.types, range: p.range, lang: ls.lang, level: ls.level, focus: p.focus, support: vocabState(ls).support, tricky: !!p.tricky, apiKey: S.settings.apiKey, model: S.settings.model })
+      promise = AI.generateWithAI({ signal: ctl ? ctl.signal : null, onStep: function (st) {
+          overlayStep(st.step === 1
+            ? 'L\'AI sta leggendo la trascrizione e preparando esercizi e tagli.'
+            : 'Il piano era troppo lungo per una risposta sola: riprovo in versione più leggera (' + st.step + ' di ' + st.total + ').');
+        }, chunks: chunks, duration: duration, target: p.target, n: nEff, auto: auto, types: p.types, range: p.range, lang: ls.lang, level: ls.level, focus: p.focus, support: vocabState(ls).support, tricky: !!p.tricky, apiKey: S.settings.apiKey, model: S.settings.model })
         .then(function (r) {
           ls.ai = { model: r.ai.model, cost: r.ai.cost, usage: r.ai.usage, notes: r.notes, title: r.title, when: new Date().toISOString() };
           if (r.title && !ls.title) ls.title = r.title;
           return { exercises: r.exercises, cuts: r.cuts, stats: r.stats, warnings: r.warnings, vocab: r.vocab };
         })
         .catch(function (e) {
+          // v87: annullato a mano o scaduto il tempo, si dice cos'e' successo senza far sembrare tutto rotto
+          if (e.aborted) { warnings.push('Generazione AI annullata: la bozza qui sotto è fatta con le regole. Per la scelta multipla e le parole utili usa i pulsanti AI nell\'editor.'); return null; }
+          if (e.timedOut) { warnings.push('L\'AI non ha risposto in tempo (' + e.message.replace(/^l'AI non ha risposto entro /, '') + ', anche riprovando più leggeri): bozza generata con le regole. Riprova, oppure genera con meno esercizi.'); return null; }
           // v86: il troncamento ha un messaggio suo, con il numero vero di token scritti dal modello e cosa fare
           warnings.push(e.truncated
             ? 'Il modello ha scritto ' + (e.outputTokens || '?') + ' token senza chiudere il piano, anche riprovando con meno esercizi: bozza generata con le regole. Gli esercizi ci sono; per la scelta multipla e le parole utili usa i pulsanti AI nell\'editor.'
@@ -898,6 +937,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       promise = Promise.resolve(null);
     }
     return promise.then(function (r) {
+      overlayCancel(null);   // v87: da qui in poi lavorano le regole, non c'e' piu' niente da annullare
       if (!r) {
         const d = G.generateDraft({ chunks: chunks, lines: ls.lines, duration: duration, n: p.n, target: p.target, tolerance: p.tolerance, types: p.types, range: p.range, lang: ls.lang, contextBefore: p.contextBefore, seed: (Date.now() % 100000) + 1 });
         // v85: se il pianificatore si e' fermato per non rompere il senso, lo si dice chiaro (la comprensione
@@ -6443,6 +6483,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // ---------- avvio ----------
   function init() {
     loadState();
+    bindOverlayCancel();   // v87: la via d'uscita dall'attesa
     const q = new URLSearchParams(location.search);
     S.mock = q.get('mock') === '1';
     S.speed = Math.max(0.25, parseFloat(q.get('speed') || '1') || 1);
@@ -6485,6 +6526,6 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     renderHome();
     maybeTour();
   }
-  window.VLApp = { S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd };
+  window.VLApp = { overlay: overlay, overlayStep: overlayStep, overlayCancel: overlayCancel, S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd };
   init();
 })();
