@@ -1330,7 +1330,10 @@ dialog.wide { max-width: 720px; }
 .gclear:hover { background: #feecec; color: #c0392b; border-color: #e8a2a2; }
 input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v78: recap Soluzioni nell'editor — lista grande e leggibile, a tutto schermo */
-#dlg-solutions { width: min(1100px, 96vw); }
+/* v97 (Edoardo: "voglio che il pop up delle soluzioni sia più largo così alcune frasi che sono su due righe
+   diventano di una riga e si risparmia in altezza"): serve anche max-width, altrimenti vince il 560px della
+   regola generale `dialog` (la larghezza dell'id non batte un max-width che l'id non dichiara). */
+#dlg-solutions { width: min(1280px, 96vw); max-width: min(1280px, 96vw); }
 .sol-row { padding: 12px 4px; border-bottom: 1px solid var(--line); }
 .sol-row:last-child { border-bottom: 0; }
 .sol-head { font-size: 13px; color: var(--muted); letter-spacing: .02em; margin-bottom: 4px; }
