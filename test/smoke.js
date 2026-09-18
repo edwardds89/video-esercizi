@@ -1736,6 +1736,68 @@ async function noOverflow(page, where) {
   await page.evaluate(function () { window.VLApp.openEditor(window.VLApp.S.currentId); });
   await page.waitForSelector('#view-editor.active');
   await page.waitForTimeout(600);
+  // v93 ("se seleziono 'trova la parola sbagliata' nel numero 11 e il 10 o il 12 hanno la stessa tipologia, voglio
+  // un pop-up al centro di 2 secondi che poi scompare da solo")
+  const es93 = await page.evaluate(function () { const l = window.VLApp.S.lessons[window.VLApp.S.currentId]; return { ids: l.exercises.map(function (e) { return e.id; }), tipi: l.exercises.map(function (e) { return e.type; }) }; });
+  await page.selectOption('#ex-' + es93.ids[1] + ' select', es93.tipi[0]);      // uguale al vicino di sopra
+  await page.waitForTimeout(300);
+  const pop = await page.evaluate(function () { const n = document.querySelector('#center-note'); if (!n) return null; const cs = getComputedStyle(n); return { testo: n.textContent, pos: cs.position, clic: cs.pointerEvents }; });
+  assert.ok(pop, 'due esercizi uguali di fila: compare l\'avviso al centro');
+  assert.ok(/Anche (l'esercizio|gli esercizi) 1/.test(pop.testo) && /uguali di fila/.test(pop.testo), 'e dice quale: ' + (pop && pop.testo));
+  assert.strictEqual(pop.pos, 'fixed', 'sta al centro dello schermo');
+  assert.strictEqual(pop.clic, 'none', 'e non ruba i clic a quello che c\'è sotto');
+  await page.waitForTimeout(2600);
+  assert.ok(!(await page.evaluate(function () { return !!document.querySelector('#center-note'); })), 'dopo due secondi sparisce da solo');
+  const diverso = ['gap', 'gapbank', 'scramble', 'missing', 'extra', 'wrong'].filter(function (t) { return t !== es93.tipi[0] && t !== es93.tipi[2]; })[0];
+  await page.selectOption('#ex-' + es93.ids[1] + ' select', diverso);
+  await page.waitForTimeout(300);
+  assert.ok(!(await page.evaluate(function () { return !!document.querySelector('#center-note'); })), 'tipo diverso dai vicini: nessun avviso');
+  // v93 (viaggio inverso, "voglio che anche questi numeri siano cliccabili... mi riporti al video e mi illumini il 4")
+  await page.evaluate(function () { const l = document.querySelector('.editor-left'); const c = document.querySelector('#e-cuts'); l.scrollTop = c.offsetTop - 60; });
+  await page.waitForTimeout(300);
+  await page.click('#cut-row-1 .cut-tag');
+  await page.waitForTimeout(250);
+  const rit = await page.evaluate(function () {
+    const band = document.querySelectorAll('#e-timeline .cut')[1], lab = document.querySelectorAll('#e-timeline .cut-n')[1];
+    const tl = document.querySelector('#e-timeline').getBoundingClientRect();
+    return { band: band.classList.contains('flash'), lab: lab.classList.contains('flash'), giri: getComputedStyle(band).animationIterationCount, inVista: tl.top < innerHeight && tl.bottom > 0 };
+  });
+  assert.ok(rit.band && rit.lab, 'dal numero della lista si illuminano la banda e il suo numero sulla barra');
+  assert.strictEqual(rit.giri, '2', 'due lampeggi anche qui');
+  assert.ok(rit.inVista, 'e la barra viene riportata in vista');
+  await page.waitForTimeout(1600);
+  assert.ok(!(await page.evaluate(function () { return document.querySelectorAll('#e-timeline .cut')[1].classList.contains('flash'); })), 'poi si spegne');
+  // v93 ("la barra del video va sotto la barra di scorrimento... metti una x in alto a destra per chiudere gli avvisi")
+  assert.ok(parseFloat(await page.evaluate(function () { return getComputedStyle(document.querySelector('.editor-left')).paddingRight; })) >= 12,
+    'la colonna lascia spazio alla sua barra di scorrimento, che su macOS galleggia sopra il contenuto');
+  await page.evaluate(function () { const S = window.VLApp.S; S.lessons[S.currentId].warnings = ['Avviso di prova uno.', 'Avviso di prova due.']; window.VLApp.openEditor(S.currentId); });
+  await page.waitForTimeout(500);
+  const nWarn = await page.$$eval('#e-warnings .notice.warn', function (n) { return n.length; });
+  assert.ok(nWarn >= 2, 'gli avvisi si vedono');
+  assert.strictEqual(await page.$$eval('#e-warnings .notice-x', function (n) { return n.length; }), nWarn, 'ognuno ha la sua ✕');
+  await page.click('#e-warnings .notice-x');
+  await page.waitForTimeout(250);
+  assert.strictEqual(await page.$$eval('#e-warnings .notice.warn', function (n) { return n.length; }), nWarn - 1, 'la ✕ chiude l\'avviso');
+  await page.evaluate(function () { const S = window.VLApp.S; window.VLApp.openEditor(S.currentId); });
+  await page.waitForTimeout(500);
+  assert.strictEqual(await page.$$eval('#e-warnings .notice.warn', function (n) { return n.length; }), nWarn - 1, 'e riaprendo l\'editor resta chiuso');
+  await page.evaluate(function () { const S = window.VLApp.S; const ls = S.lessons[S.currentId]; ls.warnings = []; ls.hiddenWarnings = []; window.VLApp.openEditor(S.currentId); });
+  await page.waitForTimeout(400);
+  // v93 ("le parole aggiunte a volte sono le stesse di quelle che c'erano già" + "che significa proponi (regole)?")
+  assert.strictEqual((await page.textContent('#btn-vocab-rules')).trim(), 'Proponi le parole', 'il pulsante dice cosa fa, senza gergo');
+  await page.evaluate(function () {
+    const S = window.VLApp.S, ls = S.lessons[S.currentId];
+    const prima = (ls.vocab && ls.vocab.words[0] && ls.vocab.words[0].word) || 'cervello';
+    ls.vocab = { support: 'en', words: [{ id: 'v1', word: 'il ' + prima.replace(/^(il|lo|la|i|gli|le|un|una) /, ''), translation: '', image: '', selected: true }], cards: { matching: true, flashcards: true } };
+    window.VLApp.openEditor(S.currentId);
+  });
+  await page.waitForTimeout(400);
+  await page.click('#btn-vocab-rules');
+  await page.waitForTimeout(500);
+  const impronte = await page.evaluate(function () {
+    return window.VLApp.S.lessons[window.VLApp.S.currentId].vocab.words.map(function (w) { return window.VLLang.vocabStem(w.word, 'it'); });
+  });
+  assert.strictEqual(impronte.length, new Set(impronte).size, 'niente doppioni fra le parole proposte e quelle che c\'erano già: ' + impronte.join(' '));
   // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
   // salvataggio sulla lezione, etichette sulla card del portfolio, campi nello studentPayload
   await page.selectOption('#e-level', 'intermediate');
