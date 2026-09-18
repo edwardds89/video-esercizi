@@ -1449,7 +1449,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     area.appendChild(el('div', { class: 'pr-sub', text: (exs.length === 1 ? '1 esercizio' : exs.length + ' esercizi') + ' \u00b7 foglio per l\'insegnante \u00b7 ' + new Date().toLocaleDateString('it-IT') }));
     if (!exs.length) area.appendChild(el('p', { class: 'hint', text: 'Questa lezione non ha ancora esercizi.' }));
     exs.forEach(function (ex, i) { area.appendChild(solutionRow(ex, i)); });
-    const fine = function () { document.body.classList.remove('printing'); area.innerHTML = ''; window.removeEventListener('afterprint', fine); };
+    // v99 ('l'impaginazione del PDF non e' ottimale, devi considerare la zona di stampa'): i margini NON possono
+    // stare nel padding di #print-area. Il padding di un blocco lungo vale una volta sola, all'inizio e alla fine:
+    // dalla seconda pagina in poi il testo partiva incollato al bordo di carta e la prima riga usciva tagliata.
+    // I margini di OGNI pagina li da' solo la @page, che pero' e' globale (non si puo' scopare per classe) e nel
+    // foglio A4 della conversazione deve restare a margin: 0. Percio' la si sovrascrive SOLO durante la stampa
+    // delle soluzioni, con un <style> messo in fondo al documento (vince per ordine di cascata) e tolto dopo.
+    const stile = document.createElement('style');
+    stile.id = 'print-page-css';
+    stile.textContent = '@page { size: A4; margin: 16mm 15mm 14mm; }';
+    document.head.appendChild(stile);
+    const fine = function () {
+      document.body.classList.remove('printing'); area.innerHTML = '';
+      if (stile.parentNode) stile.parentNode.removeChild(stile);
+      window.removeEventListener('afterprint', fine);
+    };
     document.body.classList.add('printing');
     window.addEventListener('afterprint', fine);
     // window.print() blocca il thread finche' l'anteprima di stampa non e' chiusa: quando torna, il foglio

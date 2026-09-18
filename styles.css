@@ -1105,7 +1105,9 @@ button.small.ai { background: #f3e8ff; border-color: #c99cf5; }
 
 @media print {
   @page { size: A4; margin: 0; }
-  body { background: #fff; }
+  /* anche l'HTML, non solo il body: il colore dell'elemento radice e' quello che Chrome stende su TUTTA la carta,
+     e il bianco del body copre solo il suo riquadro. Senza questa riga l'ultima pagina esce grigia sotto il testo. */
+  html, body { background: #fff; }
   .noprint, #nav, #toast, #undo-bar, .app-bar { display: none !important; }
   body > main, #view-convprint { margin: 0; padding: 0; max-width: none; }
   .view:not(.active) { display: none !important; }
@@ -1348,10 +1350,17 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .pr-sub { font-size: 9pt; color: #6b7684; margin-bottom: 6mm; }
 @media print {
   body.printing > *:not(#print-area) { display: none !important; }
-  body.printing #print-area { display: block; padding: 14mm 15mm; color: #111; }
+  /* niente padding qui: i margini di OGNI pagina li da' la @page che printSolutions inietta durante la stampa
+     (il padding di un blocco lungo vale solo sulla prima e sull'ultima pagina, e le pagine in mezzo restavano
+     senza margine, con la prima riga tagliata a meta') */
+  body.printing #print-area { display: block; color: #111; }
   body.printing #print-area .sol-row { break-inside: avoid; page-break-inside: avoid; }
-  body.printing #print-area .sol-sent { font-size: 12pt; }
-  body.printing #print-area .sol-head { font-size: 8.5pt; }
+  body.printing #print-area .pr-kicker, body.printing #print-area .pr-title { break-after: avoid; page-break-after: avoid; }
+  body.printing #print-area .sol-sent { orphans: 2; widows: 2; }
+  /* sulla carta si sta piu' stretti che a schermo: stessa resa, meno fogli da stampare */
+  body.printing #print-area .sol-row { padding: 2.6mm 0; }
+  body.printing #print-area .sol-sent { font-size: 11pt; line-height: 1.38; }
+  body.printing #print-area .sol-head { font-size: 8pt; margin-bottom: 1mm; }
 }
 .sol-row { padding: 12px 4px; border-bottom: 1px solid var(--line); }
 .sol-row:last-child { border-bottom: 0; }
