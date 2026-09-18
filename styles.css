@@ -70,8 +70,14 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 
 /* timeline */
 .timeline { position: relative; height: 54px; margin: 14px 0 6px; user-select: none; }
+/* la barra si alza solo dove ci sono i numeri dei tagli (editor): lo studente non li vede e non perde spazio */
+.timeline.has-cutn { height: 78px; }
 .timeline .track { position: absolute; left: 0; right: 0; top: 22px; height: 12px; background: var(--keep); border-radius: 6px; overflow: hidden; cursor: pointer; }
-.timeline .cut { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--cut) 0 4px, #e9ecf0 4px 8px); }
+/* v90: ogni taglio ha il suo colore (--cutc dal JS) e sotto la barra il suo numero, uguale a quello della lista */
+.timeline .cut { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--cutc, var(--cut)) 0 4px, var(--cutc-lite, #e9ecf0) 4px 8px); }
+.timeline .cut-n { position: absolute; top: 36px; font-size: 10.5px; font-weight: 700; line-height: 1; padding: 2px 5px; border-radius: 6px; white-space: nowrap; background: var(--cutc-lite); color: var(--cutc-ink); border: 1px solid var(--cutc); cursor: default; }
+.timeline .cut-n.giu { top: 51px; }
+.cut-tag { grid-area: tag; justify-self: start; font-size: 12px; font-weight: 700; padding: 3px 7px; border-radius: 7px; background: var(--cutc-lite); color: var(--cutc-ink); border: 1px solid var(--cutc); }
 .timeline .cursor { position: absolute; top: 16px; width: 2px; height: 24px; background: #d00; pointer-events: none; }
 .timeline .marker { position: absolute; top: 0; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #fff; border: 2px solid var(--marker); color: #333; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; user-select: none; }
 .timeline .marker.done { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
@@ -79,6 +85,7 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .timeline .marker.active:not(.done) { background: var(--marker); color: #fff; }
 .timeline .marker.active.done { box-shadow: 0 0 0 3px #ffe08a; }   /* rifatto/riascoltato: resta verde o rosso, con l'anello che dice "sei qui" */
 .ex-card.flash { box-shadow: 0 0 0 3px var(--marker); transition: box-shadow .3s; }
+.timeline.has-cutn .labels { top: 66px; }
 .timeline .labels { position: absolute; left: 0; right: 0; top: 38px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
 
 /* editor */
@@ -129,12 +136,12 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .chip.good { background: var(--ok-bg) !important; border-color: var(--ok) !important; color: var(--ok); font-weight: 600; }
 .chip.wrongpick { background: var(--bad-bg) !important; border-color: var(--bad) !important; color: var(--bad); }
 .preview { background: #fafbfd; border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 15px; }
-.cut-row { display: grid; grid-template-columns: 6.5em 6.5em 1fr; grid-template-areas: "start end info" "btns btns btns"; gap: 6px 8px; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
-.cut-row > :nth-child(1) { grid-area: start; }
-.cut-row > :nth-child(2) { grid-area: end; }
+.cut-row { display: grid; grid-template-columns: auto 6.5em 6.5em 1fr; grid-template-areas: "tag start end info" "btns btns btns btns"; gap: 6px 8px; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.cut-row > :nth-child(2) { grid-area: start; }
+.cut-row > :nth-child(3) { grid-area: end; }
 .cut-row > .hint { grid-area: info; margin: 0; }
 .cut-row .cut-btns { grid-area: btns; display: flex; gap: 6px; flex-wrap: wrap; }
-@media (max-width: 640px) { .cut-row { grid-template-columns: 1fr 1fr; grid-template-areas: "start end" "info info" "btns btns"; } }
+@media (max-width: 640px) { .cut-row { grid-template-columns: auto 1fr 1fr; grid-template-areas: "tag start end" "info info info" "btns btns btns"; } }
 .kv { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
 .kv b { color: var(--ink); }
 .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }

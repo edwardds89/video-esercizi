@@ -80,6 +80,28 @@
   function overlayStep(msg) { const e = $('#overlay-step'); if (e) e.textContent = msg || ''; }
   /** Registra (o toglie) la via d'uscita: il pulsante compare solo se c'e' qualcosa da annullare. */
   function overlayCancel(fn) { ovCancel = fn || null; const b = $('#overlay-cancel'); if (b) b.hidden = !fn; }
+  /**
+   * v90 (Edoardo, 18/9: "se metto il cursore su una pausa e scorro giù per vedere i numeri dei tagli, non mi
+   * fa scorrere in giù"): la colonna sinistra dell'editor è un'area di scorrimento dentro la pagina. Quando il
+   * puntatore ci sta sopra la rotella muove LEI, e arrivata a fondo corsa il browser si "aggrappa" a quella
+   * (scroll latching): le rotellate successive sparivano nel nulla finché non si staccava il dito. Qui il
+   * passaggio di consegne lo facciamo a mano: a fondo (o a inizio) corsa la rotella muove la pagina, subito.
+   */
+  function bindNestedScroll() {
+    const box = document.querySelector('.editor-left'); if (!box) return;
+    box.addEventListener('wheel', function (e) {
+      if (e.ctrlKey || e.deltaY === 0) return;
+      if (getComputedStyle(box).overflowY !== 'auto') return;      // sotto i 960px la colonna non scorre da sé
+      const limite = box.scrollHeight - box.clientHeight;
+      const fine = e.deltaY > 0 ? box.scrollTop >= limite - 1 : box.scrollTop <= 0;
+      if (!fine) return;                                           // la colonna ha ancora strada: scorre lei
+      const doc = document.scrollingElement || document.documentElement;
+      const puo = e.deltaY > 0 ? doc.scrollTop < doc.scrollHeight - doc.clientHeight - 1 : doc.scrollTop > 0;
+      if (!puo) return;
+      window.scrollBy(0, e.deltaY);
+      e.preventDefault();
+    }, { passive: false });
+  }
   function bindOverlayCancel() {
     const b = $('#overlay-cancel'); if (!b) return;
     b.onclick = function () { const f = ovCancel; if (!f) return; ovCancel = null; b.hidden = true; overlayStep('Annullo…'); f(); };
@@ -1129,6 +1151,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const toR = function (v) { let acc = 0; for (const r of keep) { const len = r.end - r.start; if (v <= acc + len) return r.start + (v - acc); acc += len; } return D; };
     return { V: V, toV: toV, toR: toR };
   }
+  /** v90: un colore per taglio (ciclo di 8 tinte ben distinte), usato sulla barra e sulla riga della lista. */
+  const CUT_HUES = [8, 200, 42, 268, 150, 330, 24, 190];
+  function cutColorStyle(i) {
+    const h = CUT_HUES[i % CUT_HUES.length];
+    return '--cutc:hsl(' + h + ' 62% 58%);--cutc-lite:hsl(' + h + ' 70% 90%);--cutc-ink:hsl(' + h + ' 70% 26%)';
+  }
   function renderTimeline(container, lesson, o) {
     o = o || {};
     container.innerHTML = '';
@@ -1137,8 +1165,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const span = tm ? tm.V : D;
     const pos = function (t) { return 100 * Math.min(span, tm ? tm.toV(t) : t) / span; };
     const track = el('div', { class: 'track' });
-    if (!tm) (lesson.cuts || []).forEach(function (c) {
-      track.appendChild(el('div', { class: 'cut', style: 'left:' + (100 * c.start / D) + '%;width:' + (100 * (c.end - c.start) / D) + '%', title: 'Taglio ' + fmt(c.start) + '–' + fmt(c.end) + (c.reason ? ' (' + c.reason + ')' : '') }));
+    const tagli = [];
+    if (!tm) (lesson.cuts || []).forEach(function (c, i) {
+      // v90 (Edoardo: "le parti tagliate sono tutte uguali… metti dei numeri sotto i tagli sulla barra, che
+      // corrispondono ai numeri sotto dove si può modificare"): ogni taglio ha il suo colore e il suo ✄N.
+      const l = 100 * c.start / D, w = 100 * (c.end - c.start) / D;
+      track.appendChild(el('div', { class: 'cut', style: 'left:' + l + '%;width:' + w + '%;' + cutColorStyle(i), title: '✄' + (i + 1) + ' · taglio ' + fmt(c.start) + '–' + fmt(c.end) + (c.reason ? ' (' + c.reason + ')' : '') }));
+      // due righe alternate: con tagli vicini (o attaccati) le etichette non si sovrappongono; ai bordi
+      // l'etichetta si allinea dentro la barra invece di finire fuori schermo
+      const centro = l + w / 2;
+      const ancora = centro < 4 ? 'translateX(0)' : (centro > 96 ? 'translateX(-100%)' : 'translateX(-50%)');
+      tagli.push(el('div', { class: 'cut-n' + (i % 2 ? ' giu' : ''), style: 'left:' + centro + '%;transform:' + ancora + ';' + cutColorStyle(i), text: '✄' + (i + 1), title: '✄' + (i + 1) + ' · ' + fmt(c.start) + '–' + fmt(c.end) + ' (' + fmtMin(c.end - c.start) + ')' }));
     });
     track.addEventListener('click', function (e) {
       if (!o.onSeek) return;
@@ -1147,6 +1184,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       o.onSeek(tm ? tm.toR(v) : v, e);
     });
     container.appendChild(track);
+    container.classList.toggle('has-cutn', tagli.length > 0);
+    tagli.forEach(function (n) { container.appendChild(n); });
     (lesson.exercises || []).forEach(function (ex, i) {
       const r = o.results && o.results[ex.id];
       const m = el('div', { class: 'marker' + (o.done && o.done.has(ex.id) ? ' done' + (r ? (r.correct ? ' ok' : ' bad') : '') : '') + (o.activeId === ex.id ? ' active' : ''), text: String(i + 1), style: 'left:' + pos(ex.markerTime) + '%', title: fmt(tm ? tm.toV(ex.markerTime) : ex.markerTime) + ' · ' + EX.LABELS[ex.type] });
@@ -1623,6 +1662,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // tagli
     const cb = $('#e-cuts'); cb.innerHTML = '';
     if (!ls.cuts.length) cb.appendChild(el('p', { class: 'muted', text: 'Nessun taglio: il video viene mostrato per intero.' }));
+    // v90: ✄1, ✄2… sulla barra e qui sotto NELLO STESSO ORDINE — quindi i tagli si tengono ordinati per tempo
+    ls.cuts.sort(function (a, b) { return a.start - b.start; });
     ls.cuts.forEach(function (c, i) { cb.appendChild(renderCutRow(ls, c, i)); });
     restoreFocus();
   }
@@ -3334,6 +3375,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
 
   function renderCutRow(ls, c, i) {
     return el('div', { class: 'cut-row' },
+      el('span', { class: 'cut-tag', style: cutColorStyle(i), text: '✄' + (i + 1), title: 'Questo taglio è il ✄' + (i + 1) + ' sulla barra del tempo' }),
       timeInput(c.start, function (t) { c.start = t; touch(ls); renderEditorBody(); }),
       timeInput(c.end, function (t) { c.end = t; touch(ls); renderEditorBody(); }),
       el('span', { class: 'hint', text: fmtMin(c.end - c.start) + ' · ' + (c.reason || '') + (c.source === 'ai' ? ' (AI)' : '') }),
@@ -6560,6 +6602,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function init() {
     loadState();
     bindOverlayCancel();   // v87: la via d'uscita dall'attesa
+    bindNestedScroll();    // v90: la rotella non resta incastrata nella colonna sinistra
     const q = new URLSearchParams(location.search);
     S.mock = q.get('mock') === '1';
     S.speed = Math.max(0.25, parseFloat(q.get('speed') || '1') || 1);
