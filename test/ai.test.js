@@ -725,5 +725,20 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(/must be written in Italian/.test(en), 'ma le note per l\'insegnante restano in italiano');
   });
 
+  await test('v94 traduci: il tetto dei token segue la lunghezza della frase', async function () {
+    const tetti = [];
+    const fake = async function (url, opts) {
+      const body = JSON.parse(opts.body); tetti.push(body.max_tokens);
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: {}, content: [{ type: 'text', text: '{"translation":"ok"}' }], stop_reason: 'end_turn' }; }, text: async function () { return ''; } };
+    };
+    const corta = 'Il gatto dorme.';
+    const lunga = 'Ora, dal momento dell\'iniezione al momento in cui diventiamo immuni, ci può essere una risposta del corpo che rientra nei cosiddetti effetti collaterali o nelle reazioni avverse, che i più comuni sono leggeri e lievi come dolore, gonfiore o rossore.';
+    await AI.translateSentence({ text: corta, whole: true, sentence: corta, lang: 'it', target: 'English', apiKey: 'k', fetchImpl: fake });
+    await AI.translateSentence({ text: lunga, whole: true, sentence: lunga, lang: 'it', target: 'English', apiKey: 'k', fetchImpl: fake });
+    assert.ok(tetti[0] >= 1200, 'anche una frase corta ha un tetto largo: ' + tetti[0]);
+    assert.ok(tetti[1] > tetti[0], 'una frase lunga ne chiede di più: ' + tetti[1] + ' contro ' + tetti[0]);
+    assert.ok(tetti[1] <= 4000, 'ma con un limite: ' + tetti[1]);
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();

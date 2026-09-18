@@ -2294,6 +2294,73 @@ async function noOverflow(page, where) {
   assert.ok(!(await pt2.$('#dlg-tour[open]')), 'niente tour sulle rotte studente');
   await ctxT2.close();
 
+  // v94 ("se clicco due volte qui mi mette due tagli identici"): il secondo clic avvisa invece di duplicare
+  await page.evaluate(function () { const S = window.VLApp.S; window.VLApp.openEditor(S.currentId); });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForTimeout(500);
+  const primaTagli = await page.evaluate(function () { const S = window.VLApp.S; const ls = S.lessons[S.currentId]; if (!ls.cuts.length) return -1; S.player.seek(ls.cuts[0].start + 1); return ls.cuts.length; });
+  if (primaTagli > 0) {
+    await page.waitForTimeout(400);
+    await page.click('#btn-add-cut');
+    await page.waitForTimeout(300);
+    const dopoTagli = await page.evaluate(function () { const S = window.VLApp.S; const n = document.querySelector('#center-note'); return { n: S.lessons[S.currentId].cuts.length, avviso: n ? n.textContent : null }; });
+    assert.strictEqual(dopoTagli.n, primaTagli, 'dentro un taglio che c\'e\' gia\' non se ne aggiunge un altro');
+    assert.ok(dopoTagli.avviso && /gi\u00e0 il taglio/.test(dopoTagli.avviso), 'e l\'avviso dice quale: ' + dopoTagli.avviso);
+    await page.waitForTimeout(2600);
+  }
+
+  console.log('26. traduzione del "trova la parola mancante": coperta prima, intera dopo (v94)');
+  const ctxTr = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  const ptr = await ctxTr.newPage();
+  ptr.on('pageerror', function (e) { errors.push('pageerror(TR): ' + e.message); });
+  await ptr.addInitScript(function () { try { const st = JSON.parse(localStorage.getItem('vle.settings') || '{}'); st.tourSeen = true; st.apiKey = 'sk-test'; localStorage.setItem('vle.settings', JSON.stringify(st)); } catch (e) { /* ignora */ } });
+  await ptr.goto(BASE + '?mock=1&speed=8');
+  await ptr.evaluate(function () { localStorage.removeItem('vle.lessons'); });
+  await ptr.goto(BASE + '?mock=1&speed=8');
+  await ptr.click('#btn-demo');
+  await ptr.waitForSelector('#view-editor.active');
+  await ptr.waitForTimeout(700);
+  // una lezione con UN solo esercizio, di tipo "missing", e niente sezioni prima del video
+  await ptr.evaluate(function () {
+    const S = window.VLApp.S, ls = S.lessons[S.currentId];
+    const EXL = window.VLEx;
+    const ex = ls.exercises[0];
+    const b = EXL.buildExercise('missing', ex.sentence, { lang: ls.lang, seed: 3 });
+    ex.type = 'missing'; ex.data = b.data;
+    ls.exercises = [ex];
+    ls.flow = ls.flow.filter(function (s) { return s.kind === 'video'; });
+    ls.cuts = [];
+  });
+  await ptr.click('#btn-student');
+  await ptr.waitForSelector('#view-student.active');
+  await ptr.waitForTimeout(400);
+  await ptr.evaluate(function () {
+    window.__tr = [];
+    window.VLAI.translateSentence = function (p) { window.__tr.push({ omission: !!p.omission, hide: (p.hide || []).length }); return Promise.resolve({ translation: p.omission ? 'COPERTA' : 'INTERA', ai: {} }); };
+  });
+  await startVideo(ptr);
+  await ptr.waitForSelector('#s-panel .gapfinder', { timeout: 15000 });
+  await ptr.click('#s-panel .actions button:has-text("Traduci")');
+  await ptr.waitForTimeout(400);
+  const tr1 = await ptr.evaluate(function () { const t = document.querySelector('#s-panel .translation'); return { testo: t.textContent, nota: /compito tuo/.test(t.textContent), n: window.__tr.length, omission: window.__tr[0] && window.__tr[0].omission }; });
+  assert.ok(tr1.omission === true && /COPERTA/.test(tr1.testo), 'prima di rispondere la traduzione non svela il buco: ' + JSON.stringify(tr1));
+  assert.ok(tr1.nota, 'e lo dice con una nota');
+  // risposta giusta: la traduzione si rifà da sola, intera, e la nota sparisce
+  const dati = await ptr.evaluate(function () { const S = window.VLApp.S; const ex = S.student.lesson.exercises[0]; return { k: ex.data.missingIndex, w: ex.data.answer }; });
+  await ptr.evaluate(function (k) {
+    const s = document.querySelector('#s-panel .gapfinder');
+    const r = s.querySelector('.slot[data-k="' + k + '"]').getBoundingClientRect();
+    s.dispatchEvent(new MouseEvent('click', { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true }));
+  }, dati.k);
+  await ptr.fill('#s-panel input.gapfind', dati.w);
+  await ptr.click('#s-panel button:has-text("Controlla")');
+  await ptr.waitForTimeout(600);
+  const tr2 = await ptr.evaluate(function () { const t = document.querySelector('#s-panel .translation'); return { testo: t.textContent, nota: /compito tuo/.test(t.textContent), n: window.__tr.length, ultima: window.__tr[window.__tr.length - 1] }; });
+  assert.strictEqual(tr2.n, 2, 'la traduzione viene rifatta da sola una volta risolto');
+  assert.ok(tr2.ultima && tr2.ultima.omission === false, 'la seconda volta si traduce la frase intera');
+  assert.ok(/INTERA/.test(tr2.testo) && !tr2.nota, 'e la nota "resta compito tuo" sparisce: ' + tr2.testo);
+  await ctxTr.close();
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
