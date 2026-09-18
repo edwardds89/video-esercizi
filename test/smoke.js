@@ -1685,12 +1685,14 @@ async function noOverflow(page, where) {
         titolo: (area.querySelector('.pr-title') || {}).textContent || '',
         kicker: (area.querySelector('.pr-kicker') || {}).textContent || '',
         visibile: getComputedStyle(area).display,
+        margini: (document.getElementById('print-page-css') || {}).textContent || '',
+        logo: (area.querySelector('.pr-logo') || {}).getAttribute ? area.querySelector('.pr-logo').getAttribute('src') : '',
         testo: area.innerText.slice(0, 400)
       };
     };
     document.getElementById('solutions-print').click();
     window.print = vero;
-    return { fatto: fatto, dopoPrinting: document.body.classList.contains('printing'), dopoVuota: document.getElementById('print-area').innerHTML === '' };
+    return { fatto: fatto, dopoPrinting: document.body.classList.contains('printing'), dopoVuota: document.getElementById('print-area').innerHTML === '', dopoMargini: !!document.getElementById('print-page-css') };
   });
   assert.ok(stampa.fatto, 'il pulsante Stampa manda davvero in stampa');
   assert.ok(stampa.fatto.printing, 'in stampa il body e\' in modalita\' foglio (classe printing)');
@@ -1698,8 +1700,13 @@ async function noOverflow(page, where) {
   const titoloLez = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].title; });
   assert.strictEqual(stampa.fatto.titolo, titoloLez, 'il foglio porta il titolo della lezione');
   assert.ok(stampa.fatto.kicker === 'Soluzioni', 'il foglio si annuncia come Soluzioni: ' + stampa.fatto.kicker);
+  // v100 ('a una certa ti daro' il logo e voglio che ci sia il logo nelle soluzioni')
+  assert.ok(/\.svg|\.png/.test(stampa.fatto.logo), 'il foglio porta il marchio: ' + stampa.fatto.logo);
   assert.ok(stampa.fatto.testo.indexOf('insegnante') !== -1, 'il foglio dice che e\' per l\'insegnante');
-  assert.ok(!stampa.dopoPrinting && stampa.dopoVuota, 'finita la stampa la pagina torna com\'era');
+  // v99 ('l'impaginazione del PDF non e' ottimale, devi considerare la zona di stampa'): i margini di OGNI
+  // pagina vengono dalla @page iniettata durante la stampa, non dal padding (che vale solo sulla prima pagina)
+  assert.ok(/@page\s*\{[^}]*margin:\s*\d+mm/.test(stampa.fatto.margini), 'la stampa impone i margini di pagina: ' + stampa.fatto.margini);
+  assert.ok(!stampa.dopoPrinting && stampa.dopoVuota && !stampa.dopoMargini, 'finita la stampa la pagina torna com\'era (margini compresi)');
   await page.click('#solutions-close');
   await page.waitForTimeout(200);
   // v87 ('sta caricando da troppo tempo'): l'attesa dice a che punto e', quanto dura, e si puo' interrompere
