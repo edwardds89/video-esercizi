@@ -677,5 +677,25 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.ok(passi[1].retry === true && passi[1].total === 3, 'il secondo si presenta come ripiego: ' + JSON.stringify(passi[1]));
   });
 
+  await test('v88 parole utili: niente stessa parola al singolare e al plurale', function () {
+    const r = AI.cleanVocab([
+      { word: 'il rischio', translation: 'the risk' },
+      { word: 'una malattia', translation: 'a disease' },
+      { word: 'rischi', translation: 'risks' },
+      { word: 'le malattie', translation: 'diseases' },
+      { word: 'funziona', translation: 'works' }
+    ], { lang: 'it', level: 'B1' });
+    const parole = r.map(function (v) { return v.word; });
+    assert.strictEqual(parole.length, 3, 'tre voci, non cinque: ' + JSON.stringify(parole));
+    assert.ok(parole.indexOf('il rischio') !== -1 && parole.indexOf('rischi') === -1, 'resta il singolare con articolo: ' + parole);
+    assert.ok(parole.indexOf('una malattia') !== -1 && parole.indexOf('le malattie') === -1, 'plurale scartato anche se ha l\'articolo: ' + parole);
+    // se arriva prima il plurale, vince comunque il singolare che arriva dopo
+    const r2 = AI.cleanVocab([{ word: 'pustole' }, { word: 'la pustola' }], { lang: 'it', level: 'B1' });
+    assert.deepStrictEqual(r2.map(function (v) { return v.word; }), ['la pustola'], 'il singolare con articolo sostituisce il plurale gia' + "'" + ' in lista');
+    // le espressioni di piu' parole non si toccano
+    const r3 = AI.cleanVocab([{ word: 'un conto è' }, { word: 'fare a meno di' }], { lang: 'it', level: 'B1' });
+    assert.strictEqual(r3.length, 2, 'le espressioni restano tutte');
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();

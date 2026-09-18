@@ -113,6 +113,18 @@ async function noOverflow(page, where) {
   assert.ok(seg1b.start > seg0.start + 0.3 && seg1b.start < seg0.end, 'chiesto a mano, l\'inizio si sposta sulle parole: ' + seg0.start + ' → ' + seg1b.start);
   assert.ok(Math.abs(seg1b.end - seg0.end) < 0.6, 'fine invariata: ' + seg0.end + ' → ' + seg1b.end);
   assert.ok(/Tempi spostati sulle parole/.test(await page.$eval('#toast', function (t) { return t.textContent; })), 'e lo dice');
+  // v88 (Edoardo: "ho modificato la frase e cliccato Aggiorna tempi, l'audio finale era identico a prima"): il
+  // gesto VERO e' scrivere nella textarea e cliccare SUBITO il pulsante — il 'change' scatta al blur, cioe' sul
+  // mousedown del pulsante, e se li' si ridisegna l'editor il click non arriva mai. Un solo clic deve bastare.
+  const ex5 = await page.evaluate(function () { const l = Object.values(window.VLApp.S.lessons)[0]; const e = l.exercises[5] || l.exercises[l.exercises.length - 1]; return { id: e.id, sentence: e.sentence, end: e.segment.end }; });
+  const corta = ex5.sentence.split(/\s+/).slice(0, -4).join(' ');
+  await page.fill('#ex-' + ex5.id + ' textarea.sentence-edit', corta);
+  await page.click('#ex-' + ex5.id + ' button:has-text("Aggiorna tempi")');   // UN solo clic, senza blur a mano
+  await page.waitForTimeout(400);
+  const dopo88 = await page.evaluate(function (id) { const l = Object.values(window.VLApp.S.lessons)[0]; const e = l.exercises.find(function (x) { return x.id === id; }); return { s: e.sentence, end: e.segment.end, marker: e.markerTime }; }, ex5.id);
+  assert.strictEqual(dopo88.s, corta, 'la frase accorciata e\' salvata');
+  assert.ok(dopo88.end < ex5.end - 0.5, 'con UN clic la fine si sposta indietro: ' + ex5.end + ' → ' + dopo88.end);
+  assert.ok(Math.abs(dopo88.marker - dopo88.end) < 0.001, 'e il segnaposto (dove il video si ferma) la segue');
   const cardEdited = '#ex-' + await page.evaluate(function (s) { return Object.values(window.VLApp.S.lessons)[0].exercises.find(function (x) { return x.sentence === s; }).id; }, ws.slice(3).join(' '));
   await page.fill(cardEdited + ' textarea.sentence-edit', ws.slice(3).join(' ') + '!');
   await page.dispatchEvent(cardEdited + ' textarea.sentence-edit', 'change');
@@ -1557,13 +1569,11 @@ async function noOverflow(page, where) {
   assert.ok(!(await rev()).verde, 'e togliere');
   // il salvataggio automatico c'e' comunque: una modifica qualsiasi finisce in localStorage senza premere niente
   const frasePrima = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[1].sentence; });
-  await page.evaluate(function () {
-    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
-    ls.exercises[1].sentence = 'Frase cambiata senza premere nessun pulsante di salvataggio.';
-    window.VLApp.S.__t = ls;
-  });
-  await page.evaluate(function () { window.VLApp.S.lessons[window.VLApp.S.currentId].updatedAt = new Date().toISOString(); });
-  await page.locator('#e-exercises .ex-card textarea.sentence-edit').first().dispatchEvent('change');
+  // v88: la modifica si fa DAVVERO nella casella (dalla v88 un blur che non cambia niente non salva e non
+  // cancella il "controllato": il test non puo' piu' far leva su un change a vuoto)
+  const id1 = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[1].id; });
+  await page.fill('#ex-' + id1 + ' textarea.sentence-edit', 'Frase cambiata senza premere nessun pulsante di salvataggio.');
+  await page.dispatchEvent('#ex-' + id1 + ' textarea.sentence-edit', 'change');
   await page.waitForTimeout(900);
   const inStorage = await page.evaluate(function () {
     return JSON.parse(localStorage.getItem('vle.lessons'))[window.VLApp.S.currentId].exercises[1].sentence;
