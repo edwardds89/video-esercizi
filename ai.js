@@ -926,14 +926,17 @@
       'TEACHER\'S REQUEST: "' + String(params.request || '') + '"',
       'Below are the numbered sentences of the video transcript. Pick the ONE sentence that best matches the request (the fact, the words or the moment the teacher describes).',
       'Pick also the exercise type that fits that sentence best, from: gap (student writes missing words), gapbank (missing words with a word bank), scramble (reorder the words), missing (find where a word is missing), extra (find the added word), wrong (find and correct the changed word). If the request names a type, respect it.',
-      'SCHEMA: {"index": 12, "type": "gap"}',
+      // v89: le "frasi" dei sottotitoli automatici possono essere paragrafi interi. Il modello deve dire DOVE
+      // comincia il pezzo da usare, altrimenti l'esercizio finisce su cento parole.
+      'The numbered items can be long (auto-generated subtitles have little punctuation). In "quote" copy the FIRST 4 TO 6 WORDS of the excerpt where the exercise must start, VERBATIM from the transcript (same words, same spelling, same order, no rewriting). If the teacher quotes some words, start exactly there. The exercise will use about 20 words from that point, so pick a start that reads naturally.',
+      'SCHEMA: {"index": 12, "type": "gap", "quote": "i piu comuni sono leggeri"}',
       'SENTENCES:\n' + list].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
     const index = parseInt(plan && plan.index, 10);
     const types = ['gap', 'gapbank', 'scramble', 'missing', 'extra', 'wrong'];
     if (!(index >= 1)) throw new Error('l\'AI non ha indicato una frase');
-    return { index: index, type: types.indexOf(plan && plan.type) !== -1 ? plan.type : 'gap',
+    return { index: index, type: types.indexOf(plan && plan.type) !== -1 ? plan.type : 'gap', quote: String((plan && plan.quote) || '').trim(),
       ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 

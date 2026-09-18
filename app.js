@@ -3184,6 +3184,52 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // l'AI cerca nella trascrizione la frase che corrisponde alla richiesta e sceglie il tipo; l'esercizio lo
   // costruisce il motore a REGOLE su quella frase (l'AI non scrive testo: niente invenzioni).
   $('#e-ask').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#btn-ask').click(); } });
+  /** v89: parole di un pezzo di trascrizione, in ordine, ciascuna col suo tempo e il suo chunk. */
+  function wordsOfUnit(ls, u) {
+    const out = [];
+    (u.ids || []).forEach(function (id) {
+      const c = (ls.chunks || []).find(function (x) { return x.id === id; });
+      if (!c) return;
+      const raw = String(c.text || '').split(/\s+/).filter(Boolean);
+      let times = G.wordTimes(c);
+      if (times.length !== raw.length) { const d = (c.end - c.start) / Math.max(1, raw.length); times = raw.map(function (w, i) { return { start: c.start + i * d, end: c.start + (i + 1) * d }; }); }
+      raw.forEach(function (w, i) {
+        const n = L.words(w)[0]; if (!n) return;
+        out.push({ raw: w, norm: n, id: c.id, start: times[i].start, end: times[i].end });
+      });
+    });
+    return out;
+  }
+  /**
+   * v89 (Edoardo, 18/9: "ho chiesto un fill the gaps dalla frase che inizia con 'i più comuni' ma non è iniziata
+   * da lì e mi ha messo un paragrafo! massimo 20-25 parole"): nei sottotitoli automatici una "frase" può essere
+   * un paragrafo di cento parole, e prima diventava tale e quale l'esercizio. Ora dal pezzo scelto si RITAGLIA
+   * una finestra da esercizio: si parte dalle parole citate dal modello (o dall'insegnante) e si chiude alla
+   * prima punteggiatura utile, comunque mai oltre MAX parole.
+   */
+  function carveAsk(words, quote, opts) {
+    const MIN = (opts && opts.min) || 12, MAX = (opts && opts.max) || 25;
+    if (words.length <= MAX) return { from: 0, to: words.length };
+    const q = L.words(quote || '');
+    let from = -1;
+    for (let need = Math.min(q.length, 5); need >= 2 && from === -1; need--) {
+      for (let i = 0; i + need <= words.length; i++) {
+        let ok = true;
+        for (let k = 0; k < need; k++) { if (words[i + k].norm !== q[k]) { ok = false; break; } }
+        if (ok) { from = i; break; }
+      }
+    }
+    if (from === -1) from = 0;
+    if (from + MIN > words.length) from = Math.max(0, words.length - MAX);
+    // fine: l'ultima punteggiatura forte dentro la finestra, altrimenti la finestra piena
+    const limite = Math.min(words.length, from + MAX);
+    let to = limite;
+    for (let j = limite - 1; j >= from + MIN; j--) {
+      if (/[.!?…]$/.test(words[j].raw)) { to = j + 1; break; }
+      if (to === limite && /[,;:]$/.test(words[j].raw)) to = j + 1;   // ripiego: una virgola è meglio di un taglio secco
+    }
+    return { from: from, to: to };
+  }
   $('#btn-ask').addEventListener('click', function () {
     const ls = current(); if (!ls) return;
     const req = $('#e-ask').value.trim();
@@ -3197,8 +3243,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       .then(function (r) {
         const u = units[r.index - 1];
         if (!u) throw new Error('l\'AI non ha trovato una frase adatta');
-        const text = textOf(u);
-        const p = { start: u.start, end: u.end, text: text, chunkIds: u.ids.slice(), wordCount: L.words(text).length, startsSentence: true, endsSentence: true };
+        // v89: dal pezzo si ritaglia una finestra da esercizio (mai un paragrafo intero)
+        const ww = wordsOfUnit(ls, u);
+        if (!ww.length) throw new Error('quel pezzo di trascrizione non ha parole con i tempi');
+        const win = carveAsk(ww, r.quote || req, { min: 12, max: 25 });
+        const pick = ww.slice(win.from, win.to);
+        const text = pick.map(function (w) { return w.raw; }).join(' ').replace(/\s+([,.;:!?…])/g, '$1').trim();
+        const ids = []; pick.forEach(function (w) { if (ids.indexOf(w.id) === -1) ids.push(w.id); });
+        const p = { start: pick[0].start, end: pick[pick.length - 1].end, text: text, chunkIds: ids, wordCount: pick.length, startsSentence: true, endsSentence: true };
         const ex = G.makeExerciseFromPassage(p, r.type, { lang: ls.lang, seed: Date.now() % 1000, vocab: lessonVocab(ls), distractors: 2, source: 'rules' });
         if (!ex) throw new Error('su quella frase non riesco a costruire un esercizio');
         ls.exercises.push(ex); sortExercises(ls); touch(ls); renderEditorBody();
@@ -6550,6 +6602,6 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     renderHome();
     maybeTour();
   }
-  window.VLApp = { overlay: overlay, overlayStep: overlayStep, overlayCancel: overlayCancel, S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd };
+  window.VLApp = { carveAsk: carveAsk, overlay: overlay, overlayStep: overlayStep, overlayCancel: overlayCancel, S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd };
   init();
 })();
