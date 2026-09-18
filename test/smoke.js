@@ -1612,6 +1612,9 @@ async function noOverflow(page, where) {
   // v78 ('un pulsante "soluzioni" che a tutto schermo è una sorta di recap'): una riga per esercizio, con la risposta
   await page.click('#btn-solutions');
   await page.waitForSelector('#dlg-solutions[open]');
+  // v97 ("voglio che il pop up delle soluzioni sia più largo, così alcune frasi diventano di una riga")
+  const largo = await page.$eval('#dlg-solutions', function (d) { return { w: Math.round(d.getBoundingClientRect().width), vw: Math.round(window.innerWidth) }; });
+  assert.ok(largo.w >= Math.min(900, largo.vw * 0.9), 'il recap Soluzioni usa la larghezza della finestra (' + largo.w + ' su ' + largo.vw + ')');
   const nSol = await page.$$eval('#dlg-solutions .sol-row', function (r) { return r.length; });
   const nExs = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises.length; });
   assert.strictEqual(nSol, nExs, 'una riga per esercizio nel recap Soluzioni (' + nSol + ' su ' + nExs + ')');
