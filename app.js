@@ -1404,6 +1404,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   });
   $('#btn-add-cut').addEventListener('click', function () {
     const ls = current(); const t = S.player ? S.player.time() : 0;
+    // v94 (Edoardo: "se clicco due volte qui mi mette due tagli identici, vorrei un pop-up che mi dice che
+    // esiste già un taglio su questo secondo"): un taglio che comincia dove ce n'è già uno non è mai voluto.
+    const gia = (ls.cuts || []).findIndex(function (c) { return t >= c.start - 0.6 && t <= c.end + 0.6; });
+    if (gia !== -1) {
+      const c = ls.cuts[gia];
+      centerNote('Qui c\'è già il taglio ✄' + (gia + 1) + ', da ' + fmt(c.start) + ' a ' + fmt(c.end) + '. Sposta il video, o allunga quello che c\'è.', 2400);
+      focusCut(gia);
+      return;
+    }
     const raw = { start: Math.round(t * 10) / 10, end: Math.min(ls.duration, Math.round(t * 10) / 10 + 10), reason: 'manuale' };
     // a frasi intere: inizia con la frase che comincia qui (o subito dopo) e finisce a fine frase
     const snapped = ls.chunks && ls.chunks.length ? G.snapCutToSentences({ start: raw.start, end: raw.end + 4 }, ls.chunks, { tol: 1.5, min: 3, duration: ls.duration }) : null;
@@ -4024,6 +4033,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const solBtn = el('button', { class: 'link', text: 'Mostra soluzione', style: 'display:none' });
     const skipBtn = el('button', { class: 'link', text: 'Salta', style: preview ? 'display:none' : '' });
     actions.appendChild(replayBtn); actions.appendChild(withTextLbl); actions.appendChild(checkBtn); actions.appendChild(hintBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
+    let refreshTranslation = function () {};   // v94: assegnata sotto quando c'è la chiave AI
     if (S.settings.apiKey) {
       // traduzione con l'AI (inglese britannico): tutta la frase, oppure solo le parole selezionate col mouse
       // La traduzione aiuta a CAPIRE la frase, non a risolverla: finché l'esercizio non è chiuso le parole da trovare
@@ -4031,7 +4041,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       // intera e non va bene perché sarebbe un suggerimento"). Nel riordino non c'è niente da mascherare — la risposta è
       // l'ordine di TUTTE le parole — quindi lì prima di risolvere si traduce solo quello che lo studente seleziona.
       const trBox = el('div', { class: 'translation', style: 'display:none' });
-      const trWrap = translateButton(function (trBtn, lang) {
+      let trUltima = null, trUltimoBtn = null;   // v94: per rifare la traduzione da soli a esercizio risolto
+      const traduci = function (trBtn, lang) {
+        trUltima = lang; trUltimoBtn = trBtn;
         const done = solved || !!opts.review || preview;
         const sel = String(window.getSelection ? window.getSelection().toString() : '').trim();
         const partial = sel && sel.length < ex.sentence.length && ex.sentence.toLowerCase().indexOf(sel.toLowerCase().slice(0, 30)) !== -1;
@@ -4054,12 +4066,23 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             trBox.style.display = ''; trBox.innerHTML = '';
             trBox.appendChild(el('span', { class: 'hint', text: (partial ? '"' + sel + '" → ' : lang[1] + ' ') }));
             trBox.appendChild(el('b', { text: r.translation }));
+            // la traduzione "coperta" si ricorda di esserlo: a esercizio risolto si rifà da sola, intera
+            trBox._coperta = !partial && (hide.length > 0 || missingShown);
             if (hide.length) trBox.appendChild(el('div', { class: 'hint', text: '___ = quello che devi trovare tu. Dopo la risposta la traduzione si vede per intero.' }));
             else if (missingShown) trBox.appendChild(el('div', { class: 'hint', text: 'La traduzione segue la frase così com\'è, senza la parola che manca: trovarla resta compito tuo.' }));
           })
           .catch(function (e) { toast('AI: ' + e.message, 6000); })
           .then(function () { trBtn.disabled = false; trBtn.textContent = etichetta; });
-      });
+      };
+      const trWrap = translateButton(traduci);
+      // v94 (Edoardo: "una volta che lo studente ha inserito la parola mancante, devi aggiornare automaticamente
+      // anche la traduzione e rimuovere la scritta sotto che dice che è compito suo"): a esercizio risolto la
+      // traduzione coperta non ha più senso. Si rifà da sola, per intero, e la nota sparisce con lei.
+      refreshTranslation = function () {
+        if (trBox.style.display === 'none' || !trBox._coperta || !trUltima || !trUltimoBtn) return;
+        trBox._coperta = false;
+        traduci(trUltimoBtn, trUltima);
+      };
       actions.appendChild(trWrap);
       actions.appendChild(fb);   // "Giusto!" a destra dei pulsanti, sulla stessa riga: niente righe in più da scorrere
       p.appendChild(actions); p.appendChild(trBox);
@@ -4607,6 +4630,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (res.correct) {
         solved = true;
         clearHintMarks();
+        refreshTranslation();
         fb.textContent = '✓ Giusto!'; fb.style.color = 'var(--ok)';
         if (!ls.options || ls.options.fx !== false) celebrate(p, fb);
         if (opts.onDone) opts.onDone(true);
@@ -4623,6 +4647,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     solBtn.addEventListener('click', function () {
       solved = true;
       clearHintMarks();
+      refreshTranslation();
       fb.textContent = 'Soluzione: ' + EX.solution(ex); fb.style.color = 'var(--muted)';
       if (opts.onDone) opts.onDone(false);
       checkBtn.style.display = 'none'; hintBtn.style.display = 'none'; solBtn.style.display = 'none'; skipBtn.style.display = 'none';

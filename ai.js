@@ -662,7 +662,7 @@
       'Write ONE replacement option in ' + lang + ': ' + (isCorrect ? 'a correct answer to the question, formulated differently from the current one' : 'a new plausible wrong option of the same kind and length as the correct answer, clearly wrong for someone who understood') + '. Short, suited to a ' + level + ' student.' + (params.topic ? ' Topic of the quiz: "' + params.topic + '".' : ''),
       'SCHEMA: {"option":"..."}',
       text ? '\nVIDEO TEXT (the quiz is about it):\n' + text : ''].join('\n');
-    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, fetchImpl: params.fetchImpl });
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 700, fetchImpl: params.fetchImpl });
     const j = extractJSON(res.text);
     const out = String((j && j.option) || '').trim();
     if (!out) throw new Error('Il modello non ha restituito una risposta');
@@ -688,7 +688,7 @@
       'Wrong options must be plausible and of the same kind as the right one.' + (params.tricky ? ' One wrong option must be "tricky": it echoes words that really occur in the sentence but does not answer the question, or is a near-synonym with the wrong nuance; give its index in "tricky".' : ' Set "tricky" to null.'),
       'SCHEMA: {"question":"...","options":["a","b","c","d"],"correct":0,"tricky":null}', '',
       'SENTENCE: ' + String(params.sentence || ''), '', 'CONTEXT (surrounding transcript):', String(params.context || '').slice(0, 3000)].join('\n');
-    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 600, fetchImpl: params.fetchImpl });
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1200, fetchImpl: params.fetchImpl });
     const j = extractJSON(res.text);
     const options = (Array.isArray(j.options) ? j.options : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 4);
     if (!j.question || options.length < 2) throw new Error('Il modello non ha restituito una domanda valida');
@@ -709,7 +709,7 @@
       'Below is a multiple-choice question about a SENTENCE the student has listened to. Replace ONE of the wrong options (indices ' + wrongIdx.join(', ') + ') with a "tricky" wrong option: it must echo words that really occur in the sentence, or be a near-synonym with the wrong nuance, so that a careless student picks it — but it must be clearly wrong on a careful listening. Keep it short, same style as the others. Never touch the correct option (index ' + (params.correct | 0) + ').',
       'SCHEMA: {"index":1,"option":"..."}', '',
       'QUESTION: ' + String(params.question || ''), 'OPTIONS: ' + JSON.stringify(opts), '', 'SENTENCE: ' + String(params.sentence || ''), '', 'CONTEXT:', String(params.context || '').slice(0, 2000)].join('\n');
-    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, fetchImpl: params.fetchImpl });
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 700, fetchImpl: params.fetchImpl });
     const j = extractJSON(res.text);
     const index = j.index | 0;
     if (wrongIdx.indexOf(index) === -1 || !j.option) throw new Error('Il modello non ha restituito una risposta tricky valida');
@@ -735,7 +735,12 @@
         : '',
       'SCHEMA: {"translation":"..."}', '',
       'TEXT: ' + String(params.text || ''), '', 'SENTENCE: ' + String(params.whole ? params.text : (params.sentence || '')), '', 'CONTEXT:', String(params.context || '').slice(0, 2000)].filter(Boolean).join('\n');
-    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 400, fetchImpl: params.fetchImpl });
+    // v94 (Edoardo: "ho cliccato su traduci e mi viene fuori questa cosa che non deve mai succedere" = risposta
+    // troncata dopo 400 token): il tetto ora parte da 1200 e cresce con la frase. 400 token sono più che
+    // sufficienti per la traduzione in sé: il sospetto (lo stesso della v86) è che il modello spenda token di
+    // ragionamento che non finiscono nel testo ma consumano il budget. Meglio abbondare: la traduzione la paghi
+    // sui token davvero scritti, non sul tetto. Stessa cura per gli altri tetti piccoli qui sotto.
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: Math.min(4000, 1200 + Math.ceil(String(params.text || params.sentence || '').length * 3)), fetchImpl: params.fetchImpl });
     const j = extractJSON(res.text);
     if (!j.translation) throw new Error('Nessuna traduzione nella risposta');
     return { translation: String(j.translation).trim(), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
@@ -941,7 +946,7 @@
       'The numbered items can be long (auto-generated subtitles have little punctuation). In "quote" copy the FIRST 4 TO 6 WORDS of the excerpt where the exercise must start, VERBATIM from the transcript (same words, same spelling, same order, no rewriting). If the teacher quotes some words, start exactly there. The exercise will use about 20 words from that point, so pick a start that reads naturally.',
       'SCHEMA: {"index": 12, "type": "gap", "quote": "i piu comuni sono leggeri"}',
       'SENTENCES:\n' + list].join('\n');
-    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, fetchImpl: params.fetchImpl });
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 700, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
     const index = parseInt(plan && plan.index, 10);
     const types = ['gap', 'gapbank', 'scramble', 'missing', 'extra', 'wrong'];
