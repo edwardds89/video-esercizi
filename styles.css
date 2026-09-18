@@ -526,6 +526,8 @@ body.mini-player .editor-layout #e-stage.docked .player-box {
 /* titolo del tipo di esercizio: sopra la consegna, entra con un'animazione che attira l'attenzione */
 h3.ex-type-title { display: inline-block; font-size: clamp(20px, 1.9vw, 30px); font-weight: 800; margin: 2px 0 6px -10px; padding: 2px 10px; border-radius: 8px; animation: title-in .6s cubic-bezier(.2, 1.4, .4, 1) both, title-glow 1.4s ease-in-out .6s 2; }
 h3.ex-type-title .sub { font-size: 14px; font-weight: 400; color: var(--muted); }
+/* v98: il numero dell'esercizio davanti al tipo, lo stesso della lista Soluzioni dell'insegnante */
+h3.ex-type-title .ex-n { color: var(--marker); font-variant-numeric: tabular-nums; }
 @keyframes title-in { 0% { transform: translateX(-28px) scale(.92); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes title-glow { 0%, 100% { background: transparent; box-shadow: none; } 50% { background: #fff1c2; box-shadow: 0 0 0 5px #ffe08a; } }
 .stage.docked .pop .ex-head h3.ex-title { font-size: 18px; }
@@ -535,6 +537,9 @@ h3.ex-type-title .sub { font-size: 14px; font-weight: 400; color: var(--muted); 
 /* aiuti: lettera svelata, parola messa al suo posto, opzione eliminata, parola sbiadita */
 input.hinted { border-color: #d99a00; background: #fff8e1; }
 .chip.hinted { border-color: #d99a00; background: #fff1c2; }
+/* v98, aiuto del semplificato: giallo = puo' andare nella casella indicata, rosso = escludila.
+   Le rosse restano cliccabili (l'aiuto indirizza, non blocca), ma si vedono barrate e spente. */
+.chip.excluded { border-color: #e2a5a5; background: #fdecec; color: #a33; text-decoration: line-through; opacity: .75; }
 .mc-opt.elim { opacity: .35; text-decoration: line-through; pointer-events: none; }
 .chip.dim { opacity: .3; pointer-events: none; }
 .sentence .filled .w { background: #fff1c2; box-shadow: 0 -2px 0 0 #f5c400 inset; font-weight: 700; color: #0f5a27; padding: 0 3px; }   /* parole scritte negli spazi, a risposta giusta */
@@ -1334,6 +1339,20 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
    diventano di una riga e si risparmia in altezza"): serve anche max-width, altrimenti vince il 560px della
    regola generale `dialog` (la larghezza dell'id non batte un max-width che l'id non dichiara). */
 #dlg-solutions { width: min(1280px, 96vw); max-width: min(1280px, 96vw); }
+
+/* v98: foglio delle Soluzioni da stampare. Sullo schermo non esiste; in stampa e' l'UNICA cosa che resta.
+   I margini li fa il padding, perche' la @page dell'app e' gia' a margin: 0 per il foglio A4 della conversazione. */
+#print-area { display: none; }
+.pr-kicker { font-size: 9pt; letter-spacing: .18em; text-transform: uppercase; color: #6b7684; }
+.pr-title { font-size: 20pt; margin: 1mm 0 2mm; }
+.pr-sub { font-size: 9pt; color: #6b7684; margin-bottom: 6mm; }
+@media print {
+  body.printing > *:not(#print-area) { display: none !important; }
+  body.printing #print-area { display: block; padding: 14mm 15mm; color: #111; }
+  body.printing #print-area .sol-row { break-inside: avoid; page-break-inside: avoid; }
+  body.printing #print-area .sol-sent { font-size: 12pt; }
+  body.printing #print-area .sol-head { font-size: 8.5pt; }
+}
 .sol-row { padding: 12px 4px; border-bottom: 1px solid var(--line); }
 .sol-row:last-child { border-bottom: 0; }
 .sol-head { font-size: 13px; color: var(--muted); letter-spacing: .02em; margin-bottom: 4px; }

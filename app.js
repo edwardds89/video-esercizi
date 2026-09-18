@@ -1389,46 +1389,74 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#btn-student').addEventListener('click', function () { openStudent(S.currentId, true); });
   // v78 ('quando clicco su modifica, ci sia un pulsante "soluzioni"... un recap con tutti gli esercizi e le
   // soluzioni in lista'): riepilogo per l'insegnante, in ordine di tempo, a schermo grande.
+  function solutionRows(ls) {
+    return (ls.exercises || []).slice().sort(function (a, b) { return (a.markerTime || 0) - (b.markerTime || 0); });
+  }
+  // v81 ('metti la frase direttamente con l'errore e la parola la barri... trova soluzioni simili per tutte le
+  // tipologie... voglio ogni frase una sola volta'): OGNI esercizio = UNA frase, con la soluzione DENTRO —
+  // parole dei gap evidenziate, parola in piu' barrata, parola sbagliata barrata + correzione accanto,
+  // parola mancante evidenziata, riordino = la frase giusta e basta. Niente riga "Soluzione:" doppione.
+  // v98: la riga e' una funzione a parte perche' la usano SIA il dialogo SIA il foglio da stampare: una sola
+  // resa, cosi' la carta non puo' dire una cosa diversa dallo schermo.
+  function solutionRow(ex, i) {
+    const d = ex.data || {};
+    const row = el('div', { class: 'sol-row' });
+    row.appendChild(el('div', { class: 'sol-head', text: (i + 1) + ' \u00b7 ' + fmtMin(ex.markerTime || 0) + ' \u00b7 ' + (EX.LABELS[ex.type] || ex.type) }));
+    const sent = el('div', { class: 'sol-sent' });
+    const addTok = function (t, cls) {
+      sent.appendChild(cls ? el('span', { class: cls, text: t }) : document.createTextNode(t));
+      sent.appendChild(document.createTextNode(' '));
+    };
+    if ((ex.type === 'gap' || ex.type === 'gapbank') && Array.isArray(d.tokens)) {
+      const inGap = new Set(d.gapIndices || []);
+      d.tokens.forEach(function (t, k) { addTok(t, inGap.has(k) ? 'sol-hit' : null); });
+    } else if (ex.type === 'missing' && Array.isArray(d.tokens)) {
+      d.tokens.forEach(function (t, k) { addTok(t, k === d.missingIndex ? 'sol-hit' : null); });
+    } else if ((ex.type === 'extra' || ex.type === 'wrong') && Array.isArray(d.shown)) {
+      const bad = ex.type === 'extra' ? d.extraIndex : d.wrongIndex;
+      d.shown.forEach(function (t, k) {
+        addTok(t, k === bad ? 'sol-strike' : null);
+        if (ex.type === 'wrong' && k === bad) addTok(d.answer, 'sol-fix');
+      });
+    } else if (ex.type === 'mc') {
+      sent.appendChild(document.createTextNode(d.question || ''));
+      sent.appendChild(el('div', {}, el('span', { class: 'sol-fix', text: '\u2713 ' + ((d.options && d.options[d.correct]) || '') })));
+    } else {
+      sent.appendChild(document.createTextNode(ex.sentence || ''));
+    }
+    row.appendChild(sent);
+    return row;
+  }
   $('#btn-solutions').addEventListener('click', function () {
     const ls = current(); if (!ls) return;
     const box = $('#solutions-body'); box.innerHTML = '';
-    const exs = (ls.exercises || []).slice().sort(function (a, b) { return (a.markerTime || 0) - (b.markerTime || 0); });
+    const exs = solutionRows(ls);
     if (!exs.length) box.appendChild(el('p', { class: 'hint', text: 'Questa lezione non ha ancora esercizi.' }));
-    // v81 ('metti la frase direttamente con l'errore e la parola la barri... trova soluzioni simili per tutte le
-    // tipologie... voglio ogni frase una sola volta'): OGNI esercizio = UNA frase, con la soluzione DENTRO —
-    // parole dei gap evidenziate, parola in più barrata, parola sbagliata barrata + correzione accanto,
-    // parola mancante evidenziata, riordino = la frase giusta e basta. Niente riga "Soluzione:" doppione.
-    exs.forEach(function (ex, i) {
-      const d = ex.data || {};
-      const row = el('div', { class: 'sol-row' });
-      row.appendChild(el('div', { class: 'sol-head', text: (i + 1) + ' · ' + fmtMin(ex.markerTime || 0) + ' · ' + (EX.LABELS[ex.type] || ex.type) }));
-      const sent = el('div', { class: 'sol-sent' });
-      const addTok = function (t, cls) {
-        sent.appendChild(cls ? el('span', { class: cls, text: t }) : document.createTextNode(t));
-        sent.appendChild(document.createTextNode(' '));
-      };
-      if ((ex.type === 'gap' || ex.type === 'gapbank') && Array.isArray(d.tokens)) {
-        const inGap = new Set(d.gapIndices || []);
-        d.tokens.forEach(function (t, k) { addTok(t, inGap.has(k) ? 'sol-hit' : null); });
-      } else if (ex.type === 'missing' && Array.isArray(d.tokens)) {
-        d.tokens.forEach(function (t, k) { addTok(t, k === d.missingIndex ? 'sol-hit' : null); });
-      } else if ((ex.type === 'extra' || ex.type === 'wrong') && Array.isArray(d.shown)) {
-        const bad = ex.type === 'extra' ? d.extraIndex : d.wrongIndex;
-        d.shown.forEach(function (t, k) {
-          addTok(t, k === bad ? 'sol-strike' : null);
-          if (ex.type === 'wrong' && k === bad) addTok(d.answer, 'sol-fix');
-        });
-      } else if (ex.type === 'mc') {
-        sent.appendChild(document.createTextNode(d.question || ''));
-        sent.appendChild(el('div', {}, el('span', { class: 'sol-fix', text: '✓ ' + ((d.options && d.options[d.correct]) || '') })));
-      } else {
-        sent.appendChild(document.createTextNode(ex.sentence || ''));
-      }
-      row.appendChild(sent);
-      box.appendChild(row);
-    });
+    exs.forEach(function (ex, i) { box.appendChild(solutionRow(ex, i)); });
     $('#dlg-solutions').showModal();
   });
+  // v98 (Edoardo: 'e' possibile un pulsante tipo "stampa" qualora un docente voglia stamparle?'): foglio per
+  // l'insegnante. NON si stampa il dialogo (in Chrome un <dialog> modale sta nel top layer e in stampa si porta
+  // dietro mezza pagina): si riempie #print-area, si mette la classe 'printing' sul body e il CSS di stampa
+  // nasconde tutto il resto. I margini li fa il padding di #print-area, perche' la @page del foglio A4 della
+  // conversazione ha gia' margin: 0 e vale per tutta l'app.
+  function printSolutions(ls) {
+    if (!ls) return;
+    const area = $('#print-area'); area.innerHTML = '';
+    const exs = solutionRows(ls);
+    area.appendChild(el('div', { class: 'pr-kicker', text: 'Soluzioni' }));
+    area.appendChild(el('h1', { class: 'pr-title', text: ls.title || 'Lezione' }));
+    area.appendChild(el('div', { class: 'pr-sub', text: (exs.length === 1 ? '1 esercizio' : exs.length + ' esercizi') + ' \u00b7 foglio per l\'insegnante \u00b7 ' + new Date().toLocaleDateString('it-IT') }));
+    if (!exs.length) area.appendChild(el('p', { class: 'hint', text: 'Questa lezione non ha ancora esercizi.' }));
+    exs.forEach(function (ex, i) { area.appendChild(solutionRow(ex, i)); });
+    const fine = function () { document.body.classList.remove('printing'); area.innerHTML = ''; window.removeEventListener('afterprint', fine); };
+    document.body.classList.add('printing');
+    window.addEventListener('afterprint', fine);
+    // window.print() blocca il thread finche' l'anteprima di stampa non e' chiusa: quando torna, il foglio
+    // e' gia' stato catturato e si puo' smontare subito (l'afterprint resta come rete di sicurezza).
+    try { window.print(); } finally { fine(); }
+  }
+  $('#solutions-print').addEventListener('click', function () { printSolutions(current()); });
   $('#solutions-close').addEventListener('click', function () { $('#dlg-solutions').close(); });
   $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
@@ -4123,8 +4151,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // titolo = tipo di esercizio ("Trova la parola mancante"), traduzione in piccolo; "N di M" piccolo a destra
     const label = EX.LABELS[ex.type] || ex.type;
     const paren = label.indexOf(' (');
+    // v98 (Edoardo: 'durante gli esercizi lo studente non vede il numero dell'esercizio ma nelle soluzioni c'e'
+    // chiaramente il numero. Metti il numero anche durante gli esercizi prima del tipo'): stesso numero della
+    // lista Soluzioni, perche' ls.exercises e' tenuto ordinato per markerTime (sortExercises) e il recap ordina
+    // allo stesso modo: se lo studente dice 'sono bloccato al 9', l'insegnante guarda il 9 e trova quello.
     const h = el('h3', { class: 'ex-title' }, [
       preview ? el('span', { class: 'muted', text: 'Anteprima · ' }) : null,
+      el('span', { class: 'ex-n', text: (opts.index + 1) + ': ' }),
       document.createTextNode(paren === -1 ? label : label.slice(0, paren)),
       paren === -1 ? null : el('span', { class: 'sub', text: ' ' + label.slice(paren + 1) })
     ]);
@@ -4160,7 +4193,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     withText.addEventListener('change', function () { S.withText = withText.checked; });
     const withTextLbl = el('label', { class: 'chip withtext', style: 'margin:0', title: 'Riascolta senza ingrandire il video: la frase resta visibile' }, withText, ' con la frase');
     const checkBtn = el('button', { class: 'primary', text: 'Controlla' });
-    const hintBtn = el('button', { class: 'small hint-btn', text: '💡 Aiuto', title: 'Un aiuto alla volta: una lettera in più della risposta (o un pezzo della soluzione)' });
+    const hintBtn = el('button', { class: 'small hint-btn', text: '💡 Aiuto', title: ex.type === 'gapbank' ? 'Un aiuto alla volta: restringe la lista a 3 parole possibili per la casella su cui sei (clicca un altro spazio per spostarlo)' : 'Un aiuto alla volta: una lettera in più della risposta (o un pezzo della soluzione)' });
     const solBtn = el('button', { class: 'link', text: 'Mostra soluzione', style: 'display:none' });
     const skipBtn = el('button', { class: 'link', text: 'Salta', style: preview ? 'display:none' : '' });
     actions.appendChild(replayBtn); actions.appendChild(withTextLbl); actions.appendChild(checkBtn); actions.appendChild(hintBtn); actions.appendChild(solBtn); actions.appendChild(skipBtn);
@@ -4271,6 +4304,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const sent = el('div', { class: 'sentence' });
       const inputs = [];
       let active = null;   // la casella su cui sta lavorando lo studente: la parola cliccata va LI'
+      let onGapPick = null;   // v98: acceso dall'Aiuto del semplificato, ricalcola le parole possibili per la casella cliccata
       // parole nascoste adiacenti = un unico spazio (lo studente scrive tutta l'espressione)
       const runs = EX.gapRuns(d);
       const runStart = {}; runs.forEach(function (r, k) { runStart[r.indices[0]] = k; });
@@ -4291,7 +4325,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (ex.type === 'gapbank') inp.readOnly = true;
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
         inp.addEventListener('focus', function () { active = inp; });
-        inp.addEventListener('click', function () { active = inp; });
+        inp.addEventListener('click', function () { active = inp; if (onGapPick) onGapPick(inp); });
         inputs.push(inp);
         const gwrap = el('span', { class: 'gwrap' });
         gwrap.appendChild(inp);
@@ -4323,6 +4357,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         sent.appendChild(document.createTextNode((lastTok.post || '') + ' '));
       });
       body.appendChild(sent);
+      let gapbankHint = null;   // v98: assegnata sotto, solo quando c'e' davvero una lista di parole
       if (ex.type === 'gapbank' && d.wordBank && d.wordBank.length) {
         // La parola cliccata va nella casella SU CUI SEI (se ne hai scelta una), non sempre nella prima libera;
         // e sparisce dalla lista, perche' una parola gia' usata non si usa due volte. Cancellandola dalla casella
@@ -4370,10 +4405,73 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         });
         body.appendChild(row);
         refreshBank();
+        // v98 (Edoardo: 'per il fill the gaps semplificato, quando si clicca aiuto voglio che venga dato un aiuto
+        // specifico: se clicco su un gap mi vengono selezionate 3 parole in giallo (tra cui una corretta) e le
+        // altre parole rosse (per escluderle)'). Nel semplificato la casella e' in SOLA LETTURA (v77): svelare
+        // lettere non serviva a niente, perche' lo studente non scrive. L'aiuto giusto e' RESTRINGERE LA LISTA:
+        // giallo = puo' andare in questa casella, rosso = non e' di questa casella (le parole rosse restano
+        // cliccabili: l'aiuto indirizza, non impedisce di sbagliare).
+        // Un Aiuto dopo l'altro sulla stessa casella stringe: 3 gialle, poi 2, poi solo quella giusta.
+        // Cliccando un'altra casella si riparte dalle 3 di quella.
+        const hintOrd = {}, hintExtra = {};   // ordine stabile delle sbagliate e quante ne restano gialle, per casella
+        let hintGap = -1;
+        const clearBankMarks = function () { bank.forEach(function (b) { b.el.classList.remove('hinted', 'excluded'); }); };
+        const narrowBank = function (k, riparti) {
+          if (k < 0 || k >= inputs.length) return false;
+          const giuste = L.words(runs[k].answer);
+          const liberi = bank.filter(function (b) { return !b.el.hidden; });
+          const scelti = [];
+          giuste.forEach(function (g) {
+            const b = liberi.find(function (x) { return scelti.indexOf(x) === -1 && L.normalize(x.w) === g; });
+            if (b) scelti.push(b);
+          });
+          if (!scelti.length) return false;   // la parola giusta e' gia' dentro una casella: niente da indicare
+          const resto = liberi.filter(function (b) { return scelti.indexOf(b) === -1; });
+          if (!resto.length) return false;   // nella lista e' rimasta solo lei: non c'e' aiuto da dare
+          if (!hintOrd[k]) {
+            // le due parole gialle sbagliate si pescano PRIMA fra le parole in piu' (i distrattori) e solo dopo
+            // fra le risposte degli altri spazi: 'una di queste tre e' quella giusta' dev'essere vero senza
+            // trappole, e una parola che serve altrove e' piu' utile segnata in rosso che proposta qui.
+            const veriSbagliati = (d.distractors || []).map(function (w) { return L.normalize(w); });
+            const mischiato = EX.shuffle(resto.slice(), Math.random);
+            hintOrd[k] = mischiato.filter(function (b) { return veriSbagliati.indexOf(L.normalize(b.w)) !== -1; })
+              .concat(mischiato.filter(function (b) { return veriSbagliati.indexOf(L.normalize(b.w)) === -1; }));
+          }
+          const ordine = hintOrd[k].filter(function (b) { return resto.indexOf(b) !== -1; });
+          // 3 gialle in tutto: le giuste di QUESTA casella (uno spazio unito ne vuole piu' di una) piu' le altre
+          const base = Math.max(0, Math.min(3 - scelti.length, ordine.length - 1));
+          const extra = (riparti || hintExtra[k] == null) ? base : Math.min(hintExtra[k] - 1, base);
+          if (extra < 0) return false;
+          hintExtra[k] = extra;
+          clearBankMarks();
+          inputs.forEach(function (i) { i.classList.remove('hinted'); });
+          const gialli = scelti.concat(ordine.slice(0, extra));
+          liberi.forEach(function (b) { b.el.classList.add(gialli.indexOf(b) === -1 ? 'excluded' : 'hinted'); });
+          inputs[k].classList.add('hinted');   // si deve vedere A QUALE casella si riferiscono le parole gialle
+          hintGap = k;
+          return true;
+        };
+        onGapPick = function (inp) { if (hintGap !== -1) narrowBank(inputs.indexOf(inp), true); };
+        // appena la casella aiutata e' piena, i colori non dicono piu' niente di utile: si spengono
+        inputs.forEach(function (i) {
+          i.addEventListener('input', function () {
+            if (hintGap !== -1 && inputs[hintGap] === i && !manca(i)) { clearBankMarks(); i.classList.remove('hinted'); hintGap = -1; }
+          });
+        });
+        gapbankHint = function () {
+          const daFare = function (i) { return !sameWord(inputs[i].value, runs[i].answer); };
+          const cur = active ? inputs.indexOf(active) : -1;
+          let k = (cur !== -1 && daFare(cur)) ? cur : -1;
+          if (k === -1) for (let i = 0; i < inputs.length && k === -1; i++) if (daFare(i)) k = i;
+          if (k === -1) return false;
+          return narrowBank(k, k !== hintGap);
+        };
       }
       getAnswer = function () { return inputs.map(function (i) { return i.value; }); };
       giveHint = function () {
-        // uno spazio unito = una risposta di più parole (runs), non la k-esima parola singola
+        // semplificato: l'aiuto restringe la lista delle parole (v98); spazi da scrivere: una lettera alla volta
+        if (gapbankHint) return gapbankHint();
+        // uno spazio unito = una risposta di piu' parole (runs), non la k-esima parola singola
         const k = inputs.findIndex(function (inp, i) { return !sameWord(inp.value, runs[i].answer); });
         if (k === -1) return false;
         return revealLetter(inputs[k], runs[k].answer);
@@ -4737,7 +4835,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // ogni evidenziazione dell'Aiuto (zona gialla, parole/caselle segnate) si spegne — non indica piu' niente.
     // Vale per TUTTI i tipi, anche futuri: la pulizia sta qui nel percorso comune, non nei singoli markResult.
     const clearHintMarks = function () {
-      $$('.zone, .zone-flash, .hinted', body).forEach(function (x) { x.classList.remove('zone', 'zone-flash', 'hinted'); });
+      $$('.zone, .zone-flash, .hinted, .excluded', body).forEach(function (x) { x.classList.remove('zone', 'zone-flash', 'hinted', 'excluded'); });
     };
     // v78 ('quando si clicca l'ultima parola ci sia l'autofeedback come se si fosse gia' cliccato su controlla'):
     // negli esercizi costruiti a CLICK (riordino, semplificato con le parole) la risposta completa e GIUSTA si
@@ -6905,6 +7003,6 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     renderHome();
     maybeTour();
   }
-  window.VLApp = { carveAsk: carveAsk, overlay: overlay, overlayStep: overlayStep, overlayCancel: overlayCancel, S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd };
+  window.VLApp = { carveAsk: carveAsk, overlay: overlay, overlayStep: overlayStep, overlayCancel: overlayCancel, S: S, generate: generate, openEditor: openEditor, openStudent: openStudent, renderHome: renderHome, newLesson: newLesson, cloud: CLOUD, runSync: runSync, openConvEditor: openConvEditor, openConvPrint: openConvPrint, renderTalk: renderTalk, renderVocabWarnings: renderVocabWarnings, inAd: inAd, printSolutions: printSolutions };
   init();
 })();

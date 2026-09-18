@@ -7,7 +7,7 @@
 
   const LABELS = {
     gap: 'Completa gli spazi (fill the gaps)',
-    gapbank: 'Completa gli spazi — semplificato, con le parole (fill the gaps)',
+    gapbank: 'Completa gli spazi, semplificato con le parole (fill the gaps)',
     scramble: 'Riordina la frase (scrambled sentence)',
     missing: 'Trova la parola mancante (find the missing word)',
     extra: 'Trova la parola in più (find the extra word)',
