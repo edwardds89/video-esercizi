@@ -317,7 +317,27 @@
     return parts[0];
   }
 
+  /** v88 (Edoardo: "che senso ha proporre rischio e rischi? e' la stessa parola singolare plurale").
+   *  Impronta di una parola del lessico: senza articolo e senza le vocali finali, cosi' singolare e plurale
+   *  cadono sulla stessa chiave (rischio/rischi -> risch, pustola/pustole -> pustol). Serve SOLO a togliere i
+   *  doppioni in una lista di parole utili: non e' un lemmatizzatore e non va usato per confrontare frasi. */
+  function vocabStem(word, lang) {
+    let w = normalize(word).trim();
+    if (!w) return '';
+    w = w.replace(/^(?:il|lo|la|i|gli|le|un|uno|una|dei|degli|delle|della|dello|del|the|a|an)\s+/, '');
+    w = w.replace(/^(?:l|un|dell|nell|all|sull|quell)'\s*/, '');
+    if (!w || /\s/.test(w)) return w;                       // espressioni ("un conto e'"): nessuna riduzione
+    const cut = (lang === 'en') ? w.replace(/(?:es|s)$/, '') : w.replace(/[aeiou]+$/, '');
+    return cut.length >= 3 ? cut : w;
+  }
+  /** Forma che SEMBRA plurale: serve solo a preferire il singolare quando due voci hanno la stessa impronta. */
+  function looksPlural(word, lang) {
+    const w = normalize(word).trim().split(/\s+/).pop() || '';
+    return (lang === 'en') ? /[^s]s$/.test(w) : /[ie]$/.test(w);
+  }
+
   return {
+    vocabStem: vocabStem, looksPlural: looksPlural,
     STOPWORDS: STOPWORDS, CTA: CTA, SWAPS: SWAPS, EXTRA: EXTRA, isDigression: isDigression, defines: defines, refsBack: refsBack, isFiller: isFiller, isQuestion: isQuestion, isCognate: isCognate, isBasic: isBasic, guessLemmas: guessLemmas,
     stopwords: stopwords, normalize: normalize, tokenize: tokenize, words: words, isContent: isContent,
     hasCTA: hasCTA, isNoise: isNoise, endsBadly: endsBadly, startsSoftly: startsSoftly, endsWithPunct: endsWithPunct, swapFor: swapFor,

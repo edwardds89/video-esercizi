@@ -86,7 +86,17 @@
       return !(x.cognate && x.basic);
     });
     list.sort(function (a, b) { return b.score - a.score || a.word.localeCompare(b.word); });
-    return list.slice(0, o.n);
+    // v88: singolare e plurale della stessa parola sono UNA voce sola (rischio/rischi); a regole si tiene il
+    // singolare, che e' la forma da dizionario, anche se la sua frequenza e' piu' bassa.
+    const perStem = {}, uniche = [];
+    list.forEach(function (x) {
+      const stem = L.vocabStem(x.word, o.lang);
+      if (!stem) { uniche.push(x); return; }
+      if (perStem[stem] == null) { perStem[stem] = uniche.length; uniche.push(x); return; }
+      const ix = perStem[stem];
+      if (L.looksPlural(uniche[ix].word, o.lang) && !L.looksPlural(x.word, o.lang)) uniche[ix] = x;
+    });
+    return uniche.slice(0, o.n);
   }
   function resolveRange(range, type) {
     if (range === 'smart') return SMART_RANGES[type] || SMART_RANGES.gap;

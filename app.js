@@ -2905,6 +2905,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       el('button', { class: 'small', text: 'Fine = ora', title: 'Usa il tempo corrente del player come fine della frase', onclick: function () { if (S.player) { ex.segment.end = Math.round(S.player.time() * 10) / 10; sortExercises(ls); touch(ls); renderEditorBody(); } } })
     );
     card.appendChild(timesRow);
+    const revBtn = el('button', {
+      class: 'small right' + (ex.reviewed ? ' ok' : ''),
+      text: ex.reviewed ? '✓ Controllato' : '💾 Salva e segna come controllato',
+      title: ex.reviewed ? 'Controllato da te: clicca per togliere il segno verde' : 'Il salvataggio è automatico: questo pulsante segna l\'esercizio come controllato (sfondo verde)',
+      onclick: function () {
+        if (ex.reviewed) delete ex.reviewed; else ex.reviewed = true;
+        saveLessons(); touch(ls); renderEditorBody();
+      }
+    });
     const head = el('div', { class: 'head', style: 'margin-top:6px' },
       typeSel,
       rangeSel,
@@ -2917,15 +2926,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       // Le modifiche si salvano DA SOLE (0,4 s dopo ogni cambio, e comunque alla chiusura della pagina): questo
       // pulsante serve a segnare l'esercizio come passato in rassegna, cosi' si vede a colpo d'occhio quali sono
       // ancora quelli proposti dall'AI e quali hai gia' guardato tu (richiesta di Edoardo, 2/9).
-      el('button', {
-        class: 'small right' + (ex.reviewed ? ' ok' : ''),
-        text: ex.reviewed ? '✓ Controllato' : '💾 Salva e segna come controllato',
-        title: ex.reviewed ? 'Controllato da te: clicca per togliere il segno verde' : 'Il salvataggio è automatico: questo pulsante segna l\'esercizio come controllato (sfondo verde)',
-        onclick: function () {
-          if (ex.reviewed) delete ex.reviewed; else ex.reviewed = true;
-          saveLessons(); touch(ls); renderEditorBody();
-        }
-      }),
+      revBtn,
       el('button', { class: 'small danger', text: 'Elimina', onclick: function () { ls.exercises = ls.exercises.filter(function (x) { return x !== ex; }); touch(ls); renderEditorBody(); undoBarFor('esercizio ' + (i + 1) + ' (' + (EX.LABELS[ex.type] || ex.type) + ')'); } })
     );
     card.appendChild(head);
@@ -2935,15 +2936,36 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // (richiesta di Edoardo, 2/9: "devo io essere quello che chiede di ricalcolarlo"). Vale anche al contrario:
     // spostando i secondi il testo non si riscrive da solo. Quando le due cose non combaciano, i due pulsanti si accendono.
     const ta = el('textarea', { class: 'sentence-edit', style: 'min-height:56px;margin-top:8px', title: 'Cambia la frase liberamente: i tempi restano come sono finché non premi "⟳ Aggiorna tempi"' }); ta.value = ex.sentence;
+    let teNode = renderTypeEditor(ls, ex);
+    let pvNode = el('div', { class: 'preview', html: '<span class="hint">Lo studente vede: </span>' + previewText(ex) });
+    // v88 (Edoardo, 18/9: "ho modificato questa frase e quando ho cliccato su Aggiorna tempi la parte finale
+    // dell'audio era identica a prima"): il 'change' della textarea scatta al BLUR, cioe' sul mousedown del
+    // pulsante. Ridisegnando li' tutto l'editor il pulsante spariva da sotto il dito e il click non arrivava
+    // MAI al suo onclick (mousedown e mouseup su due elementi diversi). Ora si aggiorna solo cio' che dipende
+    // dalla frase, la barra dei pulsanti resta in vita e il clic arriva. REGOLA: mai renderEditorBody() dentro
+    // il change/blur di un campo che sta sopra o sotto dei pulsanti.
+    const refreshSentenceParts = function () {
+      const te = renderTypeEditor(ls, ex); teNode.replaceWith(te); teNode = te;
+      const pv = el('div', { class: 'preview', html: '<span class="hint">Lo studente vede: </span>' + previewText(ex) }); pvNode.replaceWith(pv); pvNode = pv;
+      const rt2 = textForRange(ls, ex.segment);
+      const st2 = !!rt2 && !wordsAligned(L.words(rt2), L.words(ex.sentence));
+      updBtn.classList.toggle('warn', st2); updTimesBtn.classList.toggle('warn', st2);
+      updTimesBtn.title = st2 ? 'Il testo non è quello di questi secondi: clicca per spostare i tempi sulle parole che hai scritto' : 'Cerca la frase scritta qui sotto nella trascrizione e sposta "frase da" e "a" sulle sue parole';
+      card.classList.toggle('reviewed', !!ex.reviewed);
+      revBtn.classList.toggle('ok', !!ex.reviewed);
+      revBtn.textContent = ex.reviewed ? '✓ Controllato' : '💾 Salva e segna come controllato';
+    };
     ta.addEventListener('change', function () {
-      ex.sentence = ta.value.trim();
+      const v = ta.value.trim();
+      if (v === ex.sentence) return;
+      ex.sentence = v;
       if (!rebuildExercise(ls, ex, ex.type, ex.type === 'mc' ? ex.data : null)) toast('Frase troppo corta per questo tipo');
-      touch(ls); renderEditorBody();
+      touch(ls); refreshSentenceParts();
     });
     card.appendChild(el('label', { text: 'Frase (quello che lo studente sente)' }));
     card.appendChild(ta);
-    card.appendChild(renderTypeEditor(ls, ex));
-    card.appendChild(el('div', { class: 'preview', html: '<span class="hint">Lo studente vede: </span>' + previewText(ex) }));
+    card.appendChild(teNode);
+    card.appendChild(pvNode);
     return card;
   }
 
@@ -3002,7 +3024,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         // distrattori modificabili: simili alle risposte (stessa desinenza/lunghezza), non a caso
         const row = el('div', { class: 'row', style: 'margin-top:4px' }, el('span', { class: 'hint', text: 'Parole sbagliate:' }));
         (d.distractors || []).forEach(function (w, k) {
-          const inp = el('input', { type: 'text', class: 'short', value: w, title: 'Modifica la parola sbagliata' });
+          // v88 ("la parola completamente non si vede tutta"): la casella si allarga con la parola, non taglia
+          const inp = el('input', { type: 'text', class: 'short grow', value: w, size: String(Math.max(8, w.length + 1)), title: 'Modifica la parola sbagliata' });
+          inp.addEventListener('input', function () { inp.size = Math.max(8, inp.value.length + 1); });
           inp.addEventListener('change', function () { const v = inp.value.trim(); if (v) d.distractors[k] = v; else d.distractors.splice(k, 1); setBank(); });
           row.appendChild(inp);
         });

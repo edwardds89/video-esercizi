@@ -19,6 +19,8 @@ input[type=text], input[type=password], input[type=number], input[type=url], sel
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; width: 100%; min-width: 0;
 }   /* min-width:0 = un <select> con opzioni lunghe non allarga la colonna che lo contiene */
 input.short { width: 7.5em; }
+/* v88: casella che si adatta alla parola (l'attributo size fa il lavoro), senza sfondare la riga */
+input.short.grow { width: auto; min-width: 7.5em; max-width: 16em; }
 textarea { min-height: 90px; resize: vertical; }
 label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
 .hint { color: var(--muted); font-size: 13px; margin-top: 4px; }

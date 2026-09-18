@@ -63,7 +63,7 @@
     if (p.noVocab) lines.push('5. Do NOT propose useful words: leave "vocab" as an empty list.');
     else lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student whose own language is "' + sup + '" must learn to understand the video, in "vocab". ' +
       'Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (e.g. Italian "globale" ≈ English "global", "informazione" ≈ "information"), basic words a ' + (p.level || 'B1') + ' student already knows, proper names and numbers. ' +
-      'Prioritize words that occur in the exercise sentences you chose (mark them with "inExercise": true), then other key words of the video. Use the dictionary form as it appears in the video (singular noun, infinitive verb, masculine adjective) ' +
+      'Prioritize words that occur in the exercise sentences you chose (mark them with "inExercise": true), then other key words of the video. Use the dictionary form: SINGULAR noun WITH its definite article (Italian: "il rischio", "la malattia", "lo studio", "l\'acqua"), infinitive verb, masculine adjective. NEVER list two forms of the same word (no singular and plural of the same noun, no two tenses of the same verb): one entry per word. ' +
       'and give the translation in language "' + sup + '" ("translation").');
     lines.push('');
     lines.push('OUTPUT SCHEMA (JSON only):');
@@ -341,16 +341,34 @@
     // rete di sicurezza sotto il prompt: da B1 in su una parola di base (abbiamo, quattro) non e' mai "utile", anche se il
     // modello la propone; le espressioni di piu' parole ("un conto e'") passano sempre
     const advanced = /^(B1|B2|C1|C2)$/i.test(String(o.level || 'B1'));
-    const out = [], seen = {};
+    const lang = o.lang || 'it';
+    const out = [], seen = {}, byStem = {};
+    // v88 (Edoardo: "che senso ha proporre rischio e rischi?"): stessa parola al singolare e al plurale = UNA voce.
+    // Vince quella con l'articolo (e' quella scritta bene) e, a pari merito, il singolare.
+    const conArticolo = function (w) { return /^(?:il|lo|la|i|gli|le|un|uno|una)\s|^(?:l|un|dell|nell)'/i.test(String(w || '').trim()); };
+    const meglio = function (a, b) {
+      if (conArticolo(a) !== conArticolo(b)) return conArticolo(a);
+      if (L.looksPlural(a, lang) !== L.looksPlural(b, lang)) return !L.looksPlural(a, lang);
+      return false;   // a parita', resta la prima arrivata (l'ordine del modello e' una priorita')
+    };
     (Array.isArray(list) ? list : []).forEach(function (v) {
       if (!v || typeof v !== 'object') return;
       const word = String(v.word || '').trim().replace(/\s+/g, ' ');
       if (!word || word.length > 40) return;
       const k = L.normalize(word);
       if (!k || seen[k]) return;
-      if (advanced && !/\s/.test(word) && L.isBasic(word, o.lang || 'it')) return;
+      if (advanced && !/\s/.test(word) && L.isBasic(word, lang)) return;
       seen[k] = 1;
-      out.push({ word: word, translation: String(v.translation || '').trim(), inExercise: !!v.inExercise });
+      const voce = { word: word, translation: String(v.translation || '').trim(), inExercise: !!v.inExercise };
+      const stem = o.keepAll ? '' : L.vocabStem(word, lang);   // traduzione di una lista gia' scelta: non si scarta niente
+      if (stem && byStem[stem] != null) {
+        const ix = byStem[stem];
+        if (meglio(voce.word, out[ix].word)) out[ix] = Object.assign({}, out[ix], voce);
+        else if (!out[ix].translation && voce.translation) out[ix].translation = voce.translation;
+        return;
+      }
+      out.push(voce);
+      if (stem) byStem[stem] = out.length - 1;
     });
     return out;
   }
@@ -363,7 +381,7 @@
     const system = 'You help a language teacher prepare vocabulary for a video lesson. Output ONLY a JSON object, no prose, no markdown fences.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + (params.level || 'B1') + '   TRANSLATION LANGUAGE: ' + sup,
       'List ' + (params.n || 14) + ' words (or short fixed expressions) a ' + (params.level || 'B1') + ' student whose own language is ' + sup + ' must LEARN to understand the video. Choose words that are OPAQUE to a ' + sup + ' speaker: skip transparent cognates (Italian "globale" ≈ English "global", "stupido" ≈ "stupid": a student guesses those without help), basic words a ' + (params.level || 'B1') + ' student already knows, proper names and numbers. Multi-word expressions are welcome when the single word would mislead ("un conto è", "andare a male", "fare a meno di"). Prioritize words that occur in the EXERCISE SENTENCES (mark "inExercise": true), then other key words of the video. ' +
-      'Dictionary form as used in the video (singular noun, infinitive verb, masculine adjective); "translation" in ' + sup + '.' +
+      'Dictionary form: SINGULAR noun WITH its definite article (Italian: "il rischio", "la malattia", "l\'acqua"), infinitive verb, masculine adjective. NEVER list two forms of the same word (no singular and plural of the same noun): one entry per word. "translation" in ' + sup + '.' +
       (params.exclude && params.exclude.length ? ' Do NOT include: ' + params.exclude.join(', ') + '.' : ''),
       'SCHEMA: {"vocab":[{"word":"...","translation":"...","inExercise":true}]}', '',
       'EXERCISE SENTENCES:', sentences || '(none)', '', 'VIDEO TEXT:', text].join('\n');
@@ -781,7 +799,7 @@
       'WORDS: ' + words.join(', '), '', 'CONTEXT:', String(params.context || '').slice(0, 6000)].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1200, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    const list = cleanVocab(plan.vocab, { level: 'A1' });   // qui si TRADUCE una lista scelta dall'insegnante: non si scarta niente
+    const list = cleanVocab(plan.vocab, { level: 'A1', keepAll: true });   // qui si TRADUCE una lista scelta dall'insegnante: non si scarta niente
     const map = {};
     list.forEach(function (v) { if (v.translation) wordKeys(v.word).forEach(function (k) { if (!(k in map)) map[k] = v.translation; }); });
     const translations = {};
