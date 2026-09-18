@@ -86,6 +86,9 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .timeline .cursor { position: absolute; top: 16px; width: 2px; height: 24px; background: #d00; pointer-events: none; }
 .timeline .marker { position: absolute; top: 0; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #fff; border: 2px solid var(--marker); color: #333; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; user-select: none; }
 .timeline .marker.done { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+/* v92: nell'editor il pallino verde = esercizio segnato "✓ Controllato" (come la card) */
+.timeline .marker.rev { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.timeline .marker.rev.active { background: var(--ok); color: #fff; }
 .timeline .marker.done.bad { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
 .timeline .marker.active:not(.done) { background: var(--marker); color: #fff; }
 .timeline .marker.active.done { box-shadow: 0 0 0 3px #ffe08a; }   /* rifatto/riascoltato: resta verde o rosso, con l'anello che dice "sei qui" */

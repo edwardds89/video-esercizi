@@ -1191,7 +1191,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     tagli.forEach(function (n) { container.appendChild(n); });
     (lesson.exercises || []).forEach(function (ex, i) {
       const r = o.results && o.results[ex.id];
-      const m = el('div', { class: 'marker' + (o.done && o.done.has(ex.id) ? ' done' + (r ? (r.correct ? ' ok' : ' bad') : '') : '') + (o.activeId === ex.id ? ' active' : ''), text: String(i + 1), style: 'left:' + pos(ex.markerTime) + '%', title: fmt(tm ? tm.toV(ex.markerTime) : ex.markerTime) + ' · ' + EX.LABELS[ex.type] });
+      // v92 (Edoardo: "se ho già confermato un esercizio diventa verde, voglio che anche su questa barra sia verde"):
+      // il pallino dell'editor segue il segno "✓ Controllato" della card. Solo nell'editor: per lo studente il
+      // verde vuole dire "risposta giusta", e un esercizio controllato dal docente non è un esercizio fatto da lui.
+      const rev = !!(o.reviewed && ex.reviewed);
+      const m = el('div', { 'data-ex': ex.id, class: 'marker' + (o.done && o.done.has(ex.id) ? ' done' + (r ? (r.correct ? ' ok' : ' bad') : '') : '') + (rev ? ' rev' : '') + (o.activeId === ex.id ? ' active' : ''), text: String(i + 1), style: 'left:' + pos(ex.markerTime) + '%', title: fmt(tm ? tm.toV(ex.markerTime) : ex.markerTime) + ' · ' + EX.LABELS[ex.type] + (rev ? ' · controllato' : '') });
       // I segnaposto non si trascinano (troppo facile spostarli per sbaglio): l'orario si cambia nel campo "ferma il video a" della scheda.
       if (o.onMarker) m.addEventListener('click', function (e) { e.stopPropagation(); o.onMarker(ex); });
       container.appendChild(m);
@@ -1631,7 +1635,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
 
   function renderEditorBody() {
     const ls = current(); if (!ls) return;
-    renderTimeline($('#e-timeline'), ls, { editable: true, onSeek: function (t, e) { if (S.player) S.player.seek(t); showAddPopover(ls, t, e); }, onMarker: function (ex) {
+    renderTimeline($('#e-timeline'), ls, { editable: true, reviewed: true, onSeek: function (t, e) { if (S.player) S.player.seek(t); showAddPopover(ls, t, e); }, onMarker: function (ex) {
       openPreview(ls, ex, true);   // anteprima + riproduzione della frase, che si ferma da sola alla fine
       const card = $('#ex-' + ex.id);
       if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(function () { card.classList.remove('flash'); }, 1500); }
@@ -2996,6 +3000,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       updBtn.classList.toggle('warn', st2); updTimesBtn.classList.toggle('warn', st2);
       updTimesBtn.title = st2 ? 'Il testo non è quello di questi secondi: clicca per spostare i tempi sulle parole che hai scritto' : 'Cerca la frase scritta qui sotto nella trascrizione e sposta "frase da" e "a" sulle sue parole';
       card.classList.toggle('reviewed', !!ex.reviewed);
+      const mk = document.querySelector('#e-timeline .marker[data-ex="' + ex.id + '"]');   // v92: e il pallino sulla barra
+      if (mk) mk.classList.toggle('rev', !!ex.reviewed);
       revBtn.classList.toggle('ok', !!ex.reviewed);
       revBtn.textContent = ex.reviewed ? '✓ Controllato' : '💾 Salva e segna come controllato';
     };
@@ -3003,6 +3009,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const v = ta.value.trim();
       if (v === ex.sentence) return;
       ex.sentence = v;
+      // v92: la frase è cambiata, quindi il "✓ Controllato" non vale più. Va tolto QUI e non solo dentro
+      // rebuildExercise, che lo toglie solo quando riesce a ricostruire: con una frase diventata troppo corta
+      // l'esercizio resta com'era ma il testo no, e il segno verde direbbe una bugia.
+      delete ex.reviewed;
       if (!rebuildExercise(ls, ex, ex.type, ex.type === 'mc' ? ex.data : null)) toast('Frase troppo corta per questo tipo');
       touch(ls); refreshSentenceParts();
     });
