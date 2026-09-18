@@ -435,7 +435,10 @@ async function noOverflow(page, where) {
     const shownBadge = await page.$eval('#s-panel .ex-head .badge', function (b) { return b.textContent; });
     assert.ok(shownBadge.indexOf((k + 1) + ' di ') === 0, 'ordine esercizi: ' + shownBadge);
     const shownTitle = await page.$eval('#s-panel h3', function (h) { return h.textContent; });
-    assert.ok(shownTitle.indexOf(ex.type === 'gap' ? 'Completa' : '') === 0 && shownTitle.length > 5, 'titolo = tipo: ' + shownTitle);
+    // v98: il numero dell'esercizio sta nel titolo ed e' lo STESSO della lista Soluzioni dell'insegnante
+    assert.ok(shownTitle.indexOf((k + 1) + ': ') === 0, 'numero davanti al tipo: ' + shownTitle);
+    const titoloTipo = shownTitle.slice(String(k + 1).length + 2);
+    assert.ok(titoloTipo.indexOf(ex.type === 'gap' ? 'Completa' : '') === 0 && titoloTipo.length > 5, 'titolo = tipo: ' + shownTitle);
     const t = await page.evaluate(function () { return window.VLApp.S.player.time(); });
     assert.ok(Math.abs(t - ex.markerTime) < 2.5, 'fermato vicino al marker: ' + t.toFixed(1) + ' vs ' + ex.markerTime.toFixed(1));
     // riascolta una volta: durante il riascolto la frase sparisce (video grande), poi torna; con "con la frase" resta tutto com'è
@@ -485,16 +488,53 @@ async function noOverflow(page, where) {
         const w0 = await inputs[0].getAttribute('data-words');
         assert.ok(!counts[0].h && counts[0].t === 'scrivi ' + w0 + (w0 === '1' ? ' parola' : ' parole'), 'contatore iniziale: ' + counts[0].t);
       }
-      // "💡 Aiuto": una lettera alla volta nel primo spazio non giusto
       const run0 = await page.evaluate(function (id) { const e = window.VLApp.S.student.lesson.exercises.find(function (x) { return x.id === id; }); return window.VLEx.gapRuns(e.data)[0].answer; }, ex.id);
-      await page.click('#s-panel button:has-text("Aiuto")');
-      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 1).toLowerCase(), 'prima lettera svelata');
-      await page.click('#s-panel button:has-text("Aiuto")');
-      assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 2).toLowerCase(), 'seconda lettera svelata (risposta dello spazio unito)');
+      if (ex.type === 'gap') {
+        // "💡 Aiuto" negli spazi da scrivere: una lettera alla volta nel primo spazio non giusto
+        await page.click('#s-panel button:has-text("Aiuto")');
+        assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 1).toLowerCase(), 'prima lettera svelata');
+        await page.click('#s-panel button:has-text("Aiuto")');
+        assert.strictEqual((await inputs[0].inputValue()).toLowerCase(), run0.slice(0, 2).toLowerCase(), 'seconda lettera svelata (risposta dello spazio unito)');
+      }
       if (ex.type === 'gapbank') {
-        // v67: il chip che completa le lettere dell'Aiuto va nella casella dell'aiuto, non nel gap dopo
+        // v98: nel semplificato l'Aiuto NON svela lettere (la casella e' in sola lettura): restringe la lista a
+        // 3 parole gialle per la casella scelta e segna in rosso le altre. Cliccando un'altra casella si sposta.
+        const leggiBanca = function () {
+          return page.$$eval('#s-panel .chips:not(.answer-row) .chip', function (cs) {
+            const liberi = cs.filter(function (c) { return !c.hidden; });
+            return {
+              liberi: liberi.length,
+              gialli: liberi.filter(function (c) { return c.classList.contains('hinted'); }).map(function (c) { return c.textContent.trim(); }),
+              rossi: liberi.filter(function (c) { return c.classList.contains('excluded'); }).length
+            };
+          });
+        };
+        await inputs[0].click();
+        await page.click('#s-panel button:has-text("Aiuto")');
+        const b1 = await leggiBanca();
+        assert.ok(b1.gialli.length >= 1 && b1.gialli.length <= 3, 'aiuto semplificato: da 1 a 3 parole gialle (' + JSON.stringify(b1) + ')');
+        assert.ok(b1.rossi >= 1, 'aiuto semplificato: almeno una parola esclusa (' + JSON.stringify(b1) + ')');
+        assert.strictEqual(b1.gialli.length + b1.rossi, b1.liberi, 'ogni parola libera e\' gialla o rossa (' + JSON.stringify(b1) + ')');
+        const primaDelRun = run0.split(' ')[0];
+        assert.ok(b1.gialli.some(function (w) { return w.toLowerCase() === primaDelRun.toLowerCase(); }), 'la parola giusta e\' fra le gialle (' + JSON.stringify(b1) + ')');
+        assert.ok(await page.$$eval('#s-panel input.gap', function (is) { return is.filter(function (x) { return x.classList.contains('hinted'); }).length === 1 && is[0].classList.contains('hinted'); }), 'si vede a quale casella si riferisce l\'aiuto');
+        assert.strictEqual((await inputs[0].inputValue()).trim(), '', 'l\'aiuto del semplificato non scrive lettere nella casella');
+        // un altro Aiuto sulla stessa casella stringe ancora
+        await page.click('#s-panel button:has-text("Aiuto")');
+        const b2 = await leggiBanca();
+        assert.ok(b2.gialli.length < b1.gialli.length || b1.gialli.length === 1, 'il secondo aiuto stringe (' + b1.gialli.length + ' -> ' + b2.gialli.length + ')');
+        if (inputs.length > 1) {
+          await inputs[1].click();
+          const b3 = await leggiBanca();
+          const run1 = await page.evaluate(function (id) { const e = window.VLApp.S.student.lesson.exercises.find(function (x) { return x.id === id; }); return window.VLEx.gapRuns(e.data)[1].answer; }, ex.id);
+          assert.ok(b3.gialli.some(function (w) { return w.toLowerCase() === run1.split(' ')[0].toLowerCase(); }), 'cliccando un\'altra casella l\'aiuto si sposta su quella (' + JSON.stringify(b3) + ')');
+          assert.ok(await page.$$eval('#s-panel input.gap', function (is) { return is[1].classList.contains('hinted') && !is[0].classList.contains('hinted'); }), 'l\'aiuto indica la casella nuova, non quella di prima');
+        }
+        // v67: un chip che completa un inizio di parola gia' nella casella va LI', non nel gap dopo
         const prima = run0.split(' ')[0];
         if (prima.length > 2) {
+          await page.evaluate(function (a) { const inp = document.querySelectorAll('#s-panel input.gap')[0]; inp.value = a.v; inp.dispatchEvent(new Event('input')); }, { v: prima.slice(0, 2) });
+          await inputs[0].click();
           const chips2 = await page.$$('#s-panel .chips:not(.answer-row) .chip');
           let clicked2 = false;
           for (const c of chips2) { if ((await c.textContent()).trim() === prima) { await c.click(); clicked2 = true; break; } }
@@ -620,7 +660,7 @@ async function noOverflow(page, where) {
     assert.ok(/Giusto/.test(fb), 'esercizio ' + (k + 1) + ' (' + ex.type + '): ' + fb);
     // v78 ('questa cosa vale sempre, non solo per questo esercizio'): a esercizio risolto NESSUNA evidenziazione
     // dell'Aiuto sopravvive (zona gialla, parole/caselle segnate) — regola generale, vale per ogni tipo
-    assert.strictEqual(await page.$$eval('#s-panel .zone, #s-panel .zone-flash, #s-panel .hinted', function (x) { return x.length; }), 0, 'niente evidenziazioni dell\'Aiuto a esercizio risolto (' + ex.type + ')');
+    assert.strictEqual(await page.$$eval('#s-panel .zone, #s-panel .zone-flash, #s-panel .hinted, #s-panel .excluded', function (x) { return x.length; }), 0, 'niente evidenziazioni dell\'Aiuto a esercizio risolto (' + ex.type + ')');
     if ((ex.type === 'gap' || ex.type === 'gapbank') && !filledStarTested) {
       // v66: le parole degli ex-gap (avvolte in .filled a risposta giusta) non sono piu' isole per la stella —
       // cliccando la parola dentro il gap e le vicine fuori, la sequenza diventa UNA voce ('un essere vivente che...')
@@ -1631,6 +1671,35 @@ async function noOverflow(page, where) {
     if (/sbagliata/.test(r.head)) assert.ok(r.strike && r.fix, 'parola sbagliata barrata con la correzione: ' + r.head);
     if (/mancante/.test(r.head)) assert.ok(r.hit, 'parola mancante evidenziata: ' + r.head);
   });
+  // v98 ('e' possibile un pulsante tipo "stampa" qualora un docente voglia stamparle?'): il foglio si costruisce
+  // in #print-area e il body prende la classe 'printing' (si stampa quello, non il dialogo). window.print() qui
+  // e' sostituita: in un browser senza stampante bloccherebbe il test, e quello che conta e' COSA si stampa.
+  const stampa = await page.evaluate(function () {
+    const vero = window.print;
+    let fatto = null;
+    window.print = function () {
+      const area = document.getElementById('print-area');
+      fatto = {
+        printing: document.body.classList.contains('printing'),
+        righe: area.querySelectorAll('.sol-row').length,
+        titolo: (area.querySelector('.pr-title') || {}).textContent || '',
+        kicker: (area.querySelector('.pr-kicker') || {}).textContent || '',
+        visibile: getComputedStyle(area).display,
+        testo: area.innerText.slice(0, 400)
+      };
+    };
+    document.getElementById('solutions-print').click();
+    window.print = vero;
+    return { fatto: fatto, dopoPrinting: document.body.classList.contains('printing'), dopoVuota: document.getElementById('print-area').innerHTML === '' };
+  });
+  assert.ok(stampa.fatto, 'il pulsante Stampa manda davvero in stampa');
+  assert.ok(stampa.fatto.printing, 'in stampa il body e\' in modalita\' foglio (classe printing)');
+  assert.strictEqual(stampa.fatto.righe, nExs, 'il foglio ha tutti gli esercizi (' + stampa.fatto.righe + ' su ' + nExs + ')');
+  const titoloLez = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].title; });
+  assert.strictEqual(stampa.fatto.titolo, titoloLez, 'il foglio porta il titolo della lezione');
+  assert.ok(stampa.fatto.kicker === 'Soluzioni', 'il foglio si annuncia come Soluzioni: ' + stampa.fatto.kicker);
+  assert.ok(stampa.fatto.testo.indexOf('insegnante') !== -1, 'il foglio dice che e\' per l\'insegnante');
+  assert.ok(!stampa.dopoPrinting && stampa.dopoVuota, 'finita la stampa la pagina torna com\'era');
   await page.click('#solutions-close');
   await page.waitForTimeout(200);
   // v87 ('sta caricando da troppo tempo'): l'attesa dice a che punto e', quanto dura, e si puo' interrompere
