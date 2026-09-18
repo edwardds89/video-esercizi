@@ -1713,6 +1713,29 @@ async function noOverflow(page, where) {
   assert.ok(v91.inVista, 'e la riga viene portata in vista');
   await page.waitForTimeout(1600);
   assert.ok(!(await page.evaluate(function () { return document.getElementById('cut-row-2').classList.contains('flash'); })), 'poi il lampeggio si spegne da solo (e si può ricliccare)');
+  // v92 ("se ho già confermato un esercizio diventa verde, voglio che anche su questa barra sia verde")
+  const idRev = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].exercises[1].id; });
+  const segno = '#e-timeline .marker[data-ex="' + idRev + '"]';
+  assert.ok(!(await page.$eval(segno, function (m) { return m.classList.contains('rev'); })), 'il pallino parte normale');
+  await page.click('#ex-' + idRev + ' button:has-text("Salva e segna come controllato")');
+  await page.waitForTimeout(400);
+  const verde = await page.$eval(segno, function (m) { return { rev: m.classList.contains('rev'), bordo: getComputedStyle(m).borderColor, titolo: m.title }; });
+  assert.ok(verde.rev && /controllato/.test(verde.titolo), 'segnato controllato, il pallino sulla barra diventa verde');
+  assert.strictEqual(verde.bordo, 'rgb(26, 127, 55)', 'verde come la card, non un altro verde: ' + verde.bordo);
+  // e se la frase cambia, il "controllato" salta: anche il pallino torna normale, senza ridisegnare tutto
+  await page.fill('#ex-' + idRev + ' textarea.sentence-edit', await page.evaluate(function (i) { const e = window.VLApp.S.lessons[window.VLApp.S.currentId].exercises.find(function (x) { return x.id === i; }); return e.sentence.split(/\s+/).slice(0, -3).join(' '); }, idRev));
+  await page.click('#e-timeline');
+  await page.waitForTimeout(400);
+  assert.ok(!(await page.$eval(segno, function (m) { return m.classList.contains('rev'); })), 'modificata la frase, il pallino non è più verde');
+  // lo studente non deve MAI vedere il verde del docente (per lui il verde vuol dire "risposta giusta")
+  await page.evaluate(function () { const S = window.VLApp.S; S.lessons[S.currentId].exercises.forEach(function (e) { e.reviewed = true; }); });
+  await page.click('#btn-student');
+  await page.waitForSelector('#view-student.active');
+  await page.waitForTimeout(600);
+  assert.strictEqual(await page.$$eval('#s-timeline .marker.rev', function (m) { return m.length; }), 0, 'nessun pallino "controllato" nella barra dello studente');
+  await page.evaluate(function () { window.VLApp.openEditor(window.VLApp.S.currentId); });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForTimeout(600);
   // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
   // salvataggio sulla lezione, etichette sulla card del portfolio, campi nello studentPayload
   await page.selectOption('#e-level', 'intermediate');
