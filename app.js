@@ -104,6 +104,27 @@
     if (i === -1) return [];
     return [i - 1, i + 1].filter(function (k) { return ls.exercises[k] && ls.exercises[k].type === ex.type; }).map(function (k) { return k + 1; });
   }
+  /**
+   * v95: il video che ti segue. Nell'editor la colonna sinistra scorre per conto suo, quindi lavorando in fondo
+   * (tagli, esercizi) il player finisce fuori schermo. Quando esce, si stacca e va in alto a destra, sopra la
+   * colonna di destra; quando torna in vista riprende il suo posto. Si può chiudere per la sessione (✕) e
+   * "↑ Al video" riporta la colonna sul player.
+   */
+  function bindMiniPlayer() {
+    const stage = $('#e-stage');
+    if (!stage || typeof IntersectionObserver !== 'function') return;
+    const bar = el('div', { id: 'mini-bar' }, el('div', { class: 'mb-btns' },
+      el('button', { type: 'button', text: '↑ Al video', title: 'Torna al player', onclick: function () { stage.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }),
+      el('button', { type: 'button', text: '✕', title: 'Nascondi il video staccato (torna alla prossima apertura)', onclick: function () { S.editor.noMini = true; document.body.classList.remove('mini-player'); bar.remove(); } })));
+    const io = new IntersectionObserver(function (ents) {
+      const e = ents[ents.length - 1];
+      const fuori = S.view === 'editor' && !S.editor.noMini && e.intersectionRatio < 0.3;
+      document.body.classList.toggle('mini-player', fuori);
+      if (fuori) { if (!bar.isConnected) document.body.appendChild(bar); }
+      else if (bar.isConnected) bar.remove();
+    }, { threshold: [0, 0.3, 0.6] });
+    io.observe(stage);
+  }
   function bindNestedScroll() {
     const box = document.querySelector('.editor-left'); if (!box) return;
     box.addEventListener('wheel', function (e) {
@@ -506,7 +527,7 @@
       levelBand: lesson.levelBand || undefined, audience: lesson.audience || undefined,   // v79/v83: etichette community (ls.level resta il CEFR della generazione!)
       exercises: lesson.exercises, cuts: lesson.cuts, options: lesson.options, vocab: vb,
       flow: lessonFlow(lesson),
-      talks: (lesson.talks || []).map(function (sec) { return { id: sec.id, questions: sec.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help, kind: q.kind }; }) }; }),
+      talks: (lesson.talks || []).map(function (sec) { return { id: sec.id, media: sec.media || undefined, questions: sec.questions.filter(function (q) { return q.text; }).map(function (q) { return { id: q.id, text: q.text, help: q.help, kind: q.kind }; }) }; }),
       acts: (lesson.acts || []).filter(function (a) { return ACT.validate(a).length === 0; }).map(function (a) { return { id: a.id, type: a.type, theme: a.theme, title: a.title, data: a.data }; }),
       lines: lesson.videoId === 'demo' ? lesson.lines : undefined };
   }
@@ -1240,6 +1261,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     S.currentId = id;
     const ls = current();
     if (!ls) return renderHome();
+    S.editor.noMini = false;   // v95: il video staccato torna disponibile a ogni apertura dell'editor
     show('editor');
     closePreview();
     editorHeader(ls);
@@ -1931,6 +1953,33 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     dlg.showModal();
   });
   $('#tn-close').addEventListener('click', function () { $('#dlg-talk-new').close(); });
+  /**
+   * v95 (Edoardo: "in questa sezione voglio poter mettere anche un immagine da link o un link video youtube
+   * (embedded che si può tagliare) che appare quando lo studente vede le domande"): il media di una sezione
+   * "Parliamone" è UNO solo — { kind:'img'|'yt', url, id, start, end } — e si mostra sopra la domanda.
+   * Il video è un embed YouTube normale, con start/end nei parametri: niente overlay, niente player nostro.
+   */
+  function talkMediaFrom(url) {
+    const u = String(url || '').trim();
+    if (!u) return null;
+    const id = extractVideoId(u);
+    if (id && /youtu/i.test(u)) return { kind: 'yt', url: u, id: id, start: 0, end: 0 };
+    if (/^https?:\/\//i.test(u)) return { kind: 'img', url: u };
+    return null;
+  }
+  function talkMediaNode(media, opts) {
+    if (!media) return null;
+    if (media.kind === 'img') {
+      return el('div', { class: 'talk-media' }, el('img', { src: media.url, alt: media.alt || '', loading: 'lazy' }));
+    }
+    const p = [];
+    if (media.start > 0) p.push('start=' + Math.floor(media.start));
+    if (media.end > 0 && media.end > media.start) p.push('end=' + Math.ceil(media.end));
+    p.push('rel=0', 'modestbranding=1', 'playsinline=1');
+    const src = 'https://www.youtube-nocookie.com/embed/' + media.id + '?' + p.join('&');
+    return el('div', { class: 'talk-media yt' + (opts && opts.small ? ' small' : '') },
+      el('iframe', { src: src, allow: 'accelerometer; encrypted-media; picture-in-picture', allowfullscreen: 'allowfullscreen', loading: 'lazy', title: 'video della sezione' }));
+  }
   function renderTalkCard(ls, sec) {
     const before = talkBefore(ls, sec.id);
     const card = el('div', { class: 'card talk-card', 'data-tid': sec.id });
@@ -1979,6 +2028,41 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       when.appendChild(el('button', { class: 'theme-chip when-chip' + (on ? ' sel' : ''), type: 'button', text: opt[1], onclick: function () { if (on) return; placeTalk(ls, sec.id, opt[0]); touch(ls); renderFlow(ls); } }));
     });
     card.appendChild(when);
+    // v95: immagine o video da mostrare allo studente sopra le domande di QUESTA sezione
+    const mediaRow = el('div', { class: 'row', style: 'margin:8px 0 2px' });
+    const mInp = el('input', { type: 'text', placeholder: 'link di un\'immagine o di un video YouTube (facoltativo)', value: (sec.media && sec.media.url) || '', style: 'flex:1 1 22em' });
+    // il ridisegno si fa DOPO che il blur è finito (regola della v88: mai distruggere la card dentro il change
+    // del campo che ci sta dentro — il browser sta ancora smontando l'evento e il nodo sparisce sotto i piedi)
+    const ridisegna = function () { setTimeout(function () { touch(ls); renderFlow(ls); }, 0); };
+    const applica = function () {
+      const v = mInp.value.trim();
+      if (!v) { if (sec.media) { delete sec.media; ridisegna(); } return; }
+      const m = talkMediaFrom(v);
+      if (!m) { toast('Link non riconosciuto: serve l\'indirizzo di un\'immagine (http…) o di un video YouTube', 5000); mInp.value = (sec.media && sec.media.url) || ''; return; }
+      if (sec.media && sec.media.kind === 'yt' && m.kind === 'yt' && sec.media.id === m.id) { m.start = sec.media.start; m.end = sec.media.end; }
+      if (sec.media && sec.media.url === m.url && sec.media.kind === m.kind) return;   // niente di nuovo
+      sec.media = m; ridisegna();
+    };
+    mInp.addEventListener('change', applica);
+    mediaRow.appendChild(el('span', { class: 'hint', text: 'Immagine o video:' }));
+    mediaRow.appendChild(mInp);
+    if (sec.media) {
+      mediaRow.appendChild(el('button', { class: 'small danger', text: '✕', title: 'Togli immagine o video', onclick: function () { delete sec.media; ridisegna(); } }));
+    }
+    card.appendChild(mediaRow);
+    if (sec.media && sec.media.kind === 'yt') {
+      const tRow = el('div', { class: 'row', style: 'margin:0 0 6px' });
+      tRow.appendChild(el('span', { class: 'hint', text: 'Taglia il video: da' }));
+      tRow.appendChild(timeInput(sec.media.start || 0, function (t) { sec.media.start = t; ridisegna(); }, sec.id + ':mstart'));
+      tRow.appendChild(el('span', { class: 'hint', text: 'a' }));
+      tRow.appendChild(timeInput(sec.media.end || 0, function (t) { sec.media.end = t; ridisegna(); }, sec.id + ':mend'));
+      tRow.appendChild(el('span', { class: 'hint', text: '(0 = dall\'inizio / fino alla fine)' }));
+      card.appendChild(tRow);
+    }
+    if (sec.media) {
+      const prev = talkMediaNode(sec.media, { small: true });
+      if (prev) card.appendChild(prev);
+    }
     const box = el('div', { class: 'talk-box' });
     card.appendChild(box);
     const status = el('span', { class: 'hint' });
@@ -3589,20 +3673,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     updateStarCount();
     renderStudentTimeline();
     renderProgress();
-    $('#s-yt').checked = !!S.settings.ytControls;
-    createPlayer($('#s-player'), ls.videoId, { lesson: ls, controls: !!S.settings.ytControls, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
+    // v95 (Edoardo: "se clicco su comandi youtube diventa tutto nero il video e si blocca... togli il pulsante"):
+    // la casella non c'è più e i comandi di YouTube restano SEMPRE spenti. Ricreare il player al volo lasciava
+    // l'API di YouTube in uno stato sporco e il nuovo player non partiva: meno superficie, meno rotture.
+    createPlayer($('#s-player'), ls.videoId, { lesson: ls, controls: false, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (st) { if (st === 0) onEnded(); } })
       .then(function () { startLoop(); renderStart(); renderCover($('#s-player'), ls); })
       .catch(function (e) { $('#s-panel').innerHTML = ''; $('#s-panel').appendChild(el('div', { class: 'notice bad', text: e.message })); });
   }
-  // comandi di YouTube nel video: spenti di default (la barra rossa non ricompare a ogni ripartenza); il cambio ricrea il player allo stesso secondo
-  $('#s-yt').addEventListener('change', function () {
-    S.settings.ytControls = $('#s-yt').checked; saveSettings();
-    const st = S.student; if (!st || !S.player) return;
-    const ls = st.lesson, t = S.player.time(), playing = S.player.state() === 1;
-    st.lastT = null;
-    createPlayer($('#s-player'), ls.videoId, { lesson: ls, controls: !!S.settings.ytControls, start: t, onError: function (code) { toast(ytErrorText(code), 6000); }, onState: function (x) { if (x === 0) onEnded(); } })
-      .then(function (w) { renderCover($('#s-player'), ls); if (t > 0) w.seek(t); if (playing) w.play(); else w.pause(); st.lastT = null; });
-  });
   $('#btn-edit').addEventListener('click', function () { if (S.player) S.player.pause(); openEditor(S.currentId); });
   $('#s-lock').addEventListener('change', function () { if (S.student) S.student.lock = $('#s-lock').checked; });
   $('#btn-fullscreen').addEventListener('click', function () {
@@ -3798,7 +3875,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!qs.length) return advancePhase();
     st.phase = 'talk'; st.talkIdx = 0;
     $('#btn-start').style.display = 'none';
-    renderTalk(qs, talkBefore(st.lesson, step.id));
+    renderTalk(qs, talkBefore(st.lesson, step.id), sec.media);
   }
   /** Dove riprendere quando si entra nel taglio c al tempo t (fino alla frase di un esercizio da fare, se cade nel taglio). */
   function cutTarget(ls, st, c, t) {
@@ -3903,7 +3980,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     advancePhase();
   }
   /** "Parliamone": una domanda alla volta, grande, con le espressioni utili; si parla, non si scrive. Poi la sezione successiva. */
-  function renderTalk(qs, before) {
+  function renderTalk(qs, before, media) {
     const st = S.student; const ls = st.lesson;
     hideImgPreview();
     const p = $('#s-panel'); p.innerHTML = '';
@@ -3914,6 +3991,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const check = !before && q.kind === 'check';
     cardHeader(p, before ? 'Prima di guardare: parliamone' : (check ? 'Hai capito? Parliamone' : 'Parliamone'), (i + 1) + ' di ' + qs.length, before ? 'prima del video' : (check ? 'comprensione' : 'dopo il video'));
     p.appendChild(el('div', { class: 'instr', text: before ? 'Qualche domanda per entrare nel tema, prima di guardare: rispondi a voce, con calma. Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.' : (check ? 'Domanda di comprensione: racconta a voce quello che hai capito dal video. Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.' : 'Rispondi a voce, con calma: non c\'è una risposta giusta. Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.') }));
+    // v95: l'immagine (o il video) della sezione sta SOPRA la domanda, e resta lì per tutte le domande
+    const mNode = talkMediaNode(media);
+    if (mNode) p.appendChild(mNode);
     const qd = el('div', { class: 'talk-q' });
     qd.appendChild(starredSentence(ls, L.tokenize(q.text).map(function (t) { return t.raw; })));
     p.appendChild(qd);
@@ -3930,7 +4010,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     }
     const fb = el('div', { class: 'feedback' });
     const nav = el('div', { class: 'row fc-nav' });
-    nav.appendChild(el('button', { class: 'small', text: '◀ Indietro', disabled: i === 0 ? 'disabled' : null, onclick: function () { st.talkIdx = i - 1; renderTalk(qs, before); } }));
+    nav.appendChild(el('button', { class: 'small', text: '◀ Indietro', disabled: i === 0 ? 'disabled' : null, onclick: function () { st.talkIdx = i - 1; renderTalk(qs, before, media); } }));
     if (S.settings.apiKey) {
       nav.appendChild(translateButton(function (trBtn, lang) {
         const etichetta = trBtn.textContent;
@@ -3944,7 +4024,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // etichetta dell'ultimo passo: dipende da cosa viene dopo nella struttura (video, altre sezioni o riepilogo)
     const nextStep = (st.queue && st.queue[0]) || null;
     const lastLabel = nextStep ? (nextStep.kind === 'video' ? 'Guarda il video ▶' : 'Continua ▶') : 'Vai al riepilogo ▶';
-    nav.appendChild(el('button', { class: 'primary big', text: i + 1 < qs.length ? 'Prossima ▶' : lastLabel, onclick: function () { if (i + 1 < qs.length) { st.talkIdx = i + 1; renderTalk(qs, before); } else { st.talkIdx = 0; advancePhase(); } } }));
+    nav.appendChild(el('button', { class: 'primary big', text: i + 1 < qs.length ? 'Prossima ▶' : lastLabel, onclick: function () { if (i + 1 < qs.length) { st.talkIdx = i + 1; renderTalk(qs, before, media); } else { st.talkIdx = 0; advancePhase(); } } }));
     p.appendChild(nav);
     p.appendChild(fb);
     p.appendChild(el('div', { class: 'actions' }, el('button', { class: 'link', text: nextStep ? 'Salta le domande' : 'Salta le domande e vai al riepilogo', onclick: function () { st.talkIdx = 0; advancePhase(); } })));
@@ -6731,6 +6811,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     loadState();
     bindOverlayCancel();   // v87: la via d'uscita dall'attesa
     bindNestedScroll();    // v90: la rotella non resta incastrata nella colonna sinistra
+    bindMiniPlayer();      // v95: il player si stacca quando esce dallo schermo
     const q = new URLSearchParams(location.search);
     S.mock = q.get('mock') === '1';
     S.speed = Math.max(0.25, parseFloat(q.get('speed') || '1') || 1);

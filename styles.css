@@ -451,6 +451,29 @@ button.star.on { color: #e0a800; }
 
 /* flashcard che si gira */
 .flashcard { position: relative; width: min(100%, calc(var(--cardh, 250px) * 1.9), 900px); height: var(--cardh, 250px); margin: 8px auto; perspective: 1000px; cursor: pointer; }
+/* v95 (Edoardo: "se scorro sotto e mi trovo al taglio numero 7 non vedo il video... falla apparire a destra
+   sopra la struttura della lezione"): quando il player esce dallo schermo, si stacca e va in alto a destra.
+   Specificità alta apposta: deve vincere su .stage.docked .player-box. */
+body.mini-player .editor-layout #e-stage .player-box,
+body.mini-player .editor-layout #e-stage.docked .player-box {
+  display: block; position: fixed; top: 108px; right: 18px; left: auto; bottom: auto; width: 340px; height: 191px; margin: 0;
+  z-index: 42; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 14px 40px rgba(0,0,0,.34);
+  aspect-ratio: auto; transition: none;
+}
+#mini-bar { position: fixed; top: 108px; right: 18px; width: 340px; height: 191px; z-index: 43; pointer-events: none; border-radius: 10px; }
+#mini-bar .mb-btns { position: absolute; top: 6px; right: 6px; display: flex; gap: 6px; pointer-events: auto; }
+#mini-bar button { background: rgba(20,28,38,.86); color: #fff; border: 0; border-radius: 7px; font-size: 12px; padding: 4px 8px; cursor: pointer; }
+#mini-bar button:hover { background: rgba(20,28,38,1); }
+@media (max-width: 960px) { body.mini-player .editor-layout #e-stage .player-box, body.mini-player .editor-layout #e-stage.docked .player-box { position: relative; top: auto; right: auto; width: auto; height: 54%; } #mini-bar { display: none; } }
+
+/* v95: immagine o video di una sezione "Parliamone" */
+.talk-media { margin: 0 auto 12px; max-width: 640px; text-align: center; }
+.talk-media img { max-width: 100%; max-height: 42vh; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+.talk-media.yt { width: 100%; }
+.talk-media.yt iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 12px; background: #000; }
+.talk-media.small { max-width: 320px; margin: 0 0 10px; }
+.talk-media.small img { max-height: 180px; }
+
 .fc-write { justify-content: center; gap: 10px; }   /* v93: "scrivi la parola" e Controlla al centro, sotto la carta */
 .fc-nav { justify-content: center; gap: 12px; margin-top: 10px; }
 .fc-nav button.primary.big { font-size: 18px; padding: 10px 26px; }
