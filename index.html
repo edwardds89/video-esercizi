@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260918-95">
+<link rel="stylesheet" href="styles.css?v=20260918-96">
 </head>
 <body>
 <header class="topbar">
@@ -445,6 +445,26 @@
   <div class="row" style="margin-top:12px"><button id="tn-close">Annulla</button></div>
 </dialog>
 
+<!-- v96: immagine o video di UNA domanda di "Parliamone" (Edoardo: "metti solo il pulsante con l'immagine o
+     con il video, se clicco si apre il pop-up dove incollo il link inerente") -->
+<dialog id="dlg-talk-media">
+  <h2>Immagine o video per questa domanda</h2>
+  <p class="hint" id="tm-q"></p>
+  <div class="row"><input type="text" id="tm-url" placeholder="incolla qui il link di un'immagine o di un video YouTube" style="flex:1 1 24em"></div>
+  <div class="row" id="tm-times" style="margin-top:8px" hidden>
+    <span class="hint">Taglia il video: da</span><span id="tm-from"></span>
+    <span class="hint">a</span><span id="tm-to"></span>
+    <span class="hint">(0 e 0 = tutto intero)</span>
+  </div>
+  <div id="tm-prev" style="margin-top:10px"></div>
+  <div class="row" style="margin-top:12px">
+    <button id="tm-save" class="primary">Salva</button>
+    <button id="tm-remove" class="danger">Togli</button>
+    <button id="tm-close">Chiudi</button>
+    <span class="hint" id="tm-msg"></span>
+  </div>
+</dialog>
+
 <dialog id="dlg-conv-new">
   <h2>Nuova conversazione</h2>
   <p class="hint">Un'unità da parlare, senza video: lessico utile, domande numerate, due sondaggi, due testi da leggere e una telefonata di ruolo. Poi la stampi in A4.</p>
@@ -755,16 +775,16 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260918-95"></script>
-<script src="exercises.js?v=20260918-95"></script>
-<script src="generator.js?v=20260918-95"></script>
-<script src="activities.js?v=20260918-95"></script>
-<script src="ai.js?v=20260918-95"></script>
-<script src="demo-data.js?v=20260918-95"></script>
-<script src="bookmarklet.js?v=20260918-95"></script>
-<script src="sync.js?v=20260918-95"></script>
-<script src="qr.js?v=20260918-95"></script>
-<script src="challenge.js?v=20260918-95"></script>
-<script src="app.js?v=20260918-95"></script>
+<script src="lang.js?v=20260918-96"></script>
+<script src="exercises.js?v=20260918-96"></script>
+<script src="generator.js?v=20260918-96"></script>
+<script src="activities.js?v=20260918-96"></script>
+<script src="ai.js?v=20260918-96"></script>
+<script src="demo-data.js?v=20260918-96"></script>
+<script src="bookmarklet.js?v=20260918-96"></script>
+<script src="sync.js?v=20260918-96"></script>
+<script src="qr.js?v=20260918-96"></script>
+<script src="challenge.js?v=20260918-96"></script>
+<script src="app.js?v=20260918-96"></script>
 </body>
 </html>
