@@ -2309,6 +2309,62 @@ async function noOverflow(page, where) {
     await page.waitForTimeout(2600);
   }
 
+  // v95 ("togli il pulsante dei comandi YouTube"): la casella non c'e' piu' e i comandi restano spenti
+  assert.ok(!(await page.$('#s-yt')), 'la casella "Comandi YouTube" non esiste piu\'');
+  // v95 ("voglio poter mettere anche un immagine da link o un link video youtube che appare quando lo studente
+  // vede le domande") + ("se scorro sotto non vedo il video: fallo apparire a destra")
+  await page.evaluate(function () {
+    const S = window.VLApp.S, ls = S.lessons[S.currentId];
+    ls.talks = [{ id: 'tm1', questions: [{ id: 'qm1', text: 'Ti piace il caffe\'?', help: '' }, { id: 'qm2', text: 'E il te\'?', help: '' }] }];
+    ls.flow = [{ kind: 'talk', id: 'tm1' }, { kind: 'video' }];
+    window.VLApp.openEditor(S.currentId);
+  });
+  await page.waitForTimeout(600);
+  const campo = await page.$('.talk-card input[placeholder*="immagine"]');
+  assert.ok(campo, 'la card Parliamone ha il campo per immagine o video');
+  await campo.fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  await campo.dispatchEvent('change');
+  await page.waitForTimeout(600);
+  const media = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].talks[0].media; });
+  assert.deepStrictEqual({ k: media.kind, id: media.id }, { k: 'yt', id: 'dQw4w9WgXcQ' }, 'il link YouTube diventa un media della sezione');
+  assert.ok(await page.$('.talk-card .talk-media iframe'), 'anteprima nell\'editor');
+  await page.evaluate(function () { const S = window.VLApp.S, ls = S.lessons[S.currentId]; ls.talks[0].media.start = 30; ls.talks[0].media.end = 45; window.VLApp.openEditor(S.currentId); });
+  await page.waitForTimeout(500);
+  const src = await page.$eval('.talk-card .talk-media iframe', function (f) { return f.src; });
+  assert.ok(/start=30/.test(src) && /end=45/.test(src), 'i tagli finiscono nell\'embed: ' + src);
+  // lo studente lo vede sopra la domanda
+  await page.click('#btn-student');
+  await page.waitForSelector('#view-student.active');
+  await page.click('#btn-start');
+  await page.waitForTimeout(600);
+  // le schede delle parole vengono prima (lessonFlow le rimette sempre): si saltano fino al Parliamone
+  for (let g = 0; g < 6 && !(await page.$('#s-panel .talk-q')); g++) {
+    const salta = await page.$('#s-panel button:has-text("Salta tutto"), #s-panel button:has-text("Salta le schede"), #s-panel button:has-text("Salta questa scheda")');
+    if (salta) await salta.click();
+    await page.waitForTimeout(500);
+  }
+  const vistaStud = await page.evaluate(function () {
+    const m = document.querySelector('#s-panel .talk-media iframe'), q = document.querySelector('#s-panel .talk-q');
+    return { src: m && m.src, sopra: !!(m && q && (m.compareDocumentPosition(q) & Node.DOCUMENT_POSITION_FOLLOWING)) };
+  });
+  assert.ok(vistaStud.src && /start=30/.test(vistaStud.src), 'lo studente vede il video tagliato: ' + vistaStud.src);
+  assert.ok(vistaStud.sopra, 'e sta SOPRA la domanda');
+  await page.evaluate(function () { const S = window.VLApp.S; window.VLApp.openEditor(S.currentId); });
+  await page.waitForSelector('#view-editor.active');
+  await page.waitForTimeout(600);
+  // il player si stacca quando esce dallo schermo, e torna al suo posto
+  await page.evaluate(function () { const l = document.querySelector('.editor-left'); l.scrollTop = l.scrollHeight; });
+  await page.waitForTimeout(800);
+  const mini = await page.evaluate(function () {
+    const pb = document.querySelector('#e-stage .player-box'), r = pb.getBoundingClientRect();
+    return { on: document.body.classList.contains('mini-player'), pos: getComputedStyle(pb).position, destra: innerWidth - r.right < 40, inVista: r.top > 0 && r.bottom < innerHeight, bar: !!document.querySelector('#mini-bar') };
+  });
+  assert.ok(mini.on && mini.pos === 'fixed' && mini.destra && mini.inVista, 'scorrendo, il video si stacca in alto a destra: ' + JSON.stringify(mini));
+  assert.ok(mini.bar, 'con i pulsanti "Al video" e ✕');
+  await page.evaluate(function () { const l = document.querySelector('.editor-left'); l.scrollTop = 0; });
+  await page.waitForTimeout(800);
+  assert.ok(!(await page.evaluate(function () { return document.body.classList.contains('mini-player'); })), 'tornato in vista, il video riprende il suo posto');
+
   console.log('26. traduzione del "trova la parola mancante": coperta prima, intera dopo (v94)');
   const ctxTr = await browser.newContext({ viewport: { width: 1200, height: 900 } });
   const ptr = await ctxTr.newPage();
