@@ -2320,18 +2320,25 @@ async function noOverflow(page, where) {
     window.VLApp.openEditor(S.currentId);
   });
   await page.waitForTimeout(600);
-  const campo = await page.$('.talk-card input[placeholder*="immagine"]');
-  assert.ok(campo, 'la card Parliamone ha il campo per immagine o video');
-  await campo.fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-  await campo.dispatchEvent('change');
-  await page.waitForTimeout(600);
-  const media = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].talks[0].media; });
-  assert.deepStrictEqual({ k: media.kind, id: media.id }, { k: 'yt', id: 'dQw4w9WgXcQ' }, 'il link YouTube diventa un media della sezione');
-  assert.ok(await page.$('.talk-card .talk-media iframe'), 'anteprima nell\'editor');
-  await page.evaluate(function () { const S = window.VLApp.S, ls = S.lessons[S.currentId]; ls.talks[0].media.start = 30; ls.talks[0].media.end = 45; window.VLApp.openEditor(S.currentId); });
+  // v96: un pulsante per domanda, il link si incolla nel pop-up
+  const bottoni = await page.$$('.talk-row .talk-meta button');
+  let apri = null;
+  for (const bt of bottoni) { const t = await bt.textContent(); if (/Immagine o video/.test(t)) { apri = bt; break; } }
+  assert.ok(apri, 'ogni domanda ha il pulsante per immagine o video');
+  await apri.click();
+  await page.waitForSelector('#dlg-talk-media[open]');
+  await page.fill('#tm-url', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  await page.dispatchEvent('#tm-url', 'change');
+  await page.waitForTimeout(400);
+  assert.ok(!(await page.$eval('#tm-times', function (t) { return t.hidden; })), 'per un video compaiono i campi per tagliarlo');
+  assert.ok(await page.$('#tm-prev iframe'), 'con l\'anteprima');
+  await page.click('#tm-save');
   await page.waitForTimeout(500);
-  const src = await page.$eval('.talk-card .talk-media iframe', function (f) { return f.src; });
-  assert.ok(/start=30/.test(src) && /end=45/.test(src), 'i tagli finiscono nell\'embed: ' + src);
+  const media = await page.evaluate(function () { return window.VLApp.S.lessons[window.VLApp.S.currentId].talks[0].questions[0].media; });
+  assert.deepStrictEqual({ k: media.kind, id: media.id }, { k: 'yt', id: 'dQw4w9WgXcQ' }, 'il link YouTube diventa il media della DOMANDA');
+  assert.ok((await page.$$eval('.talk-row .talk-meta button', function (b) { return b.map(function (x) { return x.textContent; }); })).some(function (t) { return /Video ✓/.test(t); }), 'e il pulsante lo dice');
+  await page.evaluate(function () { const S = window.VLApp.S, ls = S.lessons[S.currentId]; ls.talks[0].questions[0].media.start = 30; ls.talks[0].questions[0].media.end = 45; window.VLApp.openEditor(S.currentId); });
+  await page.waitForTimeout(500);
   // lo studente lo vede sopra la domanda
   await page.click('#btn-student');
   await page.waitForSelector('#view-student.active');
@@ -2361,6 +2368,20 @@ async function noOverflow(page, where) {
   });
   assert.ok(mini.on && mini.pos === 'fixed' && mini.destra && mini.inVista, 'scorrendo, il video si stacca in alto a destra: ' + JSON.stringify(mini));
   assert.ok(mini.bar, 'con i pulsanti "Al video" e ✕');
+  // v96 ("il pop-up del video deve essere più grande, circa il doppio, e voglio che sia chiudibile con una X"):
+  // riquadro grande e pulsanti SOPRA il video, così il titolo e le icone di YouTube non coprono la ✕
+  const mini2 = await page.evaluate(function () {
+    const pb = document.querySelector('#e-stage .player-box').getBoundingClientRect();
+    const x = document.querySelector('#mini-bar .mb-x').getBoundingClientRect();
+    return { w: Math.round(pb.width), xSopra: x.bottom <= pb.top + 1, xInVista: x.top > 0 && x.right <= innerWidth };
+  });
+  assert.ok(mini2.w >= 560, 'il riquadro è grande (' + mini2.w + 'px)');
+  assert.ok(mini2.xSopra && mini2.xInVista, 'la ✕ sta sopra il video e si può cliccare: ' + JSON.stringify(mini2));
+  await page.click('#mini-bar .mb-x');
+  await page.waitForTimeout(250);
+  assert.ok(!(await page.evaluate(function () { return document.body.classList.contains('mini-player') || !!document.querySelector('#mini-bar'); })), 'la ✕ chiude il video staccato');
+  await page.evaluate(function () { const S = window.VLApp.S; window.VLApp.openEditor(S.currentId); });
+  await page.waitForTimeout(500);
   await page.evaluate(function () { const l = document.querySelector('.editor-left'); l.scrollTop = 0; });
   await page.waitForTimeout(800);
   assert.ok(!(await page.evaluate(function () { return document.body.classList.contains('mini-player'); })), 'tornato in vista, il video riprende il suo posto');
