@@ -1444,9 +1444,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!ls) return;
     const area = $('#print-area'); area.innerHTML = '';
     const exs = solutionRows(ls);
-    area.appendChild(el('div', { class: 'pr-kicker', text: 'Soluzioni' }));
-    area.appendChild(el('h1', { class: 'pr-title', text: ls.title || 'Lezione' }));
-    area.appendChild(el('div', { class: 'pr-sub', text: (exs.length === 1 ? '1 esercizio' : exs.length + ' esercizi') + ' \u00b7 foglio per l\'insegnante \u00b7 ' + new Date().toLocaleDateString('it-IT') }));
+    // v100 (Edoardo: 'a una certa ti daro' il logo e voglio che ci sia il logo nelle soluzioni'): per ora e' il
+    // marchio PROVVISORIO plogo.svg, lo stesso dell'intestazione e della favicon. Quando arrivera' il logo
+    // definitivo basta sostituire il file: qui non si tocca niente. E' un <img>, non un background, perche' le
+    // immagini di sfondo non si stampano se l'insegnante non spunta 'Grafica di sfondo' nella finestra di stampa.
+    const testa = el('div', { class: 'pr-head' },
+      el('div', { class: 'pr-head-txt' },
+        el('div', { class: 'pr-kicker', text: 'Soluzioni' }),
+        el('h1', { class: 'pr-title', text: ls.title || 'Lezione' }),
+        el('div', { class: 'pr-sub', text: (exs.length === 1 ? '1 esercizio' : exs.length + ' esercizi') + ' \u00b7 foglio per l\'insegnante \u00b7 ' + new Date().toLocaleDateString('it-IT') })),
+      el('img', { class: 'pr-logo', src: 'plogo.svg?v=1', alt: '' }));
+    area.appendChild(testa);
     if (!exs.length) area.appendChild(el('p', { class: 'hint', text: 'Questa lezione non ha ancora esercizi.' }));
     exs.forEach(function (ex, i) { area.appendChild(solutionRow(ex, i)); });
     // v99 ('l'impaginazione del PDF non e' ottimale, devi considerare la zona di stampa'): i margini NON possono

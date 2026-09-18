@@ -1345,6 +1345,9 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v98: foglio delle Soluzioni da stampare. Sullo schermo non esiste; in stampa e' l'UNICA cosa che resta.
    I margini li fa il padding, perche' la @page dell'app e' gia' a margin: 0 per il foglio A4 della conversazione. */
 #print-area { display: none; }
+.pr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10mm; }
+.pr-head-txt { min-width: 0; }
+.pr-logo { width: 16mm; height: 16mm; flex: 0 0 auto; }
 .pr-kicker { font-size: 9pt; letter-spacing: .18em; text-transform: uppercase; color: #6b7684; }
 .pr-title { font-size: 20pt; margin: 1mm 0 2mm; }
 .pr-sub { font-size: 9pt; color: #6b7684; margin-bottom: 6mm; }
@@ -1355,7 +1358,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
      senza margine, con la prima riga tagliata a meta') */
   body.printing #print-area { display: block; color: #111; }
   body.printing #print-area .sol-row { break-inside: avoid; page-break-inside: avoid; }
-  body.printing #print-area .pr-kicker, body.printing #print-area .pr-title { break-after: avoid; page-break-after: avoid; }
+  body.printing #print-area .pr-head { break-after: avoid; page-break-after: avoid; }
   body.printing #print-area .sol-sent { orphans: 2; widows: 2; }
   /* sulla carta si sta piu' stretti che a schermo: stessa resa, meno fogli da stampare */
   body.printing #print-area .sol-row { padding: 2.6mm 0; }
