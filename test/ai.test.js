@@ -715,5 +715,15 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.strictEqual(r2.quote, '', 'senza citazione la chiave c\'è comunque, vuota');
   });
 
+  await test('v91 la lingua si nomina: titolo nella lingua del video, note in italiano', function () {
+    const it = AI.buildMessages({ chunks: chunks, lang: 'it', level: 'B1', duration: D, target: D, n: 5, types: ['gap'] }).user;
+    assert.ok(/TRANSCRIPT LANGUAGE: Italian/.test(it), 'la lingua e\' scritta per esteso, non solo il codice');
+    assert.ok(/"title" WRITTEN IN ITALIAN/.test(it), 'il titolo va chiesto in italiano: ' + (it.match(/4\. Give[^\n]*/) || [''])[0]);
+    assert.ok(/must be written in Italian/.test(it), 'why, reason e notes in italiano (stanno accanto a etichette italiane)');
+    const en = AI.buildMessages({ chunks: chunks, lang: 'en', level: 'B1', duration: D, target: D, n: 5, types: ['gap'] }).user;
+    assert.ok(/"title" WRITTEN IN ENGLISH/.test(en), 'con un video inglese il titolo e\' inglese');
+    assert.ok(/must be written in Italian/.test(en), 'ma le note per l\'insegnante restano in italiano');
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();

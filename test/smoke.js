@@ -1698,6 +1698,21 @@ async function noOverflow(page, where) {
   const dopoRot = await page.evaluate(function () { return window.scrollY; });
   assert.ok(dopoRot > 0, 'con la colonna a fondo corsa la rotella sulla barra muove la pagina (era ' + JSON.stringify(rot) + ', ora ' + dopoRot + ')');
   await page.evaluate(function () { window.scrollTo(0, 0); document.querySelector('.editor-left').scrollTop = 0; });
+  // v91 ("rendi le forbici cliccabili, se clicco sulla prima mi rimanda sotto al primo taglio e me lo illumina
+  // 2 volte tipo flash"): dal numero sulla barra alla riga del taglio, che lampeggia due volte del suo colore
+  await page.click('#e-timeline .cut-n >> nth=2');
+  await page.waitForTimeout(200);
+  const v91 = await page.evaluate(function () {
+    const r = document.getElementById('cut-row-2'); if (!r) return { manca: true };
+    const cs = getComputedStyle(r), b = r.getBoundingClientRect();
+    return { flash: r.classList.contains('flash'), anim: cs.animationName, giri: cs.animationIterationCount, inVista: b.top < innerHeight && b.bottom > 0 };
+  });
+  assert.ok(!v91.manca, 'ogni riga di taglio ha il suo id, per arrivarci dalla barra');
+  assert.ok(v91.flash && v91.anim === 'cut-flash', 'la riga lampeggia dopo il clic sulle forbici');
+  assert.strictEqual(v91.giri, '2', 'due lampeggi, come chiesto');
+  assert.ok(v91.inVista, 'e la riga viene portata in vista');
+  await page.waitForTimeout(1600);
+  assert.ok(!(await page.evaluate(function () { return document.getElementById('cut-row-2').classList.contains('flash'); })), 'poi il lampeggio si spegne da solo (e si può ricliccare)');
   // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
   // salvataggio sulla lezione, etichette sulla card del portfolio, campi nello studentPayload
   await page.selectOption('#e-level', 'intermediate');
