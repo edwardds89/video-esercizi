@@ -75,7 +75,12 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .timeline .track { position: absolute; left: 0; right: 0; top: 22px; height: 12px; background: var(--keep); border-radius: 6px; overflow: hidden; cursor: pointer; }
 /* v90: ogni taglio ha il suo colore (--cutc dal JS) e sotto la barra il suo numero, uguale a quello della lista */
 .timeline .cut { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--cutc, var(--cut)) 0 4px, var(--cutc-lite, #e9ecf0) 4px 8px); }
-.timeline .cut-n { position: absolute; top: 36px; font-size: 10.5px; font-weight: 700; line-height: 1; padding: 2px 5px; border-radius: 6px; white-space: nowrap; background: var(--cutc-lite); color: var(--cutc-ink); border: 1px solid var(--cutc); cursor: default; }
+.timeline .cut-n { position: absolute; top: 36px; font: inherit; font-size: 10.5px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 6px; white-space: nowrap; background: var(--cutc-lite); color: var(--cutc-ink); border: 1px solid var(--cutc); cursor: pointer; }
+.timeline .cut-n:hover, .timeline .cut-n:focus-visible { background: var(--cutc); color: #fff; }
+/* v91: il numero cliccato porta alla riga del taglio, che lampeggia due volte del suo colore */
+@keyframes cut-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); background: transparent; } 45% { box-shadow: 0 0 0 4px var(--cutc, var(--marker)); background: var(--cutc-lite, #fff6e5); } }
+.cut-row.flash { animation: cut-flash .6s ease 2; border-radius: 10px; }
+@media (prefers-reduced-motion: reduce) { .cut-row.flash { animation: none; box-shadow: 0 0 0 4px var(--cutc, var(--marker)); border-radius: 10px; } }
 .timeline .cut-n.giu { top: 51px; }
 .cut-tag { grid-area: tag; justify-self: start; font-size: 12px; font-weight: 700; padding: 3px 7px; border-radius: 7px; background: var(--cutc-lite); color: var(--cutc-ink); border: 1px solid var(--cutc); }
 .timeline .cursor { position: absolute; top: 16px; width: 2px; height: 24px; background: #d00; pointer-events: none; }

@@ -1175,7 +1175,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       // l'etichetta si allinea dentro la barra invece di finire fuori schermo
       const centro = l + w / 2;
       const ancora = centro < 4 ? 'translateX(0)' : (centro > 96 ? 'translateX(-100%)' : 'translateX(-50%)');
-      tagli.push(el('div', { class: 'cut-n' + (i % 2 ? ' giu' : ''), style: 'left:' + centro + '%;transform:' + ancora + ';' + cutColorStyle(i), text: '✄' + (i + 1), title: '✄' + (i + 1) + ' · ' + fmt(c.start) + '–' + fmt(c.end) + ' (' + fmtMin(c.end - c.start) + ')' }));
+      // v91: cliccabile — porta alla riga del taglio e la fa lampeggiare due volte
+      tagli.push(el('button', { type: 'button', class: 'cut-n' + (i % 2 ? ' giu' : ''), style: 'left:' + centro + '%;transform:' + ancora + ';' + cutColorStyle(i), text: '✄' + (i + 1),
+        title: '✄' + (i + 1) + ' · ' + fmt(c.start) + '–' + fmt(c.end) + ' (' + fmtMin(c.end - c.start) + ') · clicca per vedere questo taglio qui sotto',
+        onclick: function (e) { e.stopPropagation(); focusCut(i); } }));
     });
     track.addEventListener('click', function (e) {
       if (!o.onSeek) return;
@@ -3373,9 +3376,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     autoMC(ls, ex);
   }
 
+  /** v91 (Edoardo: "rendi le forbici cliccabili, se clicco sulla prima mi rimanda sotto al primo taglio e me lo
+   *  illumina 2 volte tipo flash"): dal numero sulla barra alla riga che si modifica. */
+  function focusCut(i) {
+    const row = document.getElementById('cut-row-' + i);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.remove('flash');
+    void row.offsetWidth;                       // riavvia l'animazione anche al secondo clic sullo stesso taglio
+    row.classList.add('flash');
+    setTimeout(function () { row.classList.remove('flash'); }, 1500);
+  }
   function renderCutRow(ls, c, i) {
-    return el('div', { class: 'cut-row' },
-      el('span', { class: 'cut-tag', style: cutColorStyle(i), text: '✄' + (i + 1), title: 'Questo taglio è il ✄' + (i + 1) + ' sulla barra del tempo' }),
+    return el('div', { class: 'cut-row', id: 'cut-row-' + i, style: cutColorStyle(i) },
+      el('span', { class: 'cut-tag', text: '✄' + (i + 1), title: 'Questo taglio è il ✄' + (i + 1) + ' sulla barra del tempo' }),
       timeInput(c.start, function (t) { c.start = t; touch(ls); renderEditorBody(); }),
       timeInput(c.end, function (t) { c.end = t; touch(ls); renderEditorBody(); }),
       el('span', { class: 'hint', text: fmtMin(c.end - c.start) + ' · ' + (c.reason || '') + (c.source === 'ai' ? ' (AI)' : '') }),

@@ -25,7 +25,7 @@
     const system = 'You help a language teacher turn a YouTube video transcript into an interactive listening lesson. ' +
       'You receive the transcript split into chunks (id|start seconds|end seconds|text). Output ONLY a JSON object that follows the schema; no prose, no markdown fences.';
     const lines = [];
-    lines.push('TRANSCRIPT LANGUAGE: ' + (p.lang || 'it') + '   STUDENT LEVEL (CEFR): ' + (p.level || 'B1'));
+    lines.push('TRANSCRIPT LANGUAGE: ' + langName(p.lang) + ' (code "' + (p.lang || 'it') + '")   STUDENT LEVEL (CEFR): ' + (p.level || 'B1'));
     lines.push('NUMBER OF EXERCISES: ' + n + (p.auto ? ' (about one every 30-50 seconds of kept video; if a slot has no complete sentence of the required length, leave it without an exercise — fewer is fine)' : '') + '   ALLOWED TYPES: ' + types.join(', '));
     if (p.range === 'smart') lines.push('SENTENCE LENGTH: gap/missing/extra/wrong 25-32 words, gapbank 22-30, scramble 16-22, mc 25-40 (a passage may span several consecutive chunks).');
     else if (p.range && p.range.length === 2) lines.push('SENTENCE LENGTH: between ' + p.range[0] + ' and ' + p.range[1] + ' words for every exercise (a passage may span several consecutive chunks; this overrides the per-type ranges below).');
@@ -58,7 +58,11 @@
       'NEVER cut: a sentence that explains or defines something used later ("X is called Y because...", "this means that..."); a sentence whose answer or consequence stays in the video; the first mention of a key term that keeps coming back. ' +
       'And where the video RESUMES after a cut, the first kept sentence must stand on its own: never resume on a sentence that points back ("This process...", "That is why...") to something you removed. ' +
       'Comprehension wins over duration: if you cannot reach the target without breaking the thread, cut LESS, keep the video longer, and say it in "notes".');
-    lines.push('4. Give a short lesson "title" in the transcript language.');
+    // v91 (Edoardo, 18/9: "perché il titolo è in inglese se il video sotto è in italiano?"): "in the transcript
+    // language" non bastava, il modello scriveva nella lingua del prompt. La lingua si NOMINA, con un esempio.
+    lines.push('4. Give a short lesson "title" WRITTEN IN ' + langName(p.lang).toUpperCase() + ', the language spoken in the video. Do not translate it into English or any other language: if the video is in Italian the title is in Italian.');
+    // le note per l'insegnante stanno accanto a etichette italiane nell'interfaccia: vanno scritte in italiano
+    lines.push('5bis. The teacher-facing free text ("why" for each exercise, "reason" for each cut, "notes") must be written in ' + langName(p.uiLang || 'it') + ', short and plain.');
     const sup = p.support || (p.lang === 'en' ? 'it' : 'en');
     if (p.noVocab) lines.push('5. Do NOT propose useful words: leave "vocab" as an empty list.');
     else lines.push('5. USEFUL WORDS: list ' + (p.nVocab || 14) + ' words (or short fixed expressions) a ' + (p.level || 'B1') + ' student whose own language is "' + sup + '" must learn to understand the video, in "vocab". ' +
@@ -77,6 +81,12 @@
     return { system: system, user: lines.join('\n') };
   }
 
+  /** v91: la lingua si nomina per esteso nei prompt — un codice ISO non basta a far scrivere il modello in italiano. */
+  const LANG_NAMES = { it: 'Italian', en: 'English', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', nl: 'Dutch', ru: 'Russian', pl: 'Polish', tr: 'Turkish', ja: 'Japanese', zh: 'Chinese', ar: 'Arabic', pt_br: 'Portuguese' };
+  function langName(code) {
+    const k = String(code || 'it').slice(0, 2).toLowerCase();
+    return LANG_NAMES[k] || String(code || 'the transcript language');
+  }
   async function callAnthropic(o) {
     const f = o.fetchImpl || (typeof fetch === 'function' ? fetch : null);
     if (!f) throw new Error('fetch non disponibile');
