@@ -1651,6 +1651,28 @@ async function noOverflow(page, where) {
   assert.strictEqual(att87.subito, '', 'il cronometro non parte subito (sotto gli 8 secondi resta muto)');
   assert.ok(att87.annullato && att87.dopo.nascosto, 'il clic annulla davvero e il pulsante sparisce');
   assert.ok(att87.pulito === '' && att87.chiuso, 'chiudendo l\'attesa si ripulisce tutto');
+  // v89 ("ho chiesto un fill the gaps dalla frase che inizia con 'i più comuni' ma non è iniziata da lì e mi ha
+  // messo un paragrafo! massimo 20-25 parole"): dal pezzo scelto si ritaglia una finestra da esercizio
+  const carve = await page.evaluate(function () {
+    const mk = function (testo) { return testo.split(/\s+/).map(function (w, i) { return { raw: w, norm: w.toLowerCase().replace(/[^a-zà-ù]/g, ''), id: 'c1', start: i, end: i + 1 }; }); };
+    const lungo = mk('uno due tre quattro cinque sei sette otto nove dieci undici dodici tredici quattordici quindici sedici diciassette diciotto diciannove venti. '
+      + 'i piu comuni sono leggeri e lievi come ad esempio dolore gonfiore o rossore proprio sul punto del braccio, quindi sul sito di iniezione. '
+      + 'poi delle reazioni sistemiche come ad esempio la febbre un malessere generale dolori muscolari mal di testa eccetera.');
+    const a = window.VLApp.carveAsk(lungo, 'i piu comuni sono leggeri', { min: 12, max: 25 });
+    const corto = mk('una frase breve di appena sette parole.');
+    const b = window.VLApp.carveAsk(corto, 'una frase', { min: 12, max: 25 });
+    const c = window.VLApp.carveAsk(lungo, 'parole che non esistono nella trascrizione', { min: 12, max: 25 });
+    return {
+      testo: lungo.slice(a.from, a.to).map(function (w) { return w.raw; }).join(' '),
+      n: a.to - a.from, tuttoCorto: b.from === 0 && b.to === corto.length,
+      senzaCitazione: { from: c.from, n: c.to - c.from }
+    };
+  });
+  assert.ok(carve.n <= 25 && carve.n >= 12, 'la finestra sta fra 12 e 25 parole: ' + carve.n + ' (' + carve.testo + ')');
+  assert.ok(/^i piu comuni sono leggeri/.test(carve.testo), 'parte dalle parole citate: ' + carve.testo);
+  assert.ok(/[.!?,;:]$/.test(carve.testo), 'e chiude su una punteggiatura, non a metà: ' + carve.testo);
+  assert.ok(carve.tuttoCorto, 'un pezzo già corto resta intero');
+  assert.ok(carve.senzaCitazione.from === 0 && carve.senzaCitazione.n <= 25, 'senza citazione si parte dall\'inizio, sempre entro 25 parole: ' + JSON.stringify(carve.senzaCitazione));
   // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
   // salvataggio sulla lezione, etichette sulla card del portfolio, campi nello studentPayload
   await page.selectOption('#e-level', 'intermediate');

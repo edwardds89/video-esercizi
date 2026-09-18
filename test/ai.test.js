@@ -697,5 +697,23 @@ const find = function (re) { return chunks.find(function (c) { return !c.silence
     assert.strictEqual(r3.length, 2, 'le espressioni restano tutte');
   });
 
+  await test('v89 askExercise: il modello dice anche DOVE comincia il pezzo', async function () {
+    let inviato = '';
+    const fake = async function (url, opts) {
+      const body = JSON.parse(opts.body); inviato = body.messages[0].content;
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: { output_tokens: 40 }, content: [{ type: 'text', text: '{"index": 3, "type": "gapbank", "quote": "i piu comuni sono leggeri"}' }], stop_reason: 'end_turn' }; }, text: async function () { return ''; } };
+    };
+    const r = await AI.askExercise({ sentences: [{ n: 1, text: 'a' }, { n: 2, text: 'b' }, { n: 3, text: 'c' }], request: 'fai un fill the gaps da "i più comuni"', lang: 'it', apiKey: 'k', fetchImpl: fake });
+    assert.deepStrictEqual({ i: r.index, t: r.type, q: r.quote }, { i: 3, t: 'gapbank', q: 'i piu comuni sono leggeri' }, 'indice, tipo e citazione');
+    assert.ok(/FIRST 4 TO 6 WORDS/.test(inviato) && /VERBATIM/.test(inviato), 'il prompt chiede le prime parole copiate dalla trascrizione');
+    // senza quote non si rompe niente: resta stringa vuota e decide il codice
+    const fake2 = async function (url, opts) {
+      const body = JSON.parse(opts.body);
+      return { ok: true, status: 200, json: async function () { return { model: body.model, usage: {}, content: [{ type: 'text', text: '{"index": 1, "type": "gap"}' }], stop_reason: 'end_turn' }; }, text: async function () { return ''; } };
+    };
+    const r2 = await AI.askExercise({ sentences: [{ n: 1, text: 'a' }], request: 'x', lang: 'it', apiKey: 'k', fetchImpl: fake2 });
+    assert.strictEqual(r2.quote, '', 'senza citazione la chiave c\'è comunque, vuota');
+  });
+
   console.log('\n' + passed + ' test superati' + (process.exitCode ? ', con errori' : ''));
 })();
