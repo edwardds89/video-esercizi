@@ -55,6 +55,11 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .notice { padding: 10px 12px; border-radius: 8px; margin: 8px 0; font-size: 14px; }
 .notice.warn { background: var(--warn-bg); color: var(--warn-ink); }
 .notice.ok { background: var(--ok-bg); color: var(--ok); }
+/* v93: ogni avviso si può chiudere */
+.notice { position: relative; }
+.notice.warn { padding-right: 34px; }
+.notice-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0; line-height: 1; border-radius: 6px; border: 1px solid transparent; background: transparent; color: inherit; opacity: .55; cursor: pointer; font-size: 14px; }
+.notice-x:hover, .notice-x:focus-visible { opacity: 1; background: rgba(0,0,0,.06); }
 .notice.bad { background: var(--bad-bg); color: var(--bad); }
 .notice.info { background: #e8f0fe; color: #1b4b9b; }
 
@@ -82,7 +87,14 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .cut-row.flash { animation: cut-flash .6s ease 2; border-radius: 10px; }
 @media (prefers-reduced-motion: reduce) { .cut-row.flash { animation: none; box-shadow: 0 0 0 4px var(--cutc, var(--marker)); border-radius: 10px; } }
 .timeline .cut-n.giu { top: 51px; }
-.cut-tag { grid-area: tag; justify-self: start; font-size: 12px; font-weight: 700; padding: 3px 7px; border-radius: 7px; background: var(--cutc-lite); color: var(--cutc-ink); border: 1px solid var(--cutc); }
+/* v93: la banda e il suo numero si illuminano quando li chiami dalla lista */
+@keyframes cutbar-flash { 0%, 100% { filter: none; } 45% { filter: brightness(1.22) saturate(1.5); } }
+@keyframes cutn-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } 45% { box-shadow: 0 0 0 4px var(--cutc); } }
+.timeline .cut.flash { animation: cutbar-flash .6s ease 2; }
+.timeline .cut-n.flash { animation: cutn-flash .6s ease 2; }
+@media (prefers-reduced-motion: reduce) { .timeline .cut.flash, .timeline .cut-n.flash { animation: none; box-shadow: 0 0 0 3px var(--cutc); } }
+.cut-tag { grid-area: tag; justify-self: start; font: inherit; cursor: pointer; font-size: 12px; font-weight: 700; padding: 3px 7px; border-radius: 7px; background: var(--cutc-lite); color: var(--cutc-ink); border: 1px solid var(--cutc); }
+.cut-tag:hover, .cut-tag:focus-visible { background: var(--cutc); color: #fff; }
 .timeline .cursor { position: absolute; top: 16px; width: 2px; height: 24px; background: #d00; pointer-events: none; }
 .timeline .marker { position: absolute; top: 0; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #fff; border: 2px solid var(--marker); color: #333; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; user-select: none; }
 .timeline .marker.done { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
@@ -106,7 +118,9 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .undo-pair button:disabled { opacity: .45; cursor: default; }
 .editor-layout { display: grid; grid-template-columns: minmax(320px, 5fr) minmax(360px, 6fr); gap: 16px; align-items: start; }
 .editor-left, .editor-right { min-width: 0; }   /* le colonne possono restringersi: niente sfondamento orizzontale */
-.editor-left { position: sticky; top: 64px; max-height: calc(100vh - 76px); overflow-y: auto; padding-right: 2px; }
+/* v93: il padding tiene il contenuto lontano dalla barra di scorrimento della colonna (su macOS è "a comparsa"
+   e galleggia SOPRA il contenuto: senza spazio, la fine della barra del tempo e gli avvisi ci finivano sotto) */
+.editor-left { position: sticky; top: 64px; max-height: calc(100vh - 76px); overflow-y: auto; padding-right: 14px; }
 .editor-left .card { padding: 12px 14px; }
 .editor-left .kv { flex: 1 1 100%; gap: 12px; }
 @media (max-width: 960px) { .editor-layout { grid-template-columns: 1fr; } .editor-left { position: static; max-height: none; overflow: visible; } }
@@ -186,8 +200,13 @@ button.play { padding: 4px 12px; color: var(--accent); font-weight: 700; }
 .stage.docked.cards .player-box { display: none; }
 /* SPOT IN MUTO DURANTE LE SCHEDE (v64): mentre gira il warm il player NON si nasconde (policy YouTube: un player che
    suona resta visibile, minimo 200px) — riquadro piccolo in basso a destra, sopra niente, l'etichetta sta FUORI. */
+/* v93: il riquadro del warm-up nasce trasparente e compare solo quando uno spot c'è davvero (classe 'adon'):
+   senza spot il warm-up finisce prima e non si vede quel lampo in basso a destra. Mentre lo spot gira il player
+   è pienamente visibile, come richiedono i termini di YouTube. */
 .stage.docked.cards.warmad .player-box { display: block; position: fixed; right: 14px; bottom: 14px; width: 356px; height: 200px;
-  z-index: 55; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 12px 36px rgba(0,0,0,.4); }
+  z-index: 55; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 12px 36px rgba(0,0,0,.4);
+  opacity: 0; transition: opacity .2s ease; }
+.stage.docked.cards.warmad.adon .player-box { opacity: 1; }
 @media (max-width: 560px) { .stage.docked.cards.warmad .player-box { width: 220px; height: 200px; } }
 #warmad-tag { position: fixed; right: 14px; bottom: 222px; z-index: 56; background: rgba(20,28,38,.92); color: #fff;
   font-size: 12.5px; padding: 5px 10px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
@@ -265,6 +284,13 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 /* ✕ di chiusura in alto a destra, su OGNI dialog (v66, richiesta di Edoardo: "la x sopra a destra") */
 .dlg-x { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; padding: 0; border: none; background: transparent; color: var(--muted, #667); font-size: 16px; line-height: 30px; text-align: center; border-radius: 8px; cursor: pointer; }
 .dlg-x:hover { background: #eef1f5; color: #111; }
+/* v93: avviso al centro dello schermo, sparisce da solo (non è un dialog: non blocca e non prende il fuoco) */
+.center-note { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 60; pointer-events: none; padding: 20px; }
+.center-note .cn-box { background: rgba(28, 35, 48, .93); color: #fff; font-size: 17px; font-weight: 600; line-height: 1.4; text-align: center; padding: 16px 22px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.28); max-width: 26em; animation: cn-in .18s ease-out; }
+.center-note.out { opacity: 0; transition: opacity .28s ease; }
+@keyframes cn-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .center-note .cn-box { animation: none; } }
+
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1c2330; color: #fff; padding: 10px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
 #toast.show { opacity: 1; }
 /* barra "si può tornare indietro": elemento suo, così un avviso qualsiasi non porta via il pulsante Annulla */
@@ -425,6 +451,7 @@ button.star.on { color: #e0a800; }
 
 /* flashcard che si gira */
 .flashcard { position: relative; width: min(100%, calc(var(--cardh, 250px) * 1.9), 900px); height: var(--cardh, 250px); margin: 8px auto; perspective: 1000px; cursor: pointer; }
+.fc-write { justify-content: center; gap: 10px; }   /* v93: "scrivi la parola" e Controlla al centro, sotto la carta */
 .fc-nav { justify-content: center; gap: 12px; margin-top: 10px; }
 .fc-nav button.primary.big { font-size: 18px; padding: 10px 26px; }
 .flashcard .face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px solid var(--line); border-radius: 14px; background: #fff; backface-visibility: hidden; -webkit-backface-visibility: hidden; transition: transform .5s; box-shadow: 0 4px 14px rgba(0,0,0,.08); padding: 12px; }

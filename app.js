@@ -87,6 +87,23 @@
    * (scroll latching): le rotellate successive sparivano nel nulla finché non si staccava il dito. Qui il
    * passaggio di consegne lo facciamo a mano: a fondo (o a inizio) corsa la rotella muove la pagina, subito.
    */
+  /**
+   * v93 (Edoardo, 18/9: "voglio che mi venga segnalato con un pop-up al centro di 2 secondi che poi scompare da
+   * solo"): avviso grande in mezzo allo schermo, senza pulsanti e senza bloccare niente (non è un dialog: non
+   * ruba il fuoco e non ferma il lavoro). Il toast in basso resta per le conferme; questo è per le cose da vedere.
+   */
+  function centerNote(text, ms) {
+    const vecchio = $('#center-note'); if (vecchio) vecchio.remove();
+    const n = el('div', { id: 'center-note', class: 'center-note', role: 'status', 'aria-live': 'polite' }, el('div', { class: 'cn-box', text: text }));
+    (document.fullscreenElement || document.body).appendChild(n);
+    setTimeout(function () { n.classList.add('out'); setTimeout(function () { n.remove(); }, 300); }, ms || 2000);
+  }
+  /** Esercizi vicini (quello prima e quello dopo) con lo stesso tipo: numeri, per l'avviso. */
+  function sameTypeNeighbours(ls, ex) {
+    const i = ls.exercises.indexOf(ex);
+    if (i === -1) return [];
+    return [i - 1, i + 1].filter(function (k) { return ls.exercises[k] && ls.exercises[k].type === ex.type; }).map(function (k) { return k + 1; });
+  }
   function bindNestedScroll() {
     const box = document.querySelector('.editor-left'); if (!box) return;
     box.addEventListener('wheel', function (e) {
@@ -1651,7 +1668,18 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const w = $('#e-warnings'); w.innerHTML = '';
     const warns = (ls.warnings || []).concat(G.validateLesson(ls));
     ls.exercises.forEach(function (ex, i) { if (ex.markerTime < ex.segment.end - 0.3) warns.push('Esercizio ' + (i + 1) + ': il segnaposto è prima della fine della frase da ascoltare.'); });
-    warns.forEach(function (t) { w.appendChild(el('div', { class: 'notice warn', text: t })); });
+    // v93 (Edoardo: "metti una x in alto a destra per poter chiudere gli avvisi"): chiuso vuol dire letto.
+    // Si ricorda nella lezione (ls.hiddenWarnings, per TESTO): se il problema cambia, il testo cambia e l'avviso
+    // ritorna — un avviso di controllo non deve poter sparire per sempre restando vero.
+    const nascosti = ls.hiddenWarnings || [];
+    warns.filter(function (t) { return nascosti.indexOf(t) === -1; }).forEach(function (t) {
+      const box = el('div', { class: 'notice warn' }, el('span', { text: t }));
+      box.appendChild(el('button', { class: 'notice-x', type: 'button', text: '✕', title: 'Chiudi questo avviso', onclick: function () {
+        ls.hiddenWarnings = (ls.hiddenWarnings || []).concat([t]);
+        touch(ls); box.remove();
+      } }));
+      w.appendChild(box);
+    });
     const an = $('#e-ai-notes'); an.innerHTML = '';
     if (ls.ai && ls.ai.model) {
       an.appendChild(el('div', { class: 'notice info', text: 'Bozza generata con ' + ls.ai.model + (ls.ai.cost != null ? ' · costo stimato ' + (ls.ai.cost * 100).toFixed(1) + ' cent' : '') + (ls.ai.notes ? ' · note del modello: ' + ls.ai.notes : '') }));
@@ -2543,10 +2571,29 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const ready = cardVocab(ls).length;
     return selectedVocab(ls).length + ' selezionate, ' + ready + ' pronte per le schede (con traduzione o foto)' + (ready < 3 ? ' — ne servono almeno 3 per la scheda di abbinamento' : '');
   }
+  /** v93: due parole sono "la stessa" se hanno la stessa impronta (senza articolo, singolare/plurale). */
+  function haveVocab(vb, lang) {
+    const set = new Set();
+    vb.words.forEach(function (w) {
+      const n = L.normalize(w.word); if (n) set.add(n);
+      const st = L.vocabStem(w.word, lang); if (st) set.add('§' + st);
+    });
+    return set;
+  }
+  function isNewVocab(have, word, lang) {
+    const n = L.normalize(word), st = L.vocabStem(word, lang);
+    return !!n && !have.has(n) && !(st && have.has('§' + st));
+  }
   function proposeVocabRules(ls) {
     const vb = vocabState(ls);
-    const have = new Set(vb.words.map(function (w) { return L.normalize(w.word); }));
-    const cands = G.vocabCandidates(ls.chunks || [], ls.exercises, { lang: ls.lang, n: 20, support: vb.support, level: ls.level }).filter(function (c) { return !have.has(L.normalize(c.word)); });
+    // v93 (Edoardo: "le parole aggiunte a volte sono le stesse di quelle che c'erano già"): il confronto era
+    // sulla stringa esatta, quindi "il rischio" e "rischio" (o "rischi") passavano per parole diverse.
+    const have = haveVocab(vb, ls.lang);
+    const cands = G.vocabCandidates(ls.chunks || [], ls.exercises, { lang: ls.lang, n: 30, support: vb.support, level: ls.level }).filter(function (c) {
+      if (!isNewVocab(have, c.word, ls.lang)) return false;
+      have.add(L.normalize(c.word)); const st = L.vocabStem(c.word, ls.lang); if (st) have.add('§' + st);   // e nemmeno doppioni fra loro
+      return true;
+    });
     cands.slice(0, 14).forEach(function (c) { vb.words.push({ id: uid(), word: c.word, translation: '', image: '', selected: true, inExercise: c.inExercises, source: 'rules' }); });
     touch(ls); renderVocabEditor(ls);
     toast(cands.length ? cands.slice(0, 14).length + ' parole aggiunte (senza traduzione)' : 'Nessuna nuova parola trovata');
@@ -2557,9 +2604,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const st = $('#e-vocab-status'); st.textContent = 'Chiedo al modello…';
     AI.suggestVocab({ chunks: ls.chunks || [], exercises: ls.exercises, lang: ls.lang, support: vb.support, level: ls.level, n: 14, exclude: vb.words.map(function (w) { return w.word; }), apiKey: S.settings.apiKey, model: S.settings.model })
       .then(function (r) {
-        const have = new Set(vb.words.map(function (w) { return L.normalize(w.word); }));
+        const have = haveVocab(vb, ls.lang);   // v93: stesso confronto tollerante delle regole
         let added = 0;
-        r.vocab.forEach(function (v) { if (have.has(L.normalize(v.word))) return; vb.words.push({ id: uid(), word: v.word, translation: v.translation, image: '', selected: true, inExercise: v.inExercise, source: 'ai' }); added++; });
+        r.vocab.forEach(function (v) {
+          if (!isNewVocab(have, v.word, ls.lang)) return;
+          have.add(L.normalize(v.word)); const st2 = L.vocabStem(v.word, ls.lang); if (st2) have.add('§' + st2);
+          vb.words.push({ id: uid(), word: v.word, translation: v.translation, image: '', selected: true, inExercise: v.inExercise, source: 'ai' }); added++;
+        });
         touch(ls); renderVocabEditor(ls);
         st.textContent = added + ' parole aggiunte' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : '');
       })
@@ -2848,6 +2899,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     return true;
   }
 
+  /** "Trova la parola sbagliata (find the wrong word)" → "Trova la parola sbagliata" */
+  function tipoBreve(t) { const l = EX.LABELS[t] || t; const p = l.indexOf(' ('); return p === -1 ? l : l.slice(0, p); }
   function renderExerciseCard(ls, ex, i) {
     const card = el('div', { class: 'ex-card ' + (ex.source || 'rules') + (ex.reviewed ? ' reviewed' : ''), id: 'ex-' + ex.id });
     const typeSel = el('select', { style: 'width:auto', title: 'Tipo di esercizio' });
@@ -2862,6 +2915,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (newType === 'mc') { ex.type = 'mc'; ex.data = { question: '', options: ['', '', '', ''], correct: 0, tricky: null }; touch(ls); renderEditorBody(); autoMC(ls, ex); return; }
       if (rebuildExercise(ls, ex, newType)) {
         touch(ls); renderEditorBody();
+        // v93: due esercizi uguali di fila annoiano; l'avviso si vede e se ne va da solo, senza bloccare
+        const vicini = sameTypeNeighbours(ls, ex);
+        if (vicini.length) {
+          centerNote((vicini.length > 1 ? 'Anche gli esercizi ' + vicini.join(' e ') + ' sono' : 'Anche l\'esercizio ' + vicini[0] + ' è')
+            + ' «' + tipoBreve(newType) + '»: due uguali di fila', 2000);
+        }
         const r = G.resolveRange('smart', newType);
         const wc = L.words(ex.sentence || '').length;
         if (r && (wc < r[0] || wc > r[1])) toast('Fatto. Occhio: per "' + EX.LABELS[newType] + '" si consigliano ' + r[0] + '-' + r[1] + ' parole, questa frase ne ha ' + wc, 4000);
@@ -3397,9 +3456,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     row.classList.add('flash');
     setTimeout(function () { row.classList.remove('flash'); }, 1500);
   }
+  /** v93: il viaggio inverso — dal numero nella lista alla banda sulla barra, che si illumina due volte. */
+  function focusCutOnBar(i) {
+    const tl = $('#e-timeline'); if (!tl) return;
+    tl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const pezzi = [tl.querySelectorAll('.cut')[i], tl.querySelectorAll('.cut-n')[i]];
+    pezzi.forEach(function (n) {
+      if (!n) return;
+      n.classList.remove('flash');
+      void n.offsetWidth;                       // riavvia l'animazione anche al secondo clic
+      n.classList.add('flash');
+      setTimeout(function () { n.classList.remove('flash'); }, 1500);
+    });
+  }
   function renderCutRow(ls, c, i) {
     return el('div', { class: 'cut-row', id: 'cut-row-' + i, style: cutColorStyle(i) },
-      el('span', { class: 'cut-tag', text: '✄' + (i + 1), title: 'Questo taglio è il ✄' + (i + 1) + ' sulla barra del tempo' }),
+      el('button', { type: 'button', class: 'cut-tag', text: '✄' + (i + 1), title: 'Questo taglio è il ✄' + (i + 1) + ' sulla barra del tempo: clicca per vederlo lassù', onclick: function () { focusCutOnBar(i); } }),
       timeInput(c.start, function (t) { c.start = t; touch(ls); renderEditorBody(); }),
       timeInput(c.end, function (t) { c.end = t; touch(ls); renderEditorBody(); }),
       el('span', { class: 'hint', text: fmtMin(c.end - c.start) + ' · ' + (c.reason || '') + (c.source === 'ai' ? ' (AI)' : '') }),
@@ -3646,6 +3718,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (ls.options && ls.options.eatAd === false) return;
     if (st.phase !== 'cards' && st.phase !== 'talk' && st.phase !== 'act') return;   // il video e' la prima sezione: parte comunque adesso
     st.warmAd = { at: Date.now(), seen: false };
+    // v93 (Edoardo: "quando clicco su inizia si apre per mezzo secondo il video in basso a destra... non vorrei
+    // vedere questa cosa"): il riquadro NON si mostra subito. Nasce trasparente e diventa visibile solo se uno
+    // spot c'è davvero (classe 'adon', messa dal tick quando inAd è vero). Senza spot il warm-up finisce prima
+    // e non si vede niente. Il player NON viene mai nascosto mentre uno spot è in corso: è trasparente solo
+    // nella frazione di secondo in cui ancora non si sa se lo spot ci sia.
     $('#s-stage').classList.add('warmad');
     S.player.mute();
     S.player.seek(0);
@@ -3655,7 +3732,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const w = st.warmAd; if (!w) return;
     st.warmAd = null;
     const tag = $('#warmad-tag'); if (tag) tag.remove();
-    const stg = $('#s-stage'); if (stg) stg.classList.remove('warmad');
+    const stg = $('#s-stage'); if (stg) stg.classList.remove('warmad', 'adon');
     if (!S.player) return;
     S.player.pause();
     S.player.seek(0);
@@ -3734,6 +3811,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (inAd(ls)) {
         if (!w.seen) {
           w.seen = true;
+          $('#s-stage').classList.add('adon');   // v93: solo ORA il riquadro diventa visibile
           toast('C\u2019\u00e8 uno spot di YouTube: lo faccio passare adesso, in muto', 4000);
           if (!$('#warmad-tag')) (document.fullscreenElement || document.body).appendChild(el('div', { id: 'warmad-tag', text: '\ud83c\udf7f spot in corso (muto)\u2026' }));
         }
@@ -3826,7 +3904,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const i = st.talkIdx || 0, q = qs[i];
     const check = !before && q.kind === 'check';
     cardHeader(p, before ? 'Prima di guardare: parliamone' : (check ? 'Hai capito? Parliamone' : 'Parliamone'), (i + 1) + ' di ' + qs.length, before ? 'prima del video' : (check ? 'comprensione' : 'dopo il video'));
-    p.appendChild(el('div', { class: 'instr', text: before ? 'Qualche domanda per entrare nel tema, prima di guardare: rispondi a voce, con calma. Clicca una parola per la stella ★.' : (check ? 'Domanda di comprensione: racconta a voce quello che hai capito dal video. Clicca una parola per la stella ★.' : 'Rispondi a voce, con calma: non c\'è una risposta giusta. Clicca una parola per la stella ★.') }));
+    p.appendChild(el('div', { class: 'instr', text: before ? 'Qualche domanda per entrare nel tema, prima di guardare: rispondi a voce, con calma. Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.' : (check ? 'Domanda di comprensione: racconta a voce quello che hai capito dal video. Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.' : 'Rispondi a voce, con calma: non c\'è una risposta giusta. Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.') }));
     const qd = el('div', { class: 'talk-q' });
     qd.appendChild(starredSentence(ls, L.tokenize(q.text).map(function (t) { return t.raw; })));
     p.appendChild(qd);
@@ -3836,7 +3914,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       // anche le espressioni utili sono parole cliccabili per la stella: sono proprio quelle che lo studente deve portarsi a casa.
       // Ogni chip e' un contenitore a se': parole stellate vicine DENTRO lo stesso chip fanno una voce sola ("mi preoccupa perche'").
       p.appendChild(el('div', { class: 'talk-help' }, helps.map(function (h) {
-        const c = el('span', { class: 'chip', title: 'Clicca una parola per la stella \u2605' });
+        const c = el('span', { class: 'chip', title: 'Clicca una parola per salvarla con una stella \u2605' });
         c.appendChild(starSpans(ls, h));
         return c;
       })));
@@ -4004,7 +4082,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (opts.review) {
       // esercizio già fatto: frase completa (verde se era giusto), soluzione se era da rivedere; niente Controlla
       const rv = opts.review;
-      const ins = p.querySelector('.instr'); if (ins) ins.textContent = 'Esercizio già fatto' + (rv.correct ? ': giusto. ' : ': da rivedere. ') + 'Puoi riascoltare la frase, ma la risposta non si cambia. Clicca una parola per la stella ★.';
+      const ins = p.querySelector('.instr'); if (ins) ins.textContent = 'Esercizio già fatto' + (rv.correct ? ': giusto. ' : ': da rivedere. ') + 'Puoi riascoltare la frase, ma la risposta non si cambia. Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.';
       const full = starredSentence(ls, L.tokenize(ex.sentence).map(function (t) { return t.raw; }));
       if (rv.correct) full.style.color = 'var(--ok)';
       body.appendChild(full);
@@ -4498,7 +4576,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const showFull = function () {
       if (body.querySelector('.fullwrap')) return;
       const toks = L.tokenize(ex.sentence).map(function (t) { return t.raw; });
-      const wrap = el('div', { class: 'fullwrap' }, [el('span', { class: 'hint', text: 'Frase completa (clicca una parola per la stella ★): ' }), starredSentence(ls, toks)]);
+      const wrap = el('div', { class: 'fullwrap' }, [el('span', { class: 'hint', text: 'Frase completa (clicca una parola per salvarla con una stella ★): ' }), starredSentence(ls, toks)]);
       body.appendChild(wrap);
     };
     // v78, REGOLA di Edoardo ('questa cosa vale sempre, non solo per questo esercizio'): a esercizio risolto
@@ -4536,7 +4614,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         actions.appendChild(el('button', { class: 'primary', text: continueLabel, onclick: onContinue }));
         // la frase completa in più solo se sopra non c'è (scelta multipla); negli altri tipi le parole sopra sono già cliccabili per la stella
         if (ex.type === 'mc') showFull();
-        else { const ins = p.querySelector('.instr'); if (ins && ins.textContent.indexOf('★') === -1) ins.appendChild(document.createTextNode(' · Clicca una parola per la stella ★.')); }   // appendChild, non textContent +=: la consegna del gapbank contiene un <b> (v66)
+        else { const ins = p.querySelector('.instr'); if (ins && ins.textContent.indexOf('★') === -1) ins.appendChild(document.createTextNode(' · Clicca una parola per salvarla con una stella ★: la ritrovi nel riepilogo finale.')); }   // appendChild, non textContent +=: la consegna del gapbank contiene un <b> (v66)
       } else {
         fb.textContent = '✗ Non ancora. Riascolta e riprova.'; fb.style.color = 'var(--bad)';
         if (attempts[ex.id] >= 2 || preview) solBtn.style.display = '';
@@ -5499,7 +5577,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           card.classList.add('flipped'); flipped = true;
         } });
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') chk.click(); });
-        wrow = el('div', { class: 'row', style: 'margin-top:6px' }, [inp, chk]);
+        // v93 (Edoardo: "la parte scrivi la parola e controlla mettile al centro"): sotto la carta, centrate
+        wrow = el('div', { class: 'row fc-write', style: 'margin-top:6px' }, [inp, chk]);
         p.appendChild(wrow);
         setTimeout(function () { inp.focus(); }, 50);
       }
