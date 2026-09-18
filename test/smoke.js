@@ -1673,6 +1673,31 @@ async function noOverflow(page, where) {
   assert.ok(/[.!?,;:]$/.test(carve.testo), 'e chiude su una punteggiatura, non a metà: ' + carve.testo);
   assert.ok(carve.tuttoCorto, 'un pezzo già corto resta intero');
   assert.ok(carve.senzaCitazione.from === 0 && carve.senzaCitazione.n <= 25, 'senza citazione si parte dall\'inizio, sempre entro 25 parole: ' + JSON.stringify(carve.senzaCitazione));
+  // v90 ("le parti tagliate sono tutte uguali… metti dei numeri sotto i tagli sulla barra, che corrispondono ai
+  // numeri sotto dove si può modificare"): stessa numerazione e stesso colore sulla barra e nella lista
+  const v90 = await page.evaluate(function () {
+    const barra = [].slice.call(document.querySelectorAll('#e-timeline .cut-n')).map(function (n) { return n.textContent; });
+    const lista = [].slice.call(document.querySelectorAll('#e-cuts .cut-tag')).map(function (n) { return n.textContent; });
+    const colori = [].slice.call(document.querySelectorAll('#e-timeline .cut')).map(function (n) { return n.style.getPropertyValue('--cutc'); });
+    const ls = window.VLApp.S.lessons[window.VLApp.S.currentId];
+    const ordinati = ls.cuts.every(function (c, i) { return i === 0 || ls.cuts[i - 1].start <= c.start; });
+    return { barra: barra, lista: lista, diversi: new Set(colori).size, quanti: colori.length, ordinati: ordinati, alta: document.querySelector('#e-timeline').classList.contains('has-cutn') };
+  });
+  assert.ok(v90.barra.length > 1, 'i tagli sono numerati sulla barra: ' + v90.barra.join(' '));
+  assert.deepStrictEqual(v90.barra, v90.lista, 'stessa numerazione sulla barra e nella lista dei tagli');
+  assert.strictEqual(v90.barra[0], '✄1', 'si comincia da ✄1');
+  assert.strictEqual(v90.diversi, v90.quanti, 'ogni taglio ha il suo colore (' + v90.diversi + ' su ' + v90.quanti + ')');
+  assert.ok(v90.ordinati, 'i tagli restano in ordine di tempo, così i numeri corrispondono');
+  assert.ok(v90.alta, 'la barra si alza per far posto ai numeri solo dove ci sono');
+  // e la rotella sulla barra non resta incastrata: la colonna scorre, poi continua la pagina
+  const rot = await page.evaluate(function () { const l = document.querySelector('.editor-left'); l.scrollTop = l.scrollHeight; window.scrollTo(0, 0); return { col: l.scrollTop, win: window.scrollY }; });
+  const cut0 = await page.locator('#e-timeline .cut').first().boundingBox();
+  await page.mouse.move(cut0.x + cut0.width / 2, cut0.y + cut0.height / 2);
+  await page.mouse.wheel(0, 300);
+  await page.waitForTimeout(300);
+  const dopoRot = await page.evaluate(function () { return window.scrollY; });
+  assert.ok(dopoRot > 0, 'con la colonna a fondo corsa la rotella sulla barra muove la pagina (era ' + JSON.stringify(rot) + ', ora ' + dopoRot + ')');
+  await page.evaluate(function () { window.scrollTo(0, 0); document.querySelector('.editor-left').scrollTop = 0; });
   // v79 ('vorrei il livello del video... e che si capisca per quali studenti è pensato'): selettori nell'editor,
   // salvataggio sulla lezione, etichette sulla card del portfolio, campi nello studentPayload
   await page.selectOption('#e-level', 'intermediate');
