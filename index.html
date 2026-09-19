@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Proflandia · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="plogo.svg?v=1">
+<title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-101">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260918-100">
+<link rel="stylesheet" href="styles.css?v=20260919-101">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img src="plogo.svg?v=1" alt="" width="26" height="26" style="vertical-align:-6px;margin-right:6px">Proflandia<span class="branddot">.</span></div>
+  <div class="brand"><img class="brand-play" src="m-play.svg?v=20260919-101" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-101" alt="PauseLearn" width="178" height="22"></div>
   <nav id="nav">
     <button data-view="home">Portfolio</button>
     <button data-view="new" class="primary">Nuova lezione</button>
@@ -69,10 +69,10 @@
     </div>
     <div class="card" id="bookmarklet-card">
       <h2>Pulsante per il browser: dal video alla bozza senza copia-incolla</h2>
-      <p>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla; funziona in Chrome, Safari, Opera, Firefox, Edge): <a id="bookmarklet-link" class="chip" href="#" style="font-weight:600">▶ Proflandia</a></p>
+      <p>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla; funziona in Chrome, Safari, Opera, Firefox, Edge): <a id="bookmarklet-link" class="chip" href="#" style="font-weight:600">▶ PauseLearn</a></p>
       <p class="hint">Poi, su un video di YouTube, cliccalo: legge titolo, durata e trascrizione dal pannello di YouTube e apre qui la nuova lezione già compilata. Se il video non ha la trascrizione ti avvisa che non è utilizzabile (a meno di incollarla a mano). È l'unica via senza copia-incolla: la trascrizione si può leggere solo dentro la pagina di YouTube.</p>
       <details><summary class="hint">Non riesci a trascinarlo? Crea un preferito a mano</summary>
-        <p class="hint">Aggiungi un preferito qualsiasi, poi modificalo: nome "Proflandia", indirizzo = il codice qui sotto.</p>
+        <p class="hint">Aggiungi un preferito qualsiasi, poi modificalo: nome "PauseLearn", indirizzo = il codice qui sotto.</p>
         <div id="bookmarklet-code" class="linkbox"></div>
         <div class="row" style="margin-top:6px"><button id="bookmarklet-copy" class="small">Copia il codice</button></div>
       </details>
@@ -88,7 +88,7 @@
           <label>Link del video YouTube</label>
           <input id="f-url" type="url" placeholder="https://www.youtube.com/watch?v=…">
           <div id="f-video-status" class="hint">Incolla il link: controllo che il video esista e che si possa incorporare.</div>
-          <div id="f-yt-go" class="row" style="display:none;margin-top:6px"><button id="btn-yt-go" class="small primary" type="button">▶ Apri su YouTube e prendi la trascrizione</button><span class="hint">si apre il video: lì premi il preferito <b>▶ Proflandia</b> e torni qui con la lezione compilata</span></div>
+          <div id="f-yt-go" class="row" style="display:none;margin-top:6px"><button id="btn-yt-go" class="small primary" type="button">▶ Apri su YouTube e prendi la trascrizione</button><span class="hint">si apre il video: lì premi il preferito <b>▶ PauseLearn</b> e torni qui con la lezione compilata</span></div>
           <label>Titolo</label>
           <input id="f-title" type="text" placeholder="Es. Come funziona Neuralink">
           <div class="grid2">
@@ -676,14 +676,27 @@
 <dialog id="dlg-account">
   <h2>Le mie lezioni nel cloud</h2>
   <div id="acc-out">
-    <p class="hint">Con l'accesso le lezioni si salvano anche nel cloud e le ritrovi su ogni computer dove entri con la stessa email. Niente password: ricevi un link via email.</p>
+    <p class="hint">Con l'accesso le lezioni si salvano anche nel cloud e le ritrovi su ogni computer dove entri con la stessa email. Niente password: ti arriva un codice di 6 cifre, lo scrivi qui e sei dentro. Serve solo la prima volta su questo browser.</p>
     <label for="acc-email">Email</label>
     <input id="acc-email" type="email" placeholder="nome@esempio.it" autocomplete="email">
     <div class="row" style="margin-top:14px">
-      <button id="acc-send" class="primary">Inviami il link di accesso</button>
+      <button id="acc-send" class="primary">Inviami il codice</button>
       <button id="acc-close">Chiudi</button>
     </div>
     <div id="acc-msg" class="hint" style="margin-top:8px"></div>
+  </div>
+  <!-- v101: secondo passo dell'accesso. Il codice invece del link: niente redirect da autorizzare (l'app vive su due indirizzi),
+       niente link consumato dai filtri antispam, e si puo' leggere la mail sul telefono restando col computer. -->
+  <div id="acc-step2" style="display:none">
+    <p class="hint">Codice mandato a <b id="acc-sent-to"></b>. Guarda anche nello spam: vale un'ora.</p>
+    <label for="acc-otp">Codice di 6 cifre</label>
+    <input id="acc-otp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
+    <div class="row" style="margin-top:14px">
+      <button id="acc-verify" class="primary">Entra</button>
+      <button id="acc-resend">Rimanda il codice</button>
+      <button id="acc-back">Cambia email</button>
+    </div>
+    <div id="acc-msg2" class="hint" style="margin-top:8px"></div>
   </div>
   <div id="acc-in" style="display:none">
     <p>Connesso come <b id="acc-who"></b></p>
@@ -752,18 +765,18 @@
     <div class="pp-ombra a"></div>
     <div class="pp-ombra b"></div>
     <svg class="pp-char pp-play" width="86" height="86" viewBox="0 0 100 100">
-      <path d="M30 26 L74 50 L30 74 Z" fill="#1f6feb" stroke="#1f6feb" stroke-width="22" stroke-linejoin="round"/>
-      <g class="pp-eye"><circle cx="34" cy="42" r="8" fill="#fff"/><circle cx="37" cy="42" r="3.6" fill="#1c2330"/></g>
-      <g class="pp-eye"><circle cx="54" cy="48" r="8" fill="#fff"/><circle cx="57" cy="48" r="3.6" fill="#1c2330"/></g>
-      <path d="M30 62 Q37 67 44 62" fill="none" stroke="#0c2f6b" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M30 26 L74 50 L30 74 Z" fill="#ee8433" stroke="#ee8433" stroke-width="22" stroke-linejoin="round"/>
+      <g class="pp-eye"><circle cx="34" cy="42" r="8.4" fill="#fff"/><circle cx="36.4" cy="42" r="3.8" fill="#16244a"/></g>
+      <g class="pp-eye"><circle cx="54" cy="48" r="8.4" fill="#fff"/><circle cx="56.4" cy="48" r="3.8" fill="#16244a"/></g>
+      <path d="M31 61 Q38 68 45 61" fill="none" stroke="#16244a" stroke-width="3.8" stroke-linecap="round"/>
     </svg>
     <svg class="pp-char pp-pausa" width="82" height="86" viewBox="0 0 100 100">
-      <rect x="18" y="16" width="26" height="70" rx="13" fill="#ff8a00"/>
-      <rect x="56" y="16" width="26" height="70" rx="13" fill="#ff8a00"/>
-      <g class="pp-eye"><circle cx="31" cy="34" r="7.5" fill="#fff"/><circle cx="29" cy="34" r="3.4" fill="#1c2330"/></g>
-      <g class="pp-eye"><circle cx="69" cy="34" r="7.5" fill="#fff"/><circle cx="67" cy="34" r="3.4" fill="#1c2330"/></g>
-      <path d="M26 52 Q31 48 36 52" fill="none" stroke="#8a4a00" stroke-width="3.2" stroke-linecap="round"/>
-      <path d="M64 52 Q69 48 74 52" fill="none" stroke="#8a4a00" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M31 16a13 13 0 0 1 13 13v55a2 2 0 0 1-2 2h-4a20 20 0 0 1-20-20V29a13 13 0 0 1 13-13z" fill="#2f6ff0"/>
+      <path d="M69 16a13 13 0 0 0-13 13v55a2 2 0 0 0 2 2h4a20 20 0 0 0 20-20V29a13 13 0 0 0-13-13z" fill="#2f6ff0"/>
+      <g class="pp-eye"><circle cx="31" cy="40" r="8.2" fill="#fff"/><circle cx="32.6" cy="40" r="3.8" fill="#16244a"/></g>
+      <g class="pp-eye"><circle cx="69" cy="40" r="8.2" fill="#fff"/><circle cx="70.6" cy="40" r="3.8" fill="#16244a"/></g>
+      <path d="M25 57 Q31 62 37 57" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M63 57 Q69 62 75 57" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/>
     </svg>
   </div>
   <div id="overlay-text">Un attimo…</div>
@@ -775,17 +788,17 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260918-100"></script>
-<script src="exercises.js?v=20260918-100"></script>
-<script src="generator.js?v=20260918-100"></script>
-<script src="activities.js?v=20260918-100"></script>
-<script src="ai.js?v=20260918-100"></script>
-<script src="demo-data.js?v=20260918-100"></script>
-<script src="bookmarklet.js?v=20260918-100"></script>
-<script src="sync.js?v=20260918-100"></script>
-<script src="qr.js?v=20260918-100"></script>
-<script src="challenge.js?v=20260918-100"></script>
-<script src="app.js?v=20260918-100"></script>
+<script src="lang.js?v=20260919-101"></script>
+<script src="exercises.js?v=20260919-101"></script>
+<script src="generator.js?v=20260919-101"></script>
+<script src="activities.js?v=20260919-101"></script>
+<script src="ai.js?v=20260919-101"></script>
+<script src="demo-data.js?v=20260919-101"></script>
+<script src="bookmarklet.js?v=20260919-101"></script>
+<script src="sync.js?v=20260919-101"></script>
+<script src="qr.js?v=20260919-101"></script>
+<script src="challenge.js?v=20260919-101"></script>
+<script src="app.js?v=20260919-101"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 

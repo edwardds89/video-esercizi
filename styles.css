@@ -27,7 +27,14 @@ label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 14px; c
 code, kbd { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
 
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 18px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
-.brand { font-weight: 700; font-size: 18px; letter-spacing: .2px; }
+/* v101: il marchio nella barra = mascotte Play + wordmark (lockup scelto da Edoardo). Sono due <img> allineate
+   in fondo e non un'immagine unica: il Play e' piu' alto della scritta e deve poter "sbordare" senza alzare la barra. */
+.brand { display: flex; align-items: flex-end; gap: 7px; line-height: 0; }
+.brand-play { width: 30px; height: 34px; margin-bottom: -4px; }
+.brand-wm { width: 178px; height: 22px; }
+@media (max-width: 640px) { .brand-play { width: 24px; height: 27px; margin-bottom: -3px; } .brand-wm { width: 140px; height: 17px; } }
+/* sotto i 380 px resta solo la mascotte: una scritta da 110 px schiaccia i pulsanti del menu */
+@media (max-width: 380px) { .brand-wm { display: none; } }
 .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
 /* account/cloud: pallino di stato nel pulsante in alto */
 #btn-account { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -37,7 +44,7 @@ code, kbd { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-
 .dot.bad { background: #d64545; }
 @keyframes dotpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 body.standalone .topbar nav { display: none; }
-@media (max-width: 640px) { .topbar { padding: 8px 12px; } .topbar nav button { padding: 6px 9px; font-size: 13px; } .brand { font-size: 16px; } main { padding: 12px; } h1 { font-size: 20px; } }
+@media (max-width: 640px) { .topbar { padding: 8px 12px; } .topbar nav button { padding: 6px 9px; font-size: 13px; } main { padding: 12px; } h1 { font-size: 20px; } }
 main { max-width: 1320px; margin: 0 auto; padding: 18px; }
 .view { display: none; }
 .view.active { display: block; }
@@ -243,7 +250,7 @@ button.play { padding: 4px 12px; color: var(--accent); font-weight: 700; }
 .big { font-size: 18px; padding: 12px 20px; }
 
 /* misc */
-/* ---------- home Proflandia (v65): hero a 4 servizi + portfolio con filtri ---------- */
+/* ---------- home PauseLearn (v65): hero a 4 servizi + portfolio con filtri ---------- */
 .branddot { color: var(--marker); }
 .home-hero { margin-bottom: 18px; }
 .home-hero h1 { margin: 2px 0 4px; }
@@ -1347,7 +1354,9 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 #print-area { display: none; }
 .pr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10mm; }
 .pr-head-txt { min-width: 0; }
-.pr-logo { width: 16mm; height: 16mm; flex: 0 0 auto; }
+.pr-logo { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 1.6mm; line-height: 0; }
+.pr-logo-play { width: 5.8mm; height: 6.5mm; margin-bottom: -.8mm; }
+.pr-logo-wm { width: 34mm; height: 4.2mm; }
 .pr-kicker { font-size: 9pt; letter-spacing: .18em; text-transform: uppercase; color: #6b7684; }
 .pr-title { font-size: 20pt; margin: 1mm 0 2mm; }
 .pr-sub { font-size: 9pt; color: #6b7684; margin-bottom: 6mm; }
@@ -1379,3 +1388,9 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .chal-kick { padding: 2px 8px; font-size: 12px; border-radius: 8px; color: var(--muted); border-color: var(--line); background: #fff; }
 .chal-kick:hover { color: #c0392b; border-color: #e8a2a2; background: #feecec; }
 .chal-kick.arm { color: #fff; background: var(--bad); border-color: var(--bad); font-weight: 700; }
+
+/* v101: il campo del codice di accesso. Cifre grandi e distanziate perché si legge da una mail e si ricopia a mano:
+   a corpo normale un 6 e un 8 si confondono, e l'errore di battitura brucia un codice che vale una volta sola. */
+#acc-otp { width: 7.2em; font: 800 26px/1.2 var(--font, inherit); letter-spacing: .22em; text-align: center; font-variant-numeric: tabular-nums; padding: 10px 12px; }
+#acc-otp::placeholder { color: #c7cdd6; letter-spacing: .22em; font-weight: 700; }
+#acc-step2 label { display: block; margin-bottom: 4px; }

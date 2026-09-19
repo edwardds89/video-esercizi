@@ -500,31 +500,90 @@
     if (hint && APP_VER) hint.textContent += '  ·  versione ' + APP_VER;   // così "che versione stai vedendo?" si risponde in un secondo
     if ($('#dlg-account').open) fillAccountDialog();
   }
+  // v101: l'accesso ha due passi (email, poi codice di 6 cifre), quindi il dialogo ha tre stati e non piu' due.
+  // ACC.step vale 'email' | 'code'; appena c'e' l'utente vince sempre lo stato "connesso".
+  const ACC = { step: 'email', email: '' };
   function fillAccountDialog() {
-    const u = CLOUD.user;
-    $('#acc-out').style.display = u ? 'none' : '';
+    const u = CLOUD.user, code = !u && ACC.step === 'code';
+    $('#acc-out').style.display = u || code ? 'none' : '';
+    $('#acc-step2').style.display = code ? '' : 'none';
     $('#acc-in').style.display = u ? '' : 'none';
+    if (code) $('#acc-sent-to').textContent = ACC.email;
     if (u) { $('#acc-who').textContent = u.email || ''; $('#acc-state').textContent = cloudStatusText(); }
   }
   $('#btn-account').addEventListener('click', function () {
-    initCloud().then(function () { fillAccountDialog(); $('#acc-msg').textContent = ''; $('#dlg-account').showModal(); if (!CLOUD.user) $('#acc-email').focus(); });
+    initCloud().then(function () {
+      ACC.step = 'email'; $('#acc-otp').value = ''; $('#acc-msg2').textContent = '';   // riaprendo si ricomincia da capo: un codice vecchio non vale piu'
+      fillAccountDialog(); $('#acc-msg').textContent = ''; $('#dlg-account').showModal();
+      if (!CLOUD.user) $('#acc-email').focus();
+    });
   });
   $$('#acc-close, #acc-close2').forEach(function (b) { b.addEventListener('click', function () { $('#dlg-account').close(); }); });
   $('#acc-email').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#acc-send').click(); } });
+
+  /** Messaggio leggibile per gli errori dell'accesso: quelli veri che capitano sono due, il tetto di invii e il codice sbagliato. */
+  function authError(e) {
+    const m = String(e && e.message || e);
+    if (/rate limit|too many/i.test(m)) return 'Troppe richieste in poco tempo. Se il codice ti è già arrivato usalo (vale un\'ora, guarda anche nello spam); altrimenti riprova fra qualche minuto.';
+    if (/expired|invalid/i.test(m)) return 'Codice sbagliato o scaduto. Controlla le cifre, oppure fattene mandare un altro.';
+    if (/signups? not allowed|disabled/i.test(m)) return 'Le registrazioni nuove sono chiuse in questo momento.';
+    return 'Non ha funzionato: ' + m;
+  }
+
+  /** Passo 1: chiede il codice. NIENTE emailRedirectTo: l'app vive su due indirizzi (dominio nuovo e vecchio URL di GitHub)
+      e un redirect non autorizzato farebbe fallire l'accesso; col codice non c'è nessun indirizzo da autorizzare. */
+  function sendCode(email, msg, btn) {
+    if (!CLOUD.client) { msg.textContent = 'Cloud non disponibile in questo momento.'; return Promise.resolve(false); }
+    btn.disabled = true; msg.textContent = 'Invio in corso…';
+    return CLOUD.client.auth.signInWithOtp({ email: email })
+      .then(function (res) { if (res.error) throw res.error; return true; })
+      .catch(function (e) { msg.textContent = authError(e); return false; })
+      .then(function (ok) { btn.disabled = false; return ok; });
+  }
+
   $('#acc-send').addEventListener('click', function () {
     const email = $('#acc-email').value.trim(), msg = $('#acc-msg');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Scrivi un indirizzo email valido.'; return; }
+    sendCode(email, msg, $('#acc-send')).then(function (ok) {
+      if (!ok) return;
+      ACC.email = email; ACC.step = 'code';
+      $('#acc-otp').value = ''; $('#acc-msg2').textContent = '';
+      fillAccountDialog(); $('#acc-otp').focus();
+    });
+  });
+
+  // Passo 2: il codice. Si accettano solo cifre (chi incolla dalla mail si porta dietro spazi e a capo) e a sei cifre si entra da solo.
+  $('#acc-otp').addEventListener('input', function () {
+    const pulito = this.value.replace(/\D/g, '').slice(0, 6);
+    if (pulito !== this.value) this.value = pulito;
+    if (pulito.length === 6) $('#acc-verify').click();
+  });
+  $('#acc-otp').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#acc-verify').click(); } });
+
+  $('#acc-verify').addEventListener('click', function () {
+    const token = $('#acc-otp').value.replace(/\D/g, ''), msg = $('#acc-msg2');
+    if (token.length !== 6) { msg.textContent = 'Il codice è di 6 cifre.'; return; }
     if (!CLOUD.client) { msg.textContent = 'Cloud non disponibile in questo momento.'; return; }
-    $('#acc-send').disabled = true; msg.textContent = 'Invio in corso…';
-    CLOUD.client.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } })
-      .then(function (res) { if (res.error) throw res.error; msg.textContent = 'Email inviata a ' + email + ': apri il link che contiene (guarda anche nello spam). La pagina si aprirà già connessa e le lezioni si allineano da sole.'; })
-      .catch(function (e) {
-        const m = String(e && e.message || e);
-        msg.textContent = /rate limit/i.test(m)
-          ? 'Troppe email in poco tempo: il servizio ne manda al massimo 2 all\'ora per tutta l\'app. Se hai già ricevuto un link, usalo (vale un\'ora; guarda anche nello spam); altrimenti riprova più tardi.'
-          : 'Invio non riuscito: ' + m;
+    $('#acc-verify').disabled = true; msg.textContent = 'Controllo…';
+    CLOUD.client.auth.verifyOtp({ email: ACC.email, token: token, type: 'email' })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        // Da qui in poi fa tutto onAuthStateChange (SIGNED_IN): aggiorna CLOUD.user e lancia la sincronizzazione.
+        ACC.step = 'email'; msg.textContent = '';
+        fillAccountDialog();
+        toast('Sei dentro: le lezioni si stanno allineando');
       })
-      .then(function () { $('#acc-send').disabled = false; });
+      .catch(function (e) { msg.textContent = authError(e); $('#acc-otp').select(); })
+      .then(function () { $('#acc-verify').disabled = false; });
+  });
+
+  $('#acc-resend').addEventListener('click', function () {
+    sendCode(ACC.email, $('#acc-msg2'), $('#acc-resend')).then(function (ok) {
+      if (ok) { $('#acc-msg2').textContent = 'Ne abbiamo mandato un altro a ' + ACC.email + '. Vale solo l\'ultimo arrivato.'; $('#acc-otp').value = ''; $('#acc-otp').focus(); }
+    });
+  });
+  $('#acc-back').addEventListener('click', function () {
+    ACC.step = 'email'; $('#acc-msg').textContent = ''; fillAccountDialog(); $('#acc-email').focus(); $('#acc-email').select();
   });
   $('#acc-sync').addEventListener('click', function () { CLOUD.announce = true; runSync().then(function () { if ($('#dlg-account').open) fillAccountDialog(); }); });
   $('#acc-logout').addEventListener('click', function () {
@@ -797,7 +856,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const list = $('#lesson-list');
     list.innerHTML = '';
     const all = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
-    // chip dei filtri con i conteggi veri + ricerca per titolo (v65, home Proflandia)
+    // chip dei filtri con i conteggi veri + ricerca per titolo (v65, home PauseLearn)
     const counts = { all: all.length, video: 0, act: 0, conv: 0, chal: 0 };
     all.forEach(function (ls) { counts[homeKind(ls)]++; });
     const fbox = $('#home-filter');
@@ -1119,7 +1178,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (v === 'custom') { const t = L.parseTime($('#f-target').value.trim()); return isNaN(t) || t <= 0 ? NaN : Math.min(t, duration); }
     return Math.min(parseInt(v, 10), duration);
   }
-  $('#btn-yt-go').addEventListener('click', function () { const id = extractVideoId($('#f-url').value); if (!id) return toast('Prima incolla il link del video'); window.open('https://www.youtube.com/watch?v=' + id, '_blank'); toast('Sul video premi il preferito ▶ Proflandia: la lezione arriva qui da sola', 5000); });
+  $('#btn-yt-go').addEventListener('click', function () { const id = extractVideoId($('#f-url').value); if (!id) return toast('Prima incolla il link del video'); window.open('https://www.youtube.com/watch?v=' + id, '_blank'); toast('Sul video premi il preferito ▶ PauseLearn: la lezione arriva qui da sola', 5000); });
   $('#f-url').addEventListener('change', checkVideo);
   $('#f-url').addEventListener('paste', function () { setTimeout(checkVideo, 50); });
   function checkVideo() {
@@ -1444,16 +1503,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!ls) return;
     const area = $('#print-area'); area.innerHTML = '';
     const exs = solutionRows(ls);
-    // v100 (Edoardo: 'a una certa ti daro' il logo e voglio che ci sia il logo nelle soluzioni'): per ora e' il
-    // marchio PROVVISORIO plogo.svg, lo stesso dell'intestazione e della favicon. Quando arrivera' il logo
-    // definitivo basta sostituire il file: qui non si tocca niente. E' un <img>, non un background, perche' le
-    // immagini di sfondo non si stampano se l'insegnante non spunta 'Grafica di sfondo' nella finestra di stampa.
+    // v100/v101 (Edoardo: 'a una certa ti daro' il logo e voglio che ci sia il logo nelle soluzioni'): dalla v101
+    // c'e' il marchio vero, lo stesso lockup della barra (mascotte Play + wordmark). Sono <img> e non immagini di
+    // sfondo perche' quelle non si stampano se l'insegnante non spunta 'Grafica di sfondo' nella finestra di stampa:
+    // un logo che compare o sparisce a seconda di una casella non e' un logo. Il foglio e' stretto, quindi il lockup
+    // sta in orizzontale in alto a destra e NON e' piu' un quadrato: se il marchio cambia forma si rivede .pr-logo.
     const testa = el('div', { class: 'pr-head' },
       el('div', { class: 'pr-head-txt' },
         el('div', { class: 'pr-kicker', text: 'Soluzioni' }),
         el('h1', { class: 'pr-title', text: ls.title || 'Lezione' }),
         el('div', { class: 'pr-sub', text: (exs.length === 1 ? '1 esercizio' : exs.length + ' esercizi') + ' \u00b7 foglio per l\'insegnante \u00b7 ' + new Date().toLocaleDateString('it-IT') })),
-      el('img', { class: 'pr-logo', src: 'plogo.svg?v=1', alt: '' }));
+      el('div', { class: 'pr-logo' },
+        el('img', { class: 'pr-logo-play', src: 'm-play.svg?v=20260919-101', alt: '' }),
+        el('img', { class: 'pr-logo-wm', src: 'wordmark.svg?v=20260919-101', alt: 'PauseLearn' })));
     area.appendChild(testa);
     if (!exs.length) area.appendChild(el('p', { class: 'hint', text: 'Questa lezione non ha ancora esercizi.' }));
     exs.forEach(function (ex, i) { area.appendChild(solutionRow(ex, i)); });
@@ -6709,7 +6771,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const go = el('button', { class: 'primary big', text: 'Entra nella sfida ▶' });
     const msg = el('div', { class: 'hint', style: 'margin-top:10px' });
     wrap.appendChild(el('div', { class: 'chp-join' },
-      el('div', { class: 'chp-logo', text: 'Proflandia' }),
+      el('div', { class: 'chp-logo', text: 'PauseLearn' }),
       el('h2', { text: 'Sfida in classe' }),
       el('div', { class: 'hint', text: 'PIN ' + pin }),
       inp, go, msg));

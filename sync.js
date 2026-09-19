@@ -10,8 +10,8 @@
   // Configurazione pubblica. La chiave "anon" di Supabase è fatta per stare nel browser: i dati sono protetti dalle regole per riga (RLS),
   // ogni utente legge e scrive solo le proprie lezioni. Con url vuoto il cloud è spento e l'app lavora solo in locale.
   const CONFIG = {
-    url: 'https://raakqcqrcgbfncevxauz.supabase.co',          // progetto "video-lezioni" (org Video Lezioni, Supabase, eu-west-1)
-    anonKey: 'sb_publishable_40BFSphEmaZ0u7FU9MI8_w_ZHEwunq-',   // chiave pubblicabile: può stare nel repo, non dà accesso ai dati altrui
+    url: 'https://ytryyxgkhhvgqieodhkk.supabase.co',          // progetto "pauselearn" (org PauseLearn, Supabase, eu-west-1 Irlanda)
+    anonKey: 'sb_publishable_ui2DOBm4ruFSwDrrcGWgkQ_yv0392uW',   // chiave pubblicabile: può stare nel repo, non dà accesso ai dati altrui
     table: 'lessons',
     lib: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js'
   };
