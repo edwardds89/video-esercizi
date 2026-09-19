@@ -495,11 +495,42 @@
     b.appendChild(el('span', { class: 'dot ' + dot }));
     b.appendChild(document.createTextNode(' ' + (u ? (u.email || 'account') : 'Accedi')));
     b.title = u ? cloudStatusText() : 'Salva le lezioni nel cloud per ritrovarle su ogni computer';
-    const hint = $('#home-storage-hint');
-    if (hint) hint.textContent = u ? 'Le lezioni sono salvate nel cloud (' + (u.email || 'account') + ') e in questo browser: le ritrovi su ogni computer dove entri con la stessa email. ' + cloudStatusText() : 'Le lezioni sono salvate solo in questo browser. Con "Accedi" (in alto) le salvi anche nel cloud e le ritrovi su ogni computer.';
-    if (hint && APP_VER) hint.textContent += '  ·  versione ' + APP_VER;   // così "che versione stai vedendo?" si risponde in un secondo
+    renderStorageBanner();
     if ($('#dlg-account').open) fillAccountDialog();
   }
+  /* v102 (Edoardo, davanti al portfolio senza aver fatto l'accesso: "non ha senso, se non ho un profilo e non ho
+     fatto l'accesso perche' dovrei poter vedere un portfolio?"). L'app funziona SENZA account per scelta: chi prova
+     la piattaforma non deve registrarsi prima di capire se gli piace, e i link studente non toccano il cloud. Quindi
+     il portfolio resta visibile; quello che mancava era dire DOVE stanno le lezioni. L'avviso c'era gia'
+     (#home-storage-hint) ma era una riga grigia in fondo alla pagina, sotto due righe di spiegazioni: nessuno lo
+     leggeva, e infatti Edoardo si e' trovato due volte in un giorno davanti a una libreria vuota senza capire perche'
+     (il cambio di dominio, che ha lasciato le lezioni nel magazzino del vecchio indirizzo, e poi il telefono). Ora la
+     riga sta SOPRA le card, dove l'occhio passa per forza: gialla finche' non c'e' l'accesso (le lezioni vivono solo
+     in questo browser, una pulizia della cronologia le cancella e non c'e' cestino), verde quando c'e'. Sparisce se
+     il portfolio e' vuoto: a chi non ha ancora niente l'allarme non serve e fa solo paura. La versione dell'app,
+     che prima stava nell'avviso grigio, e' finita qui: serve per rispondere in un secondo a "che versione vedi?". */
+  function renderStorageBanner() {
+    const b = $('#storage-banner'); if (!b) return;
+    const vuoto = Object.keys(S.lessons || {}).length === 0;
+    if (vuoto || S.standalone || !cloudConfigured()) { b.hidden = true; b.innerHTML = ''; return; }
+    const u = CLOUD.user;
+    b.hidden = false;
+    b.className = 'stor ' + (u ? 'ok' : 'warn');
+    b.innerHTML = '';
+    b.appendChild(el('span', { class: 'stor-ico', text: u ? '\u2601' : '\ud83d\udcbb' }));
+    const txt = el('span', { class: 'stor-txt' });
+    if (u) {
+      txt.appendChild(el('b', { text: 'Le tue lezioni sono anche nel cloud.' }));
+      txt.appendChild(document.createTextNode(' Le ritrovi su ogni dispositivo dove entri con ' + (u.email || 'la stessa email') + '. ' + cloudStatusText()));
+    } else {
+      txt.appendChild(el('b', { text: 'Queste lezioni esistono solo su questo computer.' }));
+      txt.appendChild(document.createTextNode(" Se pulisci la cronologia del browser spariscono, e non c’è modo di recuperarle. Con l’accesso le copi nel cloud e le ritrovi anche sul telefono."));
+    }
+    b.appendChild(txt);
+    if (!u) b.appendChild(el('button', { class: 'small primary stor-go', text: 'Accedi', onclick: function () { $('#btn-account').click(); } }));
+    if (APP_VER) b.appendChild(el('span', { class: 'stor-ver', text: 'v' + APP_VER }));
+  }
+
   // v101: l'accesso ha due passi (email, poi codice di 6 cifre), quindi il dialogo ha tre stati e non piu' due.
   // ACC.step vale 'email' | 'code'; appena c'e' l'utente vince sempre lo stato "connesso".
   const ACC = { step: 'email', email: '' };
@@ -513,7 +544,7 @@
   }
   $('#btn-account').addEventListener('click', function () {
     initCloud().then(function () {
-      ACC.step = 'email'; $('#acc-otp').value = ''; $('#acc-msg2').textContent = '';   // riaprendo si ricomincia da capo: un codice vecchio non vale piu'
+      ACC.step = 'email'; clearTimeout(ACC.otpTimer); $('#acc-otp').value = ''; $('#acc-msg2').textContent = '';   // riaprendo si ricomincia da capo: un codice vecchio non vale piu'
       fillAccountDialog(); $('#acc-msg').textContent = ''; $('#dlg-account').showModal();
       if (!CLOUD.user) $('#acc-email').focus();
     });
@@ -547,22 +578,29 @@
     sendCode(email, msg, $('#acc-send')).then(function (ok) {
       if (!ok) return;
       ACC.email = email; ACC.step = 'code';
-      $('#acc-otp').value = ''; $('#acc-msg2').textContent = '';
+      clearTimeout(ACC.otpTimer); $('#acc-otp').value = ''; $('#acc-msg2').textContent = '';
       fillAccountDialog(); $('#acc-otp').focus();
     });
   });
 
-  // Passo 2: il codice. Si accettano solo cifre (chi incolla dalla mail si porta dietro spazi e a capo) e a sei cifre si entra da solo.
+  // Passo 2: il codice. Si accettano solo cifre (chi incolla dalla mail si porta dietro spazi e a capo).
+  // v102: la lunghezza NON e' fissa a 6 - Supabase la decide da un'impostazione del progetto (GOTRUE_MAILER_OTP_LENGTH,
+  // Authentication -> Email nel pannello) e puo' valere 6 come 8; assumerla qui aveva troncato i codici piu' lunghi
+  // e bloccato l'accesso (Edoardo, 19/9: "perche' mi chiede 6 cifre ma me ne arrivano 8 per email"). Si entra da soli
+  // quando la digitazione si ferma con almeno 6 cifre scritte (l'incolla arriva in un colpo solo, quindi basta un
+  // piccolo ritardo), MAI a un conteggio fisso di caratteri.
   $('#acc-otp').addEventListener('input', function () {
-    const pulito = this.value.replace(/\D/g, '').slice(0, 6);
+    const pulito = this.value.replace(/\D/g, '').slice(0, 12);
     if (pulito !== this.value) this.value = pulito;
-    if (pulito.length === 6) $('#acc-verify').click();
+    clearTimeout(ACC.otpTimer);
+    if (pulito.length >= 6) ACC.otpTimer = setTimeout(function () { $('#acc-verify').click(); }, 350);
   });
-  $('#acc-otp').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#acc-verify').click(); } });
+  $('#acc-otp').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(ACC.otpTimer); $('#acc-verify').click(); } });
 
   $('#acc-verify').addEventListener('click', function () {
+    clearTimeout(ACC.otpTimer);
     const token = $('#acc-otp').value.replace(/\D/g, ''), msg = $('#acc-msg2');
-    if (token.length !== 6) { msg.textContent = 'Il codice è di 6 cifre.'; return; }
+    if (token.length < 6) { msg.textContent = 'Il codice sembra incompleto.'; return; }
     if (!CLOUD.client) { msg.textContent = 'Cloud non disponibile in questo momento.'; return; }
     $('#acc-verify').disabled = true; msg.textContent = 'Controllo…';
     CLOUD.client.auth.verifyOtp({ email: ACC.email, token: token, type: 'email' })
@@ -579,7 +617,7 @@
 
   $('#acc-resend').addEventListener('click', function () {
     sendCode(ACC.email, $('#acc-msg2'), $('#acc-resend')).then(function (ok) {
-      if (ok) { $('#acc-msg2').textContent = 'Ne abbiamo mandato un altro a ' + ACC.email + '. Vale solo l\'ultimo arrivato.'; $('#acc-otp').value = ''; $('#acc-otp').focus(); }
+      if (ok) { $('#acc-msg2').textContent = 'Ne abbiamo mandato un altro a ' + ACC.email + '. Vale solo l\'ultimo arrivato.'; clearTimeout(ACC.otpTimer); $('#acc-otp').value = ''; $('#acc-otp').focus(); }
     });
   });
   $('#acc-back').addEventListener('click', function () {
@@ -853,6 +891,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function renderHome() {
     show('home');
     renderBookmarklet();
+    renderStorageBanner();   // v102: il numero di lezioni cambia (importa, elimina), e con zero lezioni la riga sparisce
     const list = $('#lesson-list');
     list.innerHTML = '';
     const all = Object.values(S.lessons).sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });

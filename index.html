@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-101">
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-103">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260919-101">
+<link rel="stylesheet" href="styles.css?v=20260919-103">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="brand-play" src="m-play.svg?v=20260919-101" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-101" alt="PauseLearn" width="178" height="22"></div>
+  <div class="brand"><img class="brand-play" src="m-play.svg?v=20260919-103" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-103" alt="PauseLearn" width="178" height="22"></div>
   <nav id="nav">
     <button data-view="home">Portfolio</button>
     <button data-view="new" class="primary">Nuova lezione</button>
@@ -58,6 +58,7 @@
         <div id="home-filter" class="fchips"></div>
         <input id="home-search" type="search" placeholder="🔍 Cerca per titolo…" autocomplete="off">
       </div>
+      <div id="storage-banner" class="stor" hidden></div>
       <div id="lesson-list" class="lesson-grid"></div>
       <div class="row" style="margin-top:12px">
         <label for="import-file" class="chip" style="margin:0">Importa JSON…</label>
@@ -65,7 +66,6 @@
         <button id="btn-demo">Crea lezione demo (player finto)</button>
       </div>
       <p class="hint">Aprendo una lezione dal portfolio vedi la versione pronta per la classe; "Modifica" apre l'editor. Per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
-      <p class="hint" id="home-storage-hint">Le lezioni sono salvate in questo browser.</p>
     </div>
     <div class="card" id="bookmarklet-card">
       <h2>Pulsante per il browser: dal video alla bozza senza copia-incolla</h2>
@@ -689,8 +689,8 @@
        niente link consumato dai filtri antispam, e si puo' leggere la mail sul telefono restando col computer. -->
   <div id="acc-step2" style="display:none">
     <p class="hint">Codice mandato a <b id="acc-sent-to"></b>. Guarda anche nello spam: vale un'ora.</p>
-    <label for="acc-otp">Codice di 6 cifre</label>
-    <input id="acc-otp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
+    <label for="acc-otp">Codice ricevuto via email</label>
+    <input id="acc-otp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="il codice della mail">
     <div class="row" style="margin-top:14px">
       <button id="acc-verify" class="primary">Entra</button>
       <button id="acc-resend">Rimanda il codice</button>
@@ -788,17 +788,17 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260919-101"></script>
-<script src="exercises.js?v=20260919-101"></script>
-<script src="generator.js?v=20260919-101"></script>
-<script src="activities.js?v=20260919-101"></script>
-<script src="ai.js?v=20260919-101"></script>
-<script src="demo-data.js?v=20260919-101"></script>
-<script src="bookmarklet.js?v=20260919-101"></script>
-<script src="sync.js?v=20260919-101"></script>
-<script src="qr.js?v=20260919-101"></script>
-<script src="challenge.js?v=20260919-101"></script>
-<script src="app.js?v=20260919-101"></script>
+<script src="lang.js?v=20260919-103"></script>
+<script src="exercises.js?v=20260919-103"></script>
+<script src="generator.js?v=20260919-103"></script>
+<script src="activities.js?v=20260919-103"></script>
+<script src="ai.js?v=20260919-103"></script>
+<script src="demo-data.js?v=20260919-103"></script>
+<script src="bookmarklet.js?v=20260919-103"></script>
+<script src="sync.js?v=20260919-103"></script>
+<script src="qr.js?v=20260919-103"></script>
+<script src="challenge.js?v=20260919-103"></script>
+<script src="app.js?v=20260919-103"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 
