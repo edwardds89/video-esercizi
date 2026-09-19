@@ -49,9 +49,21 @@ async function noOverflow(page, where) {
   await page.goto(BASE + '?mock=1&speed=8');
   await page.evaluate(function () { localStorage.clear(); });
   await page.goto(BASE + '?mock=1&speed=8');
-  // home Proflandia (v65): 4 card servizio, brand nuovo; la card sfida (v68) apre il dialog e senza quiz lo spiega
+  // home PauseLearn (v65): 4 card servizio, brand nuovo; la card sfida (v68) apre il dialog e senza quiz lo spiega
   assert.strictEqual(await page.$$eval('.services .svc', function (e) { return e.length; }), 4, 'quattro card servizio');
-  assert.ok((await page.textContent('.brand')).indexOf('Proflandia') !== -1, 'il brand dice Proflandia');
+  // v101: il marchio non e' piu' testo, sono due immagini. Si controllano il nome accessibile (chi non vede
+  // l'immagine deve comunque leggere PauseLearn) e che i due file arrivino davvero, non solo che il tag esista:
+  // un src sbagliato lascia il marchio invisibile e la pagina non se ne accorge.
+  const marchio = await page.evaluate(function () {
+    const p = document.querySelector('.brand .brand-play'), w = document.querySelector('.brand .brand-wm');
+    return { alt: w && w.alt, play: p && p.getAttribute('src'), wm: w && w.getAttribute('src'),
+             caricate: !!(p && p.complete && p.naturalWidth > 0 && w && w.complete && w.naturalWidth > 0) };
+  });
+  assert.strictEqual(marchio.alt, 'PauseLearn', 'il marchio si legge PauseLearn anche senza immagini');
+  assert.ok(/m-play\.svg/.test(marchio.play || '') && /wordmark\.svg/.test(marchio.wm || ''), 'mascotte Play + wordmark: ' + JSON.stringify(marchio));
+  assert.ok(marchio.caricate, 'i due file del marchio esistono davvero e si caricano');
+  assert.ok(await page.$eval('link[rel=icon]', function (l) { return /icona-play\.svg/.test(l.getAttribute('href')); }), 'la favicon e\' la mascotte Play');
+  assert.strictEqual((await page.content()).indexOf('Proflandia'), -1, 'del nome vecchio non resta traccia nella pagina');
   await page.click('#svc-qr');
   await page.waitForSelector('#dlg-chal-new[open]');
   assert.ok((await page.$eval('#ch-empty', function (e) { return getComputedStyle(e).display; })) !== 'none', 'senza quiz il dialog spiega di crearne uno');
@@ -1686,7 +1698,8 @@ async function noOverflow(page, where) {
         kicker: (area.querySelector('.pr-kicker') || {}).textContent || '',
         visibile: getComputedStyle(area).display,
         margini: (document.getElementById('print-page-css') || {}).textContent || '',
-        logo: (area.querySelector('.pr-logo') || {}).getAttribute ? area.querySelector('.pr-logo').getAttribute('src') : '',
+        logo: Array.prototype.map.call(area.querySelectorAll('.pr-logo img'), function (i) { return i.getAttribute('src'); }).join(' '),
+        logoAlt: Array.prototype.map.call(area.querySelectorAll('.pr-logo img'), function (i) { return i.alt; }).join(''),
         testo: area.innerText.slice(0, 400)
       };
     };
@@ -1701,7 +1714,8 @@ async function noOverflow(page, where) {
   assert.strictEqual(stampa.fatto.titolo, titoloLez, 'il foglio porta il titolo della lezione');
   assert.ok(stampa.fatto.kicker === 'Soluzioni', 'il foglio si annuncia come Soluzioni: ' + stampa.fatto.kicker);
   // v100 ('a una certa ti daro' il logo e voglio che ci sia il logo nelle soluzioni')
-  assert.ok(/\.svg|\.png/.test(stampa.fatto.logo), 'il foglio porta il marchio: ' + stampa.fatto.logo);
+  assert.ok(/m-play\.svg/.test(stampa.fatto.logo) && /wordmark\.svg/.test(stampa.fatto.logo), 'il foglio porta il marchio intero: ' + stampa.fatto.logo);
+  assert.strictEqual(stampa.fatto.logoAlt, 'PauseLearn', 'e il marchio sul foglio si legge PauseLearn');
   assert.ok(stampa.fatto.testo.indexOf('insegnante') !== -1, 'il foglio dice che e\' per l\'insegnante');
   // v99 ('l'impaginazione del PDF non e' ottimale, devi considerare la zona di stampa'): i margini di OGNI
   // pagina vengono dalla @page iniettata durante la stampa, non dal padding (che vale solo sulla prima pagina)
@@ -2516,6 +2530,88 @@ async function noOverflow(page, where) {
   assert.ok(tr2.ultima && tr2.ultima.omission === false, 'la seconda volta si traduce la frase intera');
   assert.ok(/INTERA/.test(tr2.testo) && !tr2.nota, 'e la nota "resta compito tuo" sparisce: ' + tr2.testo);
   await ctxTr.close();
+
+  console.log('27. accesso col codice di 6 cifre (v101): due passi, cifre sole, errore leggibile, codice rimandato');
+  // Il cloud finto dello scenario 8 e' un ADATTATORE (non ha auth), quindi qui si finge anche il client Supabase:
+  // quello che si vuole controllare e' il dialogo, non la libreria.
+  const ctxOtp = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxOtp.addInitScript(tourSeen);
+  await ctxOtp.addInitScript('(function () { window.__rows = {}; window.__vlCloud = {' +
+    ' user: async function () { return null; },' +                       // sloggato: il dialogo parte dal primo passo
+    ' list: async function () { return []; }, get: async function () { return []; },' +
+    ' upsert: async function () {}, remove: async function () {} }; })();');
+  const po = await ctxOtp.newPage();
+  po.on('pageerror', function (e) { errors.push('pageerror(otp): ' + e.message); });
+  await po.goto(BASE + '?mock=1&speed=8');
+  await po.waitForFunction(function () { return window.VLApp && window.VLApp.cloud.sync; }, null, { timeout: 8000 });
+
+  // client finto: registra le chiamate e decide l'esito del codice
+  await po.evaluate(function () {
+    window.__auth = { inviati: [], provati: [] };
+    window.VLApp.cloud.client = { auth: {
+      signInWithOtp: function (o) { window.__auth.inviati.push(o); return Promise.resolve({ error: null }); },
+      verifyOtp: function (o) {
+        window.__auth.provati.push(o);
+        return Promise.resolve(o.token === '123456' ? { error: null } : { error: { message: 'Token has expired or is invalid' } });
+      }
+    } };
+  });
+
+  await po.click('#btn-account');
+  await po.waitForSelector('#dlg-account[open]');
+  assert.ok(await po.$eval('#acc-send', function (b) { return /codice/i.test(b.textContent); }), 'il pulsante chiede il CODICE, non il link');
+  assert.ok(await po.$eval('#acc-step2', function (d) { return d.style.display === 'none'; }), 'il secondo passo parte nascosto');
+
+  await po.fill('#acc-email', 'non-una-email');
+  await po.click('#acc-send');
+  assert.ok(/valid/i.test(await po.$eval('#acc-msg', function (m) { return m.textContent; })), 'email storta: lo dice e non manda niente');
+  assert.strictEqual(await po.evaluate(function () { return window.__auth.inviati.length; }), 0, 'nessun invio con email storta');
+
+  await po.fill('#acc-email', 'collega@esempio.it');
+  await po.click('#acc-send');
+  await po.waitForFunction(function () { return document.querySelector('#acc-step2').style.display !== 'none'; }, null, { timeout: 5000 });
+  const inviato = await po.evaluate(function () { return window.__auth.inviati[0]; });
+  assert.strictEqual(inviato.email, 'collega@esempio.it', 'manda il codice a quella email');
+  assert.ok(!inviato.options || !inviato.options.emailRedirectTo, 'NIENTE emailRedirectTo: col codice non c\'e\' nessun indirizzo da autorizzare');
+  assert.ok(await po.$eval('#acc-out', function (d) { return d.style.display === 'none'; }), 'il primo passo si nasconde');
+  assert.ok(/collega@esempio\.it/.test(await po.$eval('#acc-sent-to', function (d) { return d.textContent; })), 'dice a chi l\'ha mandato');
+
+  // si scrivono solo cifre: chi incolla dalla mail si porta dietro spazi e lettere
+  await po.fill('#acc-otp', ' 12 ab34 ');
+  assert.strictEqual(await po.$eval('#acc-otp', function (i) { return i.value; }), '1234', 'nel campo restano solo le cifre');
+  // il gesto vero e' l'incollaggio dalla mail, spazio compreso: niente maxlength, il taglio lo fa il JS dopo la pulizia
+  await po.fill('#acc-otp', '654 321');
+  await po.waitForFunction(function () { return window.__auth.provati.length >= 1; }, null, { timeout: 5000 });
+  assert.strictEqual(await po.evaluate(function () { return window.__auth.provati[0].token; }), '654321', 'un codice incollato con lo spazio arriva intero');
+  await po.waitForFunction(function () { return /sbagliato o scaduto/i.test(document.querySelector('#acc-msg2').textContent); }, null, { timeout: 5000 });
+
+  // codice sbagliato: messaggio leggibile, si resta sul secondo passo
+  await po.fill('#acc-otp', '999999');
+  await po.waitForFunction(function () { return window.__auth.provati.length === 2; }, null, { timeout: 5000 });   // a sei cifre parte da solo
+  await po.waitForFunction(function () { return /sbagliato o scaduto/i.test(document.querySelector('#acc-msg2').textContent); }, null, { timeout: 5000 });
+  assert.ok(await po.$eval('#acc-step2', function (d) { return d.style.display !== 'none'; }), 'con un codice sbagliato non si torna indietro');
+
+  // "Rimanda il codice": nuovo invio alla STESSA email, campo ripulito
+  await po.click('#acc-resend');
+  await po.waitForFunction(function () { return window.__auth.inviati.length === 2; }, null, { timeout: 5000 });
+  assert.strictEqual(await po.evaluate(function () { return window.__auth.inviati[1].email; }), 'collega@esempio.it', 'il secondo codice va alla stessa email');
+
+  // codice giusto: si entra, il dialogo torna allo stato connesso
+  await po.evaluate(function () {
+    // dopo verifyOtp e' onAuthStateChange a riempire CLOUD.user: qui lo si fa a mano, la libreria vera non c'e'
+    const orig = window.VLApp.cloud.client.auth.verifyOtp;
+    window.VLApp.cloud.client.auth.verifyOtp = function (o) {
+      return orig(o).then(function (r) { if (!r.error) { window.VLApp.cloud.user = { id: 'u1', email: o.email }; } return r; });
+    };
+  });
+  await po.fill('#acc-otp', '123456');
+  await po.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.email === 'collega@esempio.it'; }, null, { timeout: 5000 });
+  const provato = await po.evaluate(function () { return window.__auth.provati[window.__auth.provati.length - 1]; });
+  assert.strictEqual(provato.type, 'email', 'verifyOtp col tipo giusto');
+  assert.strictEqual(provato.token, '123456', 'il codice arriva pulito a verifyOtp');
+  await po.waitForFunction(function () { return document.querySelector('#acc-in').style.display !== 'none'; }, null, { timeout: 5000 });
+  assert.ok(await po.$eval('#acc-step2', function (d) { return d.style.display === 'none'; }), 'entrati, il campo del codice sparisce');
+  await ctxOtp.close();
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
