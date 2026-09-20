@@ -964,7 +964,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!cloudConfigured() || !CLOUD.user) return null;
     if (ls.published || ls.publishSkip) return null;
     return el('div', { class: 'pub-nudge' },
-      el('span', { text: '🌐 Non ancora pubblicata: gli altri insegnanti non la trovano in Community.' }),
+      el('span', { text: '🌐 Non ancora pubblicata: pubblicandola contribuisci alla Community, e trovi più facilmente quella degli altri.' }),
       el('button', { class: 'small primary', text: 'Pubblica ora', onclick: function () { togglePublish(ls); } }),
       el('button', { class: 'link', text: 'Non proporla più', onclick: function () {
         ls.publishSkip = true; ls.updatedAt = new Date().toISOString(); saveLessons(); renderHome();
