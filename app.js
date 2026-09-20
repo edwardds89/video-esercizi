@@ -411,6 +411,25 @@
   }
   function loadSyncState() { try { return JSON.parse(localStorage.getItem('vle.sync') || 'null'); } catch (e) { return null; } }
   function saveSyncState(st) { try { localStorage.setItem('vle.sync', JSON.stringify(st)); } catch (e) { /* ignore */ } }
+  // v108 (Edoardo, testando la Community con un secondo account sullo stesso browser: "vedo tutte e tre le lezioni che ho fatto io,
+  // anche se ne ho copiate solo due"): "vle.lessons" e' UNA chiave sola nel browser, non per-account — se un secondo insegnante
+  // accede sullo stesso computer senza aver mai fatto logout/pulizia, la libreria del primo resta li' e sembra "sua". Il motore di
+  // sync (sync.js) gia' si accorge del cambio account e riparte da zero per il proprio STATO di sincronizzazione (state.owner),
+  // ma non tocca la cache locale delle lezioni: quella andrebbe comunque pushata (con owner = il nuovo utente) al primo giro utile.
+  // "vle.owner" ricorda a CHI appartiene la cache di QUESTO browser; quando arriva un utente autenticato diverso da quello
+  // registrato l'ultima volta, la cache locale si svuota PRIMA che il motore di sync possa leggerla, cosi' il nuovo account parte
+  // pulito e scarica solo le proprie lezioni dal cloud. Un primo accesso (nessun proprietario registrato: uso da ospite prima del
+  // login, o primo login mai fatto su questo browser) NON svuota niente: serve a poter continuare a lavorare offline e poi accedere.
+  function localOwnerGuard(user) {
+    if (!user) return;
+    let prev = null;
+    try { prev = localStorage.getItem('vle.owner'); } catch (e) { /* ignore */ }
+    if (prev && prev !== user.id) {
+      S.lessons = {}; saveLessons();
+      toast('Account diverso da quello usato prima su questo browser: le lezioni locali di prima sono state tolte per non mescolarle tra insegnanti.');
+    }
+    try { localStorage.setItem('vle.owner', user.id); } catch (e) { /* ignore */ }
+  }
   /** Applica in locale ciò che arriva dal cloud (lezioni nuove o aggiornate, eliminazioni fatte altrove). */
   function applyCloud(ch) {
     const skipped = [], replaced = [], removed = [];
@@ -445,6 +464,7 @@
         CLOUD.client.auth.onAuthStateChange(function (ev, session) {
           const before = CLOUD.user && CLOUD.user.id;
           CLOUD.user = session ? session.user : null;
+          localOwnerGuard(CLOUD.user);
           renderAccount();
           // v105: il pulsante "Pubblica" dipende da CLOUD.user (senza account non c'e' dove pubblicare) — se la home e' gia'
           // disegnata quando l'accesso cambia, va ridisegnata anche lei, non solo il pallino dell'account.
@@ -455,6 +475,7 @@
       CLOUD.adapter = adapter;   // v105: la community legge le righe pubblicate di TUTTI, il motore di sync (sopra) solo le proprie
       CLOUD.sync = window.VLSync.createSync({ adapter: adapter, getLocal: function () { return S.lessons; }, apply: applyCloud, save: saveLessons, loadState: loadSyncState, saveState: saveSyncState, onStatus: function () { renderAccount(); } });
       CLOUD.user = await adapter.user();
+      localOwnerGuard(CLOUD.user);
       renderAccount();
       // v105: la sessione si puo' ripristinare DOPO il primo renderHome() (fatto all'avvio, prima che initCloud finisca):
       // senza questo, il pulsante "Pubblica" resta assente finche' qualcos'altro non ridisegna la home (es. un cambio di vista).
@@ -1073,8 +1094,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     items.forEach(function (r) {
       const ls = r.data || {};
       const label = KIND_LABEL[homeKind(ls)] || '🎬 Lezione';
+      const thumbStyle = ls.videoId && ls.videoId !== 'demo' ? 'background-image:url(https://i.ytimg.com/vi/' + ls.videoId + '/mqdefault.jpg)' : '';
+      const thumb = thumbStyle
+        ? el('div', { class: 'thumb', style: thumbStyle }, el('div', { class: 'play', text: '▶' }))
+        : el('div', { class: 'thumb act-thumb' }, label.split(' ')[0]);
       const card = el('div', { class: 'lesson-card' },
-        el('div', { class: 'thumb act-thumb' }, label.split(' ')[0]),
+        thumb,
         el('div', { class: 'body' },
           el('div', { class: 'title', text: ls.title || '(senza titolo)' }),
           el('div', { class: 'meta', text: label + (r.updated_at ? ' · ' + new Date(r.updated_at).toLocaleDateString('it-IT') : '') }),
