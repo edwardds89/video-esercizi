@@ -954,6 +954,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!cloudConfigured() || !CLOUD.user) return null;   // serve un account: senza, non c'è dove pubblicarla né chi la vedrebbe
     return el('button', { class: 'small' + (ls.published ? ' ok' : ''), text: ls.published ? '🌐 Pubblicata ✓' : '🌐 Pubblica', title: ls.published ? 'Visibile nella Community agli insegnanti registrati: clicca per ritirarla' : 'Rendila visibile nella Community agli insegnanti registrati', onclick: function () { togglePublish(ls); } });
   }
+  /* v110 (Edoardo: "il fine per me è la pubblicazione... mi serve un promemoria, se non pubblicano rimane lì"): fascia
+     NON bloccante sulla card di ogni lezione non pubblicata (niente pop-up: un'interruzione ripetuta a ogni apertura
+     punirebbe anche chi ha deciso apposta di non pubblicare, e spingerebbe a pubblicare contenuto acerbo solo per
+     zittirla — vedi la discussione in chat). Resta finché non si pubblica O si sceglie esplicitamente "Non proporla più"
+     (ls.publishSkip, opt-out per singola lezione: il pulsante "Pubblica" nella riga delle azioni resta comunque sempre
+     lì, quindi pubblicare più avanti è sempre possibile). */
+  function publishNudge(ls) {
+    if (!cloudConfigured() || !CLOUD.user) return null;
+    if (ls.published || ls.publishSkip) return null;
+    return el('div', { class: 'pub-nudge' },
+      el('span', { text: '🌐 Non ancora pubblicata: gli altri insegnanti non la trovano in Community.' }),
+      el('button', { class: 'small primary', text: 'Pubblica ora', onclick: function () { togglePublish(ls); } }),
+      el('button', { class: 'link', text: 'Non proporla più', onclick: function () {
+        ls.publishSkip = true; ls.updatedAt = new Date().toISOString(); saveLessons(); renderHome();
+      } }));
+  }
   /** Tipo di una voce del portfolio: lezione video, attività standalone o conversazione. */
   function homeKind(ls) {
     if (ls.activity && !Array.isArray(ls.exercises)) return 'act';
@@ -1002,6 +1018,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('div', { class: 'body' },
             el('div', { class: 'title', text: ls.title || '(attività senza titolo)', onclick: openA }),
             el('div', { class: 'meta', text: t.label + ' · ' + nItems + ' elementi' + (th ? ' · tema ' + th.name : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            publishNudge(ls),
             el('div', { class: 'actions' },
               el('button', { class: 'small primary', text: '▶ Gioca', onclick: openA }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openActEditor(ls.id); } }),
@@ -1020,6 +1037,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('div', { class: 'body' },
             el('div', { class: 'title', text: ls.title || '(set senza titolo)', onclick: openS }),
             el('div', { class: 'meta', text: 'Sfida in classe · ' + nIt + (nIt === 1 ? ' esercizio' : ' esercizi') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            publishNudge(ls),
             el('div', { class: 'actions' },
               el('button', { class: 'small primary', text: '▶ Gioca', onclick: function () { openChalNew(ls.id); } }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: openS }),
@@ -1040,6 +1058,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('div', { class: 'body' },
             el('div', { class: 'title', text: ls.title || '(conversazione senza titolo)', onclick: openC }),
             el('div', { class: 'meta', text: 'Conversazione \u00b7 ' + (u.questions || []).length + ' domande \u00b7 livello ' + (u.level || 'B1') + (u.focus ? ' \u00b7 ' + u.focus : '') + (ls.updatedAt ? ' \u00b7 ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            publishNudge(ls),
             el('div', { class: 'actions' },
               el('button', { class: 'small primary', text: '\uD83D\uDDA8 Foglio A4', onclick: openC }),
               el('button', { class: 'small', text: '\u270E Modifica', onclick: function () { openConvEditor(ls.id); } }),
@@ -1057,6 +1076,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('div', { class: 'body' },
           el('div', { class: 'title', text: ls.title || '(senza titolo)', onclick: open }),
           el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (LEVEL_LABELS[ls.levelBand] ? ' · ' + LEVEL_LABELS[ls.levelBand] : '') + (audienceLabel(ls.audience) ? ' · ' + audienceLabel(ls.audience) : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+          publishNudge(ls),
           el('div', { class: 'actions' },
             el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
@@ -1143,6 +1163,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const ls = JSON.parse(JSON.stringify(row.data || {}));
     ls.id = uid();
     delete ls.published;
+    delete ls.publishSkip;   // v110: se l'originale aveva chiuso il promemoria, la copia (nuova, mai pubblicata) lo riceve di nuovo
     ls.updatedAt = new Date().toISOString();
     S.lessons[ls.id] = ls;
     saveLessons();

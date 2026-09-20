@@ -92,6 +92,9 @@ h3 { font-size: 16px; margin: 4px 0 8px; }
 .notice-x:hover, .notice-x:focus-visible { opacity: 1; background: rgba(0,0,0,.06); }
 .notice.bad { background: var(--bad-bg); color: var(--bad); }
 .notice.info { background: #e8f0fe; color: #1b4b9b; }
+/* v110: fascia non bloccante "non ancora pubblicata" sulle card del portfolio */
+.pub-nudge { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 8px; margin: 6px 0; font-size: 13px; background: var(--warn-bg); color: var(--warn-ink); }
+.pub-nudge > span { flex: 1 1 auto; }
 
 /* player */
 .player-box { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius); overflow: hidden; }
