@@ -2714,6 +2714,48 @@ async function noOverflow(page, where) {
   assert.ok(await pm.$eval('#nav', function (n) { return !n.classList.contains('open'); }), 'scegliendo una voce il pannello si richiude da solo');
   await ctxMob.close();
 
+  console.log('29. secondo insegnante sullo stesso browser: la libreria locale del primo non diventa "sua" (v108)');
+  const ctxSw = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxSw.addInitScript(tourSeen);
+  await ctxSw.addInitScript(fakeCloud2('prof-x', {}));
+  const psw = await ctxSw.newPage();
+  psw.on('pageerror', function (e) { errors.push('pageerror(SW): ' + e.message); });
+  await psw.goto(BASE + '?mock=1&speed=8');
+  await psw.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-x'; }, null, { timeout: 5000 });
+  await psw.click('#btn-demo');
+  await psw.waitForSelector('#view-editor.active', { timeout: 15000 });
+  await psw.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  await psw.waitForFunction(function () { return Object.keys(window.__rows).length === 1 && window.VLApp.cloud.sync.pending() === 0; }, null, { timeout: 8000 });
+  assert.strictEqual(await psw.evaluate(function () { return localStorage.getItem('vle.owner'); }), 'prof-x', 'vle.owner segue il primo insegnante che accede su questo browser');
+  // Secondo insegnante: STESSO contesto Playwright = stesso localStorage del browser, ma account DIVERSO (nessun logout esplicito, come nel test di Edoardo).
+  await ctxSw.addInitScript(fakeCloud2('prof-y', {}));
+  await psw.goto(BASE + '?mock=1&speed=8');
+  await psw.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-y'; }, null, { timeout: 5000 });
+  await psw.waitForFunction(function () { return Object.keys(window.VLApp.S.lessons).length === 0; }, null, { timeout: 5000 });
+  await psw.waitForSelector('#view-home.active');
+  assert.strictEqual((await psw.$$('#lesson-list .lesson-card')).length, 0, 'la lezione demo del primo insegnante non appare nella libreria del secondo');
+  assert.strictEqual(await psw.evaluate(function () { return localStorage.getItem('vle.owner'); }), 'prof-y', 'vle.owner passa al nuovo account');
+  await ctxSw.close();
+
+  console.log('30. Community: la lezione da video mostra la vera miniatura YouTube, non solo l\'iconcina (v108)');
+  const ctxThumb = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxThumb.addInitScript(tourSeen);
+  await ctxThumb.addInitScript(fakeCloud2('prof-view', {
+    'lezione-vera': { id: 'lezione-vera', owner: 'prof-autore', title: 'Una lezione vera', data: { id: 'lezione-vera', title: 'Una lezione vera', videoId: 'dQw4w9WgXcQ', published: true, exercises: [] }, updated_at: new Date().toISOString(), deleted: false },
+    'attivita-vera': { id: 'attivita-vera', owner: 'prof-autore', title: 'Un gioco', data: { id: 'attivita-vera', activity: { type: 'quiz', theme: 'classic', questions: [] }, published: true }, updated_at: new Date().toISOString(), deleted: false }
+  }));
+  const pth = await ctxThumb.newPage();
+  pth.on('pageerror', function (e) { errors.push('pageerror(TH): ' + e.message); });
+  await pth.goto(BASE + '?mock=1&speed=8');
+  await pth.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-view'; }, null, { timeout: 5000 });
+  await pth.click('#nav button[data-view=community]');
+  await pth.waitForSelector('#view-community.active');
+  await pth.waitForFunction(function () { return document.querySelectorAll('#community-list .lesson-card').length === 2; }, null, { timeout: 8000 });
+  const thumbs = await pth.$$eval('#community-list .lesson-card .thumb', function (ts) { return ts.map(function (t) { return { cls: t.className, bg: getComputedStyle(t).backgroundImage }; }); });
+  assert.ok(thumbs.some(function (t) { return /dQw4w9WgXcQ/.test(t.bg); }), 'la lezione da video mostra la vera miniatura YouTube in Community');
+  assert.ok(thumbs.some(function (t) { return t.cls.indexOf('act-thumb') >= 0; }), 'un\'attività senza video resta con l\'iconcina, non una miniatura inventata');
+  await ctxThumb.close();
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
