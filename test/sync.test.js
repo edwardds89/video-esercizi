@@ -177,5 +177,35 @@ function lesson(id, title, at, extra) { return Object.assign({ v: 1, id: id, tit
     await assert.rejects(ad.upsert([{ owner: 'u1', id: 'hack', data: {}, updated_at: iso(T0), deleted: false }]), /RLS/);
   });
 
+  console.log('community (v105: catalogo pubblico delle lezioni pubblicate)');
+  await test('community() vede solo le righe con data.published true, di qualunque proprietario', async function () {
+    const cs = SY.memoryServer();
+    const ad1 = cs.adapterFor('u1'), ad2 = cs.adapterFor('u2');
+    await ad1.upsert([{ owner: 'u1', id: 'pub1', title: 'Pubblica', data: { title: 'Pubblica', published: true, exercises: [] }, updated_at: iso(T0), deleted: false }]);
+    await ad1.upsert([{ owner: 'u1', id: 'priv1', title: 'Privata', data: { title: 'Privata', exercises: [] }, updated_at: iso(T0), deleted: false }]);
+    const seen = await ad2.community();
+    assert.strictEqual(seen.length, 1);
+    assert.strictEqual(seen[0].id, 'pub1'); assert.strictEqual(seen[0].owner, 'u1'); assert.strictEqual(seen[0].data.published, true);
+  });
+  await test('community() ignora le righe eliminate (tombstone) anche se erano pubblicate', async function () {
+    const cs = SY.memoryServer();
+    const ad1 = cs.adapterFor('u1');
+    await ad1.upsert([{ owner: 'u1', id: 'pub2', title: 'Poi cancellata', data: { title: 'Poi cancellata', published: true }, updated_at: iso(T0), deleted: false }]);
+    await ad1.remove([{ owner: 'u1', id: 'pub2', deleted: true, data: null, updated_at: iso(Date.now()) }]);
+    const seen = await cs.adapterFor('u2').community();
+    assert.strictEqual(seen.length, 0);
+  });
+  await test('community() senza account (utente null): niente, come per il vero client senza sessione', async function () {
+    const cs = SY.memoryServer();
+    await cs.adapterFor('u1').upsert([{ owner: 'u1', id: 'pub3', title: 'X', data: { title: 'X', published: true }, updated_at: iso(T0), deleted: false }]);
+    const seen = await cs.adapterFor(null).community();
+    assert.deepStrictEqual(seen, []);
+  });
+  await test('community() propaga gli errori di rete come le altre chiamate', async function () {
+    const cs = SY.memoryServer();
+    cs.failNext = 'rete assente';
+    await assert.rejects(cs.adapterFor('u1').community(), /rete assente/);
+  });
+
   console.log(passed + ' test superati' + (process.exitCode ? ' (con errori)' : ''));
 })();

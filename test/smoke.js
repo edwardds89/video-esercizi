@@ -64,6 +64,30 @@ async function noOverflow(page, where) {
   assert.ok(marchio.caricate, 'i due file del marchio esistono davvero e si caricano');
   assert.ok(await page.$eval('link[rel=icon]', function (l) { return /icona-play\.svg/.test(l.getAttribute('href')); }), 'la favicon e\' la mascotte Play');
   assert.strictEqual((await page.content()).indexOf('Proflandia'), -1, 'del nome vecchio non resta traccia nella pagina');
+  // v102 ('se non ho un profilo e non ho fatto l'accesso perche' dovrei poter vedere un portfolio?'): il portfolio
+  // resta visibile senza account (l'app si prova senza registrarsi), ma sopra le card ci deve essere scritto DOVE
+  // stanno le lezioni. Senza accesso la riga e' gialla e nomina il rischio vero: pulire il browser le cancella.
+  // A questo punto (reload appena fatto, localStorage vuoto) la libreria e' vuota: a libreria vuota l'allarme non
+  // serve, chi non ha ancora niente non deve spaventarsi. #btn-demo arriva solo dopo (riga 90) e apre l'editor,
+  // non la home: per provare lo stato "con lezioni" senza dipendere da quella navigazione si inietta una lezione
+  // finta, si ridisegna la home, e si rimette tutto come prima.
+  assert.ok(await page.evaluate(function () { return document.getElementById('storage-banner').hidden; }), 'senza lezioni la riga sparisce');
+  const avviso = await page.evaluate(function () {
+    const S = window.VLApp.S;
+    S.lessons = { finta: { id: 'finta', title: 'Prova', exercises: [] } };
+    window.VLApp.renderHome();
+    const b = document.getElementById('storage-banner');
+    const out = { c_e: !!b, nascosto: b ? b.hidden : null, classe: b ? b.className : '', testo: b ? b.innerText : '',
+             sopraLeCard: !!(b && b.nextElementSibling && b.nextElementSibling.id === 'lesson-list'),
+             haAccedi: !!(b && b.querySelector('.stor-go')) };
+    S.lessons = {}; window.VLApp.renderHome();   // si rimette a posto: il resto dello scenario riparte da libreria vuota
+    return out;
+  });
+  assert.ok(avviso.c_e && !avviso.nascosto, 'con lezioni in libreria la riga sullo storage si vede');
+  assert.ok(avviso.sopraLeCard, 'la riga sta SOPRA le card, non in fondo alla pagina');
+  assert.ok(/warn/.test(avviso.classe), 'senza accesso e\' un avviso, non una conferma: ' + avviso.classe);
+  assert.ok(/solo su questo computer/i.test(avviso.testo) && /pulisci la cronologia/i.test(avviso.testo), 'dice dove stanno e cosa le cancella: ' + avviso.testo);
+  assert.ok(avviso.haAccedi, 'e offre l\'accesso li\' dove lo dice');
   await page.click('#svc-qr');
   await page.waitForSelector('#dlg-chal-new[open]');
   assert.ok((await page.$eval('#ch-empty', function (e) { return getComputedStyle(e).display; })) !== 'none', 'senza quiz il dialog spiega di crearne uno');
@@ -955,7 +979,8 @@ async function noOverflow(page, where) {
   await pa.goto(BASE + '?mock=1&speed=8');
   await pa.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.email === 'prof@esempio.it'; }, null, { timeout: 5000 });
   assert.ok(await pa.$eval('#btn-account', function (b) { return b.style.display !== 'none' && /prof@esempio\.it/.test(b.textContent); }), 'pulsante account con l\'email');
-  assert.ok(/nel cloud/.test(await pa.$eval('#home-storage-hint', function (h) { return h.textContent; })), 'avviso "salvate nel cloud"');
+  // v102: l'avviso "salvate nel cloud" e' diventato #storage-banner, e prima di avere una lezione non ha senso mostrarlo
+  assert.ok(await pa.$eval('#storage-banner', function (b) { return b.hidden; }), 'senza lezioni ancora niente riga (nulla da dire sullo storage)');
   await pa.click('#btn-demo');
   await pa.waitForSelector('#view-editor.active', { timeout: 15000 });
   await pa.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
@@ -964,6 +989,9 @@ async function noOverflow(page, where) {
   assert.ok(rowA.title && rowA.hasLines && rowA.owner === 'u-test' && !rowA.deleted && !rowA.cache, 'lezione caricata nel cloud (con trascrizione, senza cache): ' + JSON.stringify(rowA));
   assert.ok(await pa.$eval('#btn-account .dot', function (d) { return d.classList.contains('ok'); }), 'pallino verde dopo il caricamento');
   await pa.click('#nav button[data-view=home]');
+  // v102: ora c'e' una lezione ED e' connesso -> riga verde di conferma, non l'avviso giallo
+  assert.ok(/cloud/i.test(await pa.$eval('#storage-banner', function (b) { return b.hidden ? '' : b.className + ' ' + b.innerText; })) &&
+    /ok/.test(await pa.$eval('#storage-banner', function (b) { return b.className; })), 'connesso e con lezioni: riga verde che nomina il cloud');
   await pa.click('#btn-account');
   await pa.waitForSelector('#dlg-account[open]');
   assert.ok(/prof@esempio\.it/.test(await pa.$eval('#acc-who', function (w) { return w.textContent; })), 'finestra account: connesso come');
@@ -1005,6 +1033,62 @@ async function noOverflow(page, where) {
   await pb.waitForSelector('#view-student.active', { timeout: 8000 });
   assert.ok(await pb.$eval('#btn-account', function (b) { return b.style.display === 'none'; }), 'link studente: pulsante account nascosto');
   await ctxA.close(); await ctxB.close();
+
+  console.log('8b. community v105: un insegnante pubblica una lezione, un altro la trova e la copia');
+  // come fakeCloud, ma con owner PARAMETRICO (due account diversi, non due computer dello stesso account) e il metodo community().
+  const fakeCloud2 = function (userId, rows) {
+    const uid = JSON.stringify(userId), email = JSON.stringify(userId + '@esempio.it');
+    return '(function () { window.__rows = ' + JSON.stringify(rows) + ';' +
+      'function sortKeys(v) { if (Array.isArray(v)) return v.map(sortKeys); if (v && typeof v === "object") { var o = {}; Object.keys(v).sort().forEach(function (k) { o[k] = sortKeys(v[k]); }); return o; } return v; }' +
+      'window.__vlCloud = {' +
+      ' user: async function () { return { id: ' + uid + ', email: ' + email + ' }; },' +
+      ' list: async function () { return Object.values(window.__rows).filter(function (r) { return r.owner === ' + uid + '; }).map(function (r) { return { id: r.id, title: r.title, updated_at: r.updated_at, deleted: r.deleted }; }); },' +
+      ' get: async function (ids) { return ids.map(function (id) { return window.__rows[id]; }).filter(Boolean).map(function (r) { return { id: r.id, title: r.title, data: r.data ? sortKeys(JSON.parse(JSON.stringify(r.data))) : null, updated_at: r.updated_at, deleted: r.deleted }; }); },' +
+      ' upsert: async function (rs) { rs.forEach(function (r) { window.__rows[r.id] = Object.assign({}, window.__rows[r.id], r); }); },' +
+      ' remove: async function (rs) { rs.forEach(function (r) { window.__rows[r.id] = Object.assign({}, window.__rows[r.id], r); }); },' +
+      ' community: async function () { return Object.values(window.__rows).filter(function (r) { return !r.deleted && r.data && r.data.published; }).map(function (r) { return { id: r.id, owner: r.owner, title: r.title, data: sortKeys(JSON.parse(JSON.stringify(r.data))), updated_at: r.updated_at }; }); } }; })();';
+  };
+  const ctxComA = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxComA.addInitScript(tourSeen);
+  await ctxComA.addInitScript(fakeCloud2('prof-a', {}));
+  const pComA = await ctxComA.newPage();
+  pComA.on('pageerror', function (e) { errors.push('pageerror(C): ' + e.message); });
+  await pComA.goto(BASE + '?mock=1&speed=8');
+  await pComA.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-a'; }, null, { timeout: 5000 });
+  await pComA.click('#btn-demo');
+  await pComA.waitForSelector('#view-editor.active', { timeout: 15000 });
+  await pComA.waitForFunction(function () { return document.querySelectorAll('#e-exercises .ex-card').length > 0; });
+  await pComA.waitForFunction(function () { return Object.keys(window.__rows).length === 1 && window.VLApp.cloud.sync.pending() === 0; }, null, { timeout: 8000 });
+  await pComA.click('#nav button[data-view=home]');
+  await pComA.waitForSelector('#lesson-list .lesson-card');
+  assert.strictEqual(await pComA.$$eval('#lesson-list .lesson-card button', function (bs) { return bs.filter(function (b) { return /🌐 Pubblica$/.test(b.textContent); }).length; }), 1, 'con account attivo compare il bottone "Pubblica" (non pubblicata)');
+  const titleC = await pComA.$eval('#lesson-list .lesson-card .title', function (t) { return t.textContent; });
+  await pComA.click('#lesson-list .lesson-card button:has-text("Pubblica")');
+  await pComA.waitForFunction(function () { return Object.values(window.__rows)[0].data.published === true && window.VLApp.cloud.sync.pending() === 0; }, null, { timeout: 8000 });
+  assert.ok(/Pubblicata ✓/.test(await pComA.$eval('#lesson-list .lesson-card', function (c) { return c.textContent; })), 'la card mostra lo stato pubblicato dopo il click');
+  const rowsC = await pComA.evaluate(function () { return window.__rows; });
+
+  const ctxComB = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxComB.addInitScript(tourSeen);
+  await ctxComB.addInitScript(fakeCloud2('prof-b', rowsC));
+  const pComB = await ctxComB.newPage();
+  pComB.on('pageerror', function (e) { errors.push('pageerror(D): ' + e.message); });
+  await pComB.goto(BASE + '?mock=1&speed=8');
+  await pComB.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-b'; }, null, { timeout: 5000 });
+  await pComB.click('#nav button[data-view=community]');
+  await pComB.waitForSelector('#view-community.active');
+  await pComB.waitForFunction(function () { return document.querySelectorAll('#community-list .lesson-card').length === 1; }, null, { timeout: 8000 });
+  assert.strictEqual(await pComB.$eval('#community-list .lesson-card .title', function (t) { return t.textContent; }), titleC, 'la Community mostra la lezione pubblicata da prof-a, non ancora nella libreria di prof-b');
+  await pComB.click('#community-list .lesson-card button:has-text("Copia")');
+  await pComB.waitForFunction(function () { return Object.keys(window.VLApp.S.lessons).length === 1; }, null, { timeout: 5000 });
+  await pComB.click('#nav button[data-view=home]');
+  await pComB.waitForSelector('#lesson-list .lesson-card');
+  assert.strictEqual(await pComB.$eval('#lesson-list .lesson-card .title', function (t) { return t.textContent; }), titleC, 'copiata nella libreria di prof-b con lo stesso titolo');
+  assert.ok(!/Pubblicata ✓/.test(await pComB.$eval('#lesson-list .lesson-card', function (c) { return c.textContent; })), 'la copia parte NON pubblicata: non eredita lo stato dell\'originale');
+  const idA = await pComA.evaluate(function () { return Object.keys(window.VLApp.S.lessons)[0]; });
+  const idB = await pComB.evaluate(function () { return Object.keys(window.VLApp.S.lessons)[0]; });
+  assert.notStrictEqual(idB, idA, 'id nuovo per la copia, non condiviso con l\'originale');
+  await ctxComA.close(); await ctxComB.close();
 
   console.log('9. attività: Quiz standalone con tema Natale e Memory dentro la lezione');
   await page.goto(BASE + '?mock=1&speed=8');
