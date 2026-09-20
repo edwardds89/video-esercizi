@@ -1581,7 +1581,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   $('#solutions-print').addEventListener('click', function () { printSolutions(current()); });
   $('#solutions-close').addEventListener('click', function () { $('#dlg-solutions').close(); });
-  $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato nel portfolio'); renderHome(); });
+  $('#btn-save').addEventListener('click', function () { const ls = current(); if (!ls) return; ls.title = $('#e-title').value.trim() || ls.title; ls.updatedAt = new Date().toISOString(); saveLessons(); toast('Salvato tra le tue lezioni'); renderHome(); });
   $('#btn-export').addEventListener('click', function () { const ls = current(); download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); });
   $('#btn-delete').addEventListener('click', function () { const ls = current(); if (ls && confirm('Eliminare "' + ls.title + '"?')) deleteLesson(ls); });
   $('#btn-add-ex').addEventListener('click', function () {

@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-103">
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-104">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260919-103">
+<link rel="stylesheet" href="styles.css?v=20260919-104">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="brand-play" src="m-play.svg?v=20260919-103" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-103" alt="PauseLearn" width="178" height="22"></div>
+  <div class="brand"><img class="brand-play" src="m-play.svg?v=20260919-104" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-104" alt="PauseLearn" width="178" height="22"></div>
   <nav id="nav">
-    <button data-view="home">Portfolio</button>
+    <button data-view="home">Le tue lezioni</button>
     <button data-view="new" class="primary">Nuova lezione</button>
     <button id="btn-settings">Impostazioni AI</button>
     <button id="btn-tour" class="qmark" title="Come funziona: la guida in mezzo minuto">?</button>
@@ -54,7 +54,7 @@
     </div>
     <div class="card">
       <div class="row port-head">
-        <h2 style="margin:0">Il tuo portfolio</h2>
+        <h2 style="margin:0">Le tue lezioni</h2>
         <div id="home-filter" class="fchips"></div>
         <input id="home-search" type="search" placeholder="🔍 Cerca per titolo…" autocomplete="off">
       </div>
@@ -65,7 +65,7 @@
         <input id="import-file" type="file" accept="application/json,.json" class="sr">
         <button id="btn-demo">Crea lezione demo (player finto)</button>
       </div>
-      <p class="hint">Aprendo una lezione dal portfolio vedi la versione pronta per la classe; "Modifica" apre l'editor. Per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
+      <p class="hint">Aprendo una lezione da qui vedi la versione pronta per la classe; "Modifica" apre l'editor. Per condividerle o metterle nel repo usa "Esporta" / "Link studente".</p>
     </div>
     <div class="card" id="bookmarklet-card">
       <h2>Pulsante per il browser: dal video alla bozza senza copia-incolla</h2>
@@ -170,7 +170,7 @@
     <div class="row editor-bar">
       <input id="e-title" type="text" class="grow" style="font-size:18px;font-weight:600">
       <span class="undo-pair"><button id="btn-undo" disabled>↶ Annulla</button><button id="btn-redo" disabled aria-label="Ripeti">↷</button></span>
-      <button id="btn-save" class="primary" title="Salva tutto e torna al portfolio">💾 Salva e torna al portfolio</button>
+      <button id="btn-save" class="primary" title="Salva tutto e torna alle lezioni">💾 Salva e torna alle lezioni</button>
       <button id="btn-student">▶ Anteprima studente</button>
       <button id="btn-solutions" title="Tutti gli esercizi con le risposte, in lista">✓ Soluzioni</button>
       <button id="btn-share">Link studente</button>
@@ -229,7 +229,7 @@
             <label class="hint" for="e-audience" style="margin-left:10px">Pensata per studenti che parlano:</label>
             <select id="e-audience"></select>
           </div>
-          <p class="hint">Si vedono nel portfolio e viaggiano con la lezione: servono a capire al volo a chi è adatta (es. intermedio, per chi parla inglese).</p>
+          <p class="hint">Si vedono tra le tue lezioni e viaggiano con la lezione: servono a capire al volo a chi è adatta (es. intermedio, per chi parla inglese).</p>
         </div>
       </div>
       <div class="editor-right">
@@ -302,7 +302,7 @@
       <span id="a-emoji" style="font-size:28px"></span>
       <input id="a-title" type="text" class="grow" style="font-size:18px;font-weight:600" placeholder="Titolo dell'attività">
       <span class="undo-pair"><button id="a-undo" disabled>↶ Annulla</button><button id="a-redo" disabled aria-label="Ripeti">↷</button></span>
-      <button id="a-save" class="primary" title="Salva e torna al portfolio">💾 Salva e torna al portfolio</button>
+      <button id="a-save" class="primary" title="Salva e torna alle lezioni">💾 Salva e torna alle lezioni</button>
       <button id="a-try">▶ Prova</button>
       <button id="a-share">Link studente</button>
       <button id="a-export">Esporta JSON</button>
@@ -323,7 +323,7 @@
       <span style="font-size:28px">💬</span>
       <input id="c-title" type="text" class="grow" style="font-size:18px;font-weight:600" placeholder="Titolo dell'unità">
       <span class="undo-pair"><button id="c-undo" disabled>↶ Annulla</button><button id="c-redo" disabled aria-label="Ripeti">↷</button></span>
-      <button id="c-save" class="primary" title="Salva e torna al portfolio">💾 Salva e torna al portfolio</button>
+      <button id="c-save" class="primary" title="Salva e torna alle lezioni">💾 Salva e torna alle lezioni</button>
       <button id="c-print">🖨 Foglio A4</button>
       <button id="c-delete" class="danger">Elimina</button>
     </div>
@@ -396,7 +396,7 @@
   <!-- SFIDA IN CLASSE: editor del set di esercizi -->
   <section id="view-chalset" class="view">
     <div class="row" style="margin-bottom:10px">
-      <button data-view="home">◀ Portfolio</button>
+      <button data-view="home">◀ Le tue lezioni</button>
       <input id="cs-title" type="text" class="grow" placeholder="Titolo del set (es. Ripasso unità 3)" style="font-size:18px;font-weight:700">
       <button id="cs-play" class="primary">▶ Lancia la sfida</button>
       <button id="cs-delete" class="danger">Elimina</button>
@@ -788,17 +788,17 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260919-103"></script>
-<script src="exercises.js?v=20260919-103"></script>
-<script src="generator.js?v=20260919-103"></script>
-<script src="activities.js?v=20260919-103"></script>
-<script src="ai.js?v=20260919-103"></script>
-<script src="demo-data.js?v=20260919-103"></script>
-<script src="bookmarklet.js?v=20260919-103"></script>
-<script src="sync.js?v=20260919-103"></script>
-<script src="qr.js?v=20260919-103"></script>
-<script src="challenge.js?v=20260919-103"></script>
-<script src="app.js?v=20260919-103"></script>
+<script src="lang.js?v=20260919-104"></script>
+<script src="exercises.js?v=20260919-104"></script>
+<script src="generator.js?v=20260919-104"></script>
+<script src="activities.js?v=20260919-104"></script>
+<script src="ai.js?v=20260919-104"></script>
+<script src="demo-data.js?v=20260919-104"></script>
+<script src="bookmarklet.js?v=20260919-104"></script>
+<script src="sync.js?v=20260919-104"></script>
+<script src="qr.js?v=20260919-104"></script>
+<script src="challenge.js?v=20260919-104"></script>
+<script src="app.js?v=20260919-104"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 
