@@ -277,8 +277,14 @@ button.play { padding: 4px 12px; color: var(--accent); font-weight: 700; }
 .branddot { color: var(--marker); }
 .home-hero { margin-bottom: 18px; }
 .home-hero h1 { margin: 2px 0 4px; }
-.hero-sub { margin: 0 0 14px; color: var(--muted); font-size: 15px; }
-.services { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; }
+.hero-sub { margin: 0; color: var(--muted); font-size: 15px; }
+.hero-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.svc-toggle-btn { white-space: nowrap; font-weight: 700; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; font-size: 14px; cursor: pointer; color: var(--accent); }
+.svc-toggle-btn:hover, .svc-toggle-btn[aria-expanded="true"] { border-color: var(--accent); background: #eef4ff; }
+/* v109 (Edoardo: "voglio che si vedano già le lezioni"): i 4 servizi partono chiusi in un pannello a tendina
+   sotto il titolo, aperto solo premendo "+ Nuovo…" — così sotto l'intestazione compare subito "Le tue lezioni". */
+.services { display: none; grid-template-columns: repeat(4, 1fr); gap: 13px; margin-top: 14px; }
+.services.open { display: grid; }
 .svc { background: #fff; border: 1px solid var(--line); border-radius: 15px; padding: 15px 14px; cursor: pointer; position: relative;
   display: flex; flex-direction: column; gap: 7px; transition: border-color .15s, box-shadow .15s, transform .15s; min-width: 0; }
 .svc:hover, .svc:focus-visible { border-color: var(--accent); box-shadow: 0 6px 22px rgba(31,111,235,.13); transform: translateY(-2px); outline: none; }

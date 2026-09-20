@@ -910,6 +910,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     nav.addEventListener('click', function (e) { if (e.target.closest('button')) setOpen(false); });
   })();
 
+  // v109 (Edoardo: "comprimi 'lezione da video/giochi/conversazione/sfida' in un menù a tendina a fianco al
+  // titolo, così di default si vedono già le lezioni"): il pannello con i 4 servizi parte chiuso, si apre col
+  // pulsante "+ Nuovo…" e si richiude da solo appena si sceglie una voce (naviga o apre un dialogo) o si clicca
+  // fuori — stesso schema del menu ☰ qui sopra.
+  (function () {
+    const toggle = $('#svc-toggle'), panel = $('#services');
+    if (!toggle || !panel) return;
+    function setOpen(open) { panel.classList.toggle('open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    toggle.addEventListener('click', function (e) { e.stopPropagation(); setOpen(!panel.classList.contains('open')); });
+    panel.addEventListener('click', function () { setOpen(false); });
+    document.addEventListener('click', function (e) { if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== toggle) setOpen(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel.classList.contains('open')) setOpen(false); });
+  })();
+
   // ---------- HOME ----------
   function bookmarkletUrl() {
     if (!window.VL_BOOKMARKLET) return '';
@@ -949,6 +963,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   function renderHome() {
     show('home');
+    const svcPanel = $('#services'), svcToggle = $('#svc-toggle');   // v109: si richiude tornando/restando in home
+    if (svcPanel) svcPanel.classList.remove('open');
+    if (svcToggle) svcToggle.setAttribute('aria-expanded', 'false');
     renderBookmarklet();
     renderStorageBanner();   // v102: il numero di lezioni cambia (importa, elimina), e con zero lezioni la riga sparisce
     const list = $('#lesson-list');
@@ -1085,11 +1102,24 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     list.innerHTML = '';
     const rows = COMM.rows || [];
     const mine = CLOUD.user && CLOUD.user.id;
-    const others = rows.filter(function (r) { return r.owner !== mine; });
+    // v109 (Edoardo: "voglio che ci fossero le lezioni in ordine di data, prima la più recente"): niente ordine dal
+    // server, quindi lo si applica qui una volta sola, PRIMA del filtro di ricerca (così l'ordine resta stabile
+    // mentre si digita).
+    const others = rows.filter(function (r) { return r.owner !== mine; })
+      .sort(function (a, b) { return (b.updated_at || '').localeCompare(a.updated_at || ''); });
     if (!rows.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione pubblicata ancora: quando un insegnante pubblica una lezione, comparirà qui.' })); return; }
     const q = L.normalize(($('#comm-search') && $('#comm-search').value) || '');
     const items = others.filter(function (r) { return !q || L.normalize((r.title || '')).indexOf(q) !== -1; });
-    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Niente che corrisponda alla ricerca (o le pubblicate sono solo tue).' })); return; }
+    if (!items.length) {
+      // v109 (Edoardo: "ho cercato vaccino/vaccini e non appare nulla ma c'è un video sui vaccini" — l'unica
+      // pubblicata era la SUA, ed è per design esclusa dalla propria vista Community, vedi riga "others" sopra;
+      // prima i due casi condividevano un unico messaggio ambiguo, ora sono separati per non sembrare un bug di ricerca).
+      const msg = !others.length
+        ? 'Le lezioni pubblicate finora sono solo le tue: qui in Community vedi quelle degli ALTRI insegnanti (le tue sono già in "Le tue lezioni"). Appena un collega pubblica qualcosa comparirà qui.'
+        : 'Nessuna lezione pubblicata corrisponde alla ricerca.';
+      list.appendChild(el('p', { class: 'muted', text: msg }));
+      return;
+    }
     const KIND_LABEL = { video: '🎬 Lezione', act: '🎲 Attività', conv: '💬 Conversazione', chal: '📱 Sfida' };
     items.forEach(function (r) {
       const ls = r.data || {};

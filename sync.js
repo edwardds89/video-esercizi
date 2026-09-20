@@ -194,7 +194,8 @@
       // v105 (community): legge le righe di TUTTI, non solo le proprie. Funziona perché una regola in più nel database
       // (accanto a "owner = auth.uid()", che resta l'unica per scrivere) lascia leggere agli utenti con un account anche
       // le righe altrui con data->>published = 'true' — chi non ha fatto l'accesso non vede niente di questo.
-      community: async function () { return chk(await client.from(table).select('id,owner,title,data,updated_at').filter('data->>published', 'eq', 'true')) || []; }
+      // v109: più recenti prima anche lato server (app.js la riordina comunque, ma così l'ordine è corretto già dalla prima risposta)
+      community: async function () { return chk(await client.from(table).select('id,owner,title,data,updated_at').filter('data->>published', 'eq', 'true').order('updated_at', { ascending: false })) || []; }
     };
   }
 
