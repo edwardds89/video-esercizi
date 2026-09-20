@@ -2817,6 +2817,33 @@ async function noOverflow(page, where) {
   assert.ok(/solo le tue/.test(msgOwn) && !/Niente che corrisponda/.test(msgOwn), 'messaggio dedicato quando le pubblicate sono solo tue: ' + msgOwn);
   await ctxOwn.close();
 
+  console.log('34. fascia "non ancora pubblicata" (v110): non bloccante, sparisce pubblicando o scegliendo "Non proporla più"');
+  const ctxNudge = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxNudge.addInitScript(tourSeen);
+  await ctxNudge.addInitScript(fakeCloud2('prof-nudge', {}));
+  const pnu = await ctxNudge.newPage();
+  pnu.on('pageerror', function (e) { errors.push('pageerror(NUDGE): ' + e.message); });
+  await pnu.goto(BASE + '?mock=1&speed=8');
+  await pnu.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-nudge'; }, null, { timeout: 5000 });
+  await pnu.click('#btn-demo');
+  await pnu.waitForSelector('#view-editor.active', { timeout: 15000 });
+  await pnu.click('button[data-view=home]');
+  await pnu.waitForSelector('#view-home.active');
+  await pnu.waitForFunction(function () { return document.querySelectorAll('#lesson-list .lesson-card').length === 1; }, null, { timeout: 8000 });
+  assert.ok(await pnu.$eval('.pub-nudge', function (n) { return /Non ancora pubblicata/.test(n.textContent); }), 'lezione appena creata, mai pubblicata: la fascia compare');
+  assert.strictEqual((await pnu.$$('dialog[open]')).length, 0, 'niente pop-up modale: si può continuare a lavorare senza chiudere nulla');
+  // "Non proporla più": la fascia sparisce e NON torna al giro successivo di renderHome
+  await pnu.click('.pub-nudge button:has-text("Non proporla più")');
+  await pnu.waitForFunction(function () { return document.querySelector('.pub-nudge') === null; }, null, { timeout: 5000 });
+  await pnu.click('#nav button[data-view=community]');
+  await pnu.click('button[data-view=home]');
+  assert.strictEqual((await pnu.$$('.pub-nudge')).length, 0, '"Non proporla più" resta valido: la fascia non ricompare da sola');
+  // il pulsante "Pubblica" nella riga delle azioni resta comunque disponibile dopo il dismiss
+  await pnu.click('#lesson-list .lesson-card button:has-text("🌐 Pubblica")');
+  await pnu.waitForFunction(function () { return /Pubblicata ✓/.test(document.querySelector('#lesson-list .lesson-card').textContent); }, null, { timeout: 5000 });
+  assert.strictEqual((await pnu.$$('.pub-nudge')).length, 0, 'pubblicata: la fascia non c\'è più');
+  await ctxNudge.close();
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
