@@ -446,6 +446,9 @@
           const before = CLOUD.user && CLOUD.user.id;
           CLOUD.user = session ? session.user : null;
           renderAccount();
+          // v105: il pulsante "Pubblica" dipende da CLOUD.user (senza account non c'e' dove pubblicare) — se la home e' gia'
+          // disegnata quando l'accesso cambia, va ridisegnata anche lei, non solo il pallino dell'account.
+          if (S.view === 'home' && CLOUD.user && CLOUD.user.id !== before) renderHome();
           if (ev === 'SIGNED_IN' && CLOUD.user && CLOUD.user.id !== before) { CLOUD.announce = true; runSync(); }
         });
       }
@@ -453,6 +456,9 @@
       CLOUD.sync = window.VLSync.createSync({ adapter: adapter, getLocal: function () { return S.lessons; }, apply: applyCloud, save: saveLessons, loadState: loadSyncState, saveState: saveSyncState, onStatus: function () { renderAccount(); } });
       CLOUD.user = await adapter.user();
       renderAccount();
+      // v105: la sessione si puo' ripristinare DOPO il primo renderHome() (fatto all'avvio, prima che initCloud finisca):
+      // senza questo, il pulsante "Pubblica" resta assente finche' qualcos'altro non ridisegna la home (es. un cambio di vista).
+      if (CLOUD.user && S.view === 'home') renderHome();
       if (CLOUD.user) { CLOUD.announce = !CLOUD.sync.state.lastSync; runSync(); }
       return CLOUD.sync;
     })().catch(function (e) { toast(e.message); CLOUD.ready = null; return null; });
