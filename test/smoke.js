@@ -88,6 +88,7 @@ async function noOverflow(page, where) {
   assert.ok(/warn/.test(avviso.classe), 'senza accesso e\' un avviso, non una conferma: ' + avviso.classe);
   assert.ok(/solo su questo computer/i.test(avviso.testo) && /pulisci la cronologia/i.test(avviso.testo), 'dice dove stanno e cosa le cancella: ' + avviso.testo);
   assert.ok(avviso.haAccedi, 'e offre l\'accesso li\' dove lo dice');
+  await page.click('#svc-toggle');   // v109: i 4 servizi sono in un pannello a tendina, va aperto prima di cliccarci dentro
   await page.click('#svc-qr');
   await page.waitForSelector('#dlg-chal-new[open]');
   assert.ok((await page.$eval('#ch-empty', function (e) { return getComputedStyle(e).display; })) !== 'none', 'senza quiz il dialog spiega di crearne uno');
@@ -1094,6 +1095,7 @@ async function noOverflow(page, where) {
   await page.goto(BASE + '?mock=1&speed=8');
   await page.waitForSelector('#view-home.active');
   // 9a. quiz standalone: crea, compila due domande, tema, prova, gioca dalla card
+  await page.click('#svc-toggle');   // v109: pannello a tendina
   await page.click('#btn-new-act');
   await page.waitForSelector('#dlg-act-new[open]');
   await page.click('#an-types button:has-text("Quiz gioco")');
@@ -2292,6 +2294,7 @@ async function noOverflow(page, where) {
   await hostP.waitForSelector('#view-editor.active', { timeout: 15000 });
   await hostP.evaluate(function () { window.VLApp.renderHome(); });
   // card senza set: il dialog invita a crearne uno; da li' si apre l'editor
+  await hostP.click('#svc-toggle');   // v109: pannello a tendina
   await hostP.click('#svc-qr');
   await hostP.waitForSelector('#dlg-chal-new[open]');
   await hostP.click('#ch-new-set');
@@ -2347,6 +2350,7 @@ async function noOverflow(page, where) {
   });
   // lancio: modalita' guidata (default), punti secchi, nessun timer (chiusura quando tutti rispondono)
   await hostP.evaluate(function () { window.VLApp.renderHome(); });
+  await hostP.click('#svc-toggle');   // v109: pannello a tendina
   await hostP.click('#svc-qr');
   await hostP.waitForSelector('#dlg-chal-new[open]');
   assert.ok((await hostP.$eval('#ch-set', function (s) { return s.textContent; })).indexOf('Ripasso di prova') !== -1, 'il set compare nella scelta');
@@ -2755,6 +2759,63 @@ async function noOverflow(page, where) {
   assert.ok(thumbs.some(function (t) { return /dQw4w9WgXcQ/.test(t.bg); }), 'la lezione da video mostra la vera miniatura YouTube in Community');
   assert.ok(thumbs.some(function (t) { return t.cls.indexOf('act-thumb') >= 0; }), 'un\'attività senza video resta con l\'iconcina, non una miniatura inventata');
   await ctxThumb.close();
+
+  console.log('31. home v109: i 4 servizi partono chiusi in un pannello a tendina, "Le tue lezioni" si vede subito, e il logo riporta alla home');
+  const ctxSvc = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxSvc.addInitScript(tourSeen);
+  const psv = await ctxSvc.newPage();
+  psv.on('pageerror', function (e) { errors.push('pageerror(SVC): ' + e.message); });
+  await psv.goto(BASE + '?mock=1&speed=8');
+  await psv.waitForSelector('#view-home.active');
+  assert.ok(await psv.$eval('#services', function (s) { return !s.classList.contains('open') && getComputedStyle(s).display === 'none'; }), 'i 4 servizi sono chiusi di default');
+  assert.ok(await psv.$eval('#lesson-list', function (l) { return l.offsetParent !== null; }), '"Le tue lezioni" si vede subito, senza dover aprire il pannello');
+  await psv.click('#svc-toggle');
+  assert.ok(await psv.$eval('#services', function (s) { return s.classList.contains('open') && getComputedStyle(s).display !== 'none'; }), 'il click su "+ Nuovo…" apre il pannello');
+  assert.strictEqual(await psv.$eval('#svc-toggle', function (b) { return b.getAttribute('aria-expanded'); }), 'true', 'aria-expanded segue lo stato aperto');
+  await psv.click('.home-hero h1');
+  assert.ok(await psv.$eval('#services', function (s) { return !s.classList.contains('open'); }), 'un clic fuori dal pannello lo richiude');
+  await psv.click('#svc-toggle');
+  await psv.click('.svc-video');
+  await psv.waitForSelector('#view-new.active');
+  await psv.click('.brand');
+  await psv.waitForSelector('#view-home.active');
+  assert.ok(await psv.$eval('#services', function (s) { return !s.classList.contains('open'); }), 'il logo riporta alla home (anche col pannello ritrovato chiuso)');
+  await ctxSvc.close();
+
+  console.log('32. Community v109: ordinata per data, la più recente prima');
+  const ctxOrd = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxOrd.addInitScript(tourSeen);
+  await ctxOrd.addInitScript(fakeCloud2('prof-view2', {
+    vecchia: { id: 'vecchia', owner: 'prof-autore', title: 'Lezione vecchia', data: { id: 'vecchia', title: 'Lezione vecchia', published: true, exercises: [] }, updated_at: '2026-01-01T10:00:00.000Z', deleted: false },
+    nuova: { id: 'nuova', owner: 'prof-autore', title: 'Lezione nuova', data: { id: 'nuova', title: 'Lezione nuova', published: true, exercises: [] }, updated_at: '2026-06-01T10:00:00.000Z', deleted: false }
+  }));
+  const pord = await ctxOrd.newPage();
+  pord.on('pageerror', function (e) { errors.push('pageerror(ORD): ' + e.message); });
+  await pord.goto(BASE + '?mock=1&speed=8');
+  await pord.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-view2'; }, null, { timeout: 5000 });
+  await pord.click('#nav button[data-view=community]');
+  await pord.waitForSelector('#view-community.active');
+  await pord.waitForFunction(function () { return document.querySelectorAll('#community-list .lesson-card').length === 2; }, null, { timeout: 8000 });
+  const titlesOrd = await pord.$$eval('#community-list .lesson-card .title', function (ts) { return ts.map(function (t) { return t.textContent; }); });
+  assert.deepStrictEqual(titlesOrd, ['Lezione nuova', 'Lezione vecchia'], 'Community ordinata dalla più recente: ' + titlesOrd.join(' | '));
+  await ctxOrd.close();
+
+  console.log('33. Community v109: messaggio dedicato quando le uniche pubblicate sono le proprie (prima si confondeva con "niente ricerca")');
+  const ctxOwn = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxOwn.addInitScript(tourSeen);
+  await ctxOwn.addInitScript(fakeCloud2('prof-solo', {
+    mia: { id: 'mia', owner: 'prof-solo', title: 'Lezione mia', data: { id: 'mia', title: 'Lezione mia', published: true, exercises: [] }, updated_at: new Date().toISOString(), deleted: false }
+  }));
+  const pown = await ctxOwn.newPage();
+  pown.on('pageerror', function (e) { errors.push('pageerror(OWN): ' + e.message); });
+  await pown.goto(BASE + '?mock=1&speed=8');
+  await pown.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.id === 'prof-solo'; }, null, { timeout: 5000 });
+  await pown.click('#nav button[data-view=community]');
+  await pown.waitForSelector('#view-community.active');
+  await pown.waitForFunction(function () { return /solo le tue/.test(document.getElementById('community-list').textContent); }, null, { timeout: 8000 });
+  const msgOwn = await pown.$eval('#community-list', function (l) { return l.textContent; });
+  assert.ok(/solo le tue/.test(msgOwn) && !/Niente che corrisponda/.test(msgOwn), 'messaggio dedicato quando le pubblicate sono solo tue: ' + msgOwn);
+  await ctxOwn.close();
 
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
