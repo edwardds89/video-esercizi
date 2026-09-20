@@ -957,17 +957,28 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /* v110 (Edoardo: "il fine per me è la pubblicazione... mi serve un promemoria, se non pubblicano rimane lì"): fascia
      NON bloccante sulla card di ogni lezione non pubblicata (niente pop-up: un'interruzione ripetuta a ogni apertura
      punirebbe anche chi ha deciso apposta di non pubblicare, e spingerebbe a pubblicare contenuto acerbo solo per
-     zittirla — vedi la discussione in chat). Resta finché non si pubblica O si sceglie esplicitamente "Non proporla più"
-     (ls.publishSkip, opt-out per singola lezione: il pulsante "Pubblica" nella riga delle azioni resta comunque sempre
-     lì, quindi pubblicare più avanti è sempre possibile). */
+     zittirla — vedi la discussione in chat).
+     v112 (Edoardo: "'non proporla più' sostituiscilo con 'ricordamelo più tardi'"): NON è stato un cambio di sola
+     etichetta. Il pulsante della v110 (ls.publishSkip) era un opt-out PERMANENTE: una volta chiuso, quella lezione
+     non riceveva più la fascia, punto, e non esisteva alcun modo di riaccenderla dall'interfaccia. "Ricordamelo più
+     tardi" promette il contrario: un ritorno futuro. Tenere la logica vecchia sotto l'etichetta nuova avrebbe reso il
+     pulsante bugiardo (l'insegnante lo legge come "fra un po' me lo richiede", ma non sarebbe successo mai più).
+     Sostituito con uno SNOOZE vero: ls.publishSnoozeUntil (timestamp ISO), 3 giorni da quando si preme il pulsante —
+     scelto come compromesso fra "quasi subito" (rischia di essere identico al pop-up ripetuto appena scartato) e
+     "praticamente per sempre" (il difetto della v110); se in futuro 3 giorni si rivelano troppi o troppo pochi, il
+     numero è isolato in SNOOZE_DAYS, non sparso nel codice. Il pulsante "Pubblica" nella riga delle azioni resta
+     comunque sempre lì: pubblicare prima dei 3 giorni è sempre possibile, lo snooze riguarda solo il promemoria. */
+  var PUBLISH_SNOOZE_DAYS = 3;
   function publishNudge(ls) {
     if (!cloudConfigured() || !CLOUD.user) return null;
-    if (ls.published || ls.publishSkip) return null;
+    if (ls.published) return null;
+    if (ls.publishSnoozeUntil && new Date(ls.publishSnoozeUntil).getTime() > Date.now()) return null;
     return el('div', { class: 'pub-nudge' },
       el('span', { text: '🌐 Non ancora pubblicata: pubblicandola contribuisci alla Community, e trovi più facilmente quella degli altri.' }),
       el('button', { class: 'small primary', text: 'Pubblica ora', onclick: function () { togglePublish(ls); } }),
-      el('button', { class: 'link', text: 'Non proporla più', onclick: function () {
-        ls.publishSkip = true; ls.updatedAt = new Date().toISOString(); saveLessons(); renderHome();
+      el('button', { class: 'link', text: 'Ricordamelo più tardi', onclick: function () {
+        ls.publishSnoozeUntil = new Date(Date.now() + PUBLISH_SNOOZE_DAYS * 86400000).toISOString();
+        ls.updatedAt = new Date().toISOString(); saveLessons(); renderHome();
       } }));
   }
   /** Tipo di una voce del portfolio: lezione video, attività standalone o conversazione. */
@@ -1163,7 +1174,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const ls = JSON.parse(JSON.stringify(row.data || {}));
     ls.id = uid();
     delete ls.published;
-    delete ls.publishSkip;   // v110: se l'originale aveva chiuso il promemoria, la copia (nuova, mai pubblicata) lo riceve di nuovo
+    delete ls.publishSnoozeUntil;   // v110/v112: se l'originale aveva rimandato il promemoria, la copia (nuova, mai pubblicata) lo riceve subito
     ls.updatedAt = new Date().toISOString();
     S.lessons[ls.id] = ls;
     saveLessons();
