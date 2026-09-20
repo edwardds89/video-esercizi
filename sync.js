@@ -190,7 +190,11 @@
         return out;
       },
       upsert: async function (rows) { for (let i = 0; i < rows.length; i += 10) chk(await client.from(table).upsert(rows.slice(i, i + 10), { onConflict: 'owner,id' })); },
-      remove: async function (rows) { chk(await client.from(table).upsert(rows, { onConflict: 'owner,id' })); }
+      remove: async function (rows) { chk(await client.from(table).upsert(rows, { onConflict: 'owner,id' })); },
+      // v105 (community): legge le righe di TUTTI, non solo le proprie. Funziona perché una regola in più nel database
+      // (accanto a "owner = auth.uid()", che resta l'unica per scrivere) lascia leggere agli utenti con un account anche
+      // le righe altrui con data->>published = 'true' — chi non ha fatto l'accesso non vede niente di questo.
+      community: async function () { return chk(await client.from(table).select('id,owner,title,data,updated_at').filter('data->>published', 'eq', 'true')) || []; }
     };
   }
 
@@ -214,7 +218,15 @@
           list: async function () { maybeFail('list'); return Object.values(rows).filter(function (r) { return r.owner === userId; }).map(function (r) { return { id: r.id, title: r.title, updated_at: r.updated_at, deleted: r.deleted }; }); },
           get: async function (ids) { maybeFail('get'); return ids.map(function (id) { return rows[userId + ':' + id]; }).filter(Boolean).map(function (r) { return { id: r.id, title: r.title, data: r.data ? sortKeys(JSON.parse(JSON.stringify(r.data))) : null, updated_at: r.updated_at, deleted: r.deleted }; }); },
           upsert: async function (rs) { maybeFail('upsert'); rs.forEach(function (r) { if (r.owner !== userId) throw new Error('RLS: owner diverso'); rows[r.owner + ':' + r.id] = Object.assign({}, rows[r.owner + ':' + r.id], r, { data: r.data ? JSON.parse(JSON.stringify(r.data)) : null }); }); },
-          remove: async function (rs) { maybeFail('remove'); rs.forEach(function (r) { if (r.owner !== userId) throw new Error('RLS: owner diverso'); rows[r.owner + ':' + r.id] = Object.assign({}, rows[r.owner + ':' + r.id], r); }); }
+          remove: async function (rs) { maybeFail('remove'); rs.forEach(function (r) { if (r.owner !== userId) throw new Error('RLS: owner diverso'); rows[r.owner + ':' + r.id] = Object.assign({}, rows[r.owner + ':' + r.id], r); }); },
+          // v105: stessa regola del vero adattatore Supabase, per poterla testare senza rete — legge le righe di TUTTI gli
+          // utenti con data.published true, non solo le proprie (senza account, userId è null: niente community per lui).
+          community: async function () {
+            maybeFail('community');
+            if (!userId) return [];
+            return Object.values(rows).filter(function (r) { return !r.deleted && r.data && r.data.published; })
+              .map(function (r) { return { id: r.id, owner: r.owner, title: r.title, data: sortKeys(JSON.parse(JSON.stringify(r.data))), updated_at: r.updated_at }; });
+          }
         };
       }
     };

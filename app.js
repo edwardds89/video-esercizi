@@ -449,6 +449,7 @@
           if (ev === 'SIGNED_IN' && CLOUD.user && CLOUD.user.id !== before) { CLOUD.announce = true; runSync(); }
         });
       }
+      CLOUD.adapter = adapter;   // v105: la community legge le righe pubblicate di TUTTI, il motore di sync (sopra) solo le proprie
       CLOUD.sync = window.VLSync.createSync({ adapter: adapter, getLocal: function () { return S.lessons; }, apply: applyCloud, save: saveLessons, loadState: loadSyncState, saveState: saveSyncState, onStatus: function () { renderAccount(); } });
       CLOUD.user = await adapter.user();
       renderAccount();
@@ -864,6 +865,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const v = b.dataset.view;
     if (v === 'home') renderHome();
     else if (v === 'new') openNew();
+    else if (v === 'community') renderCommunity();
   });
 
   // ---------- HOME ----------
@@ -880,6 +882,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     a.onclick = function (e) { e.preventDefault(); toast('Trascina il pulsante nella barra dei preferiti, poi usalo su YouTube'); };
     $('#bookmarklet-code').textContent = url;
     $('#bookmarklet-copy').onclick = function () { copyText(url); };
+  }
+  /* v105 (community, Edoardo: "voglio che la mia collega trovi le mie lezioni online anche quando si registra"): pubblicare
+     una lezione la rende leggibile a CHIUNQUE abbia un account (non solo alla collega, e non a chi non si è registrato:
+     regola nel database, non un filtro dell'interfaccia), ma resta una scelta per singola voce, spenta di default — niente
+     esce dal proprio account finché non lo si dice esplicitamente. Il campo vive dentro `ls` come level/audience (v79) e
+     viaggia col resto della lezione: niente colonna nuova nel database, solo una nuova regola di lettura su quella già
+     esistente (`data->>published`). */
+  function togglePublish(ls) {
+    ls.published = !ls.published; ls.updatedAt = new Date().toISOString();
+    saveLessons(); renderHome();
+    toast(ls.published ? 'Pubblicata: la vedranno gli insegnanti che hanno un account (Community)' : 'Tolta dalla Community');
+  }
+  function publishBtn(ls) {
+    if (!cloudConfigured() || !CLOUD.user) return null;   // serve un account: senza, non c'è dove pubblicarla né chi la vedrebbe
+    return el('button', { class: 'small' + (ls.published ? ' ok' : ''), text: ls.published ? '🌐 Pubblicata ✓' : '🌐 Pubblica', title: ls.published ? 'Visibile nella Community agli insegnanti registrati: clicca per ritirarla' : 'Rendila visibile nella Community agli insegnanti registrati', onclick: function () { togglePublish(ls); } });
   }
   /** Tipo di una voce del portfolio: lezione video, attività standalone o conversazione. */
   function homeKind(ls) {
@@ -930,6 +947,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               el('button', { class: 'small primary', text: '▶ Gioca', onclick: openA }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openActEditor(ls.id); } }),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'attivita') + '.json', JSON.stringify(actPayload(ls), null, 1)); } }),
+              publishBtn(ls),
               el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'attività senza titolo') + '"?')) deleteLesson(ls); } }))));
         list.appendChild(cardA);
         return;
@@ -947,6 +965,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               el('button', { class: 'small primary', text: '▶ Gioca', onclick: function () { openChalNew(ls.id); } }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: openS }),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'sfida') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, chal: ls.chal }, null, 1)); } }),
+              publishBtn(ls),
               el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'set senza titolo') + '"?')) deleteLesson(ls); } }))));
         list.appendChild(cardS);
         return;
@@ -966,6 +985,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               el('button', { class: 'small primary', text: '\uD83D\uDDA8 Foglio A4', onclick: openC }),
               el('button', { class: 'small', text: '\u270E Modifica', onclick: function () { openConvEditor(ls.id); } }),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'conversazione') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, conv: ls.conv }, null, 1)); } }),
+              publishBtn(ls),
               el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'conversazione senza titolo') + '"?')) deleteLesson(ls); } }))));
         list.appendChild(cardC);
         return;
@@ -983,9 +1003,74 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
             el('button', { class: 'small', text: '🔗 Condividi', title: 'Link studente', onclick: function () { openShare(ls); } }),   // v78
             el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
+            publishBtn(ls),
             el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + ls.title + '"?')) deleteLesson(ls); } }))));
       list.appendChild(card);
     });
+  }
+  // ---------- COMMUNITY (v105) ----------
+  // COMM.rows: null = non ancora caricato, [] = caricato e vuoto. Si ricarica solo entrando nella vista (niente polling).
+  const COMM = { rows: null, loading: false };
+  function renderCommunity() {
+    show('community');
+    const list = $('#community-list');
+    if (!cloudConfigured() || !CLOUD.user) {
+      list.innerHTML = '';
+      list.appendChild(el('p', { class: 'muted', text: 'Per vedere le lezioni pubblicate dagli altri insegnanti serve un account gratuito: accedi dal pulsante in alto.' }));
+      return;
+    }
+    if (COMM.rows === null) { loadCommunity(); return; }
+    renderCommunityList();
+  }
+  function loadCommunity() {
+    if (COMM.loading) return;
+    COMM.loading = true;
+    const list = $('#community-list');
+    list.innerHTML = '';
+    list.appendChild(el('p', { class: 'muted', text: 'Carico…' }));
+    CLOUD.adapter.community().then(function (rows) {
+      COMM.rows = rows || [];
+      COMM.loading = false;
+      renderCommunityList();
+    }).catch(function (err) {
+      COMM.loading = false;
+      list.innerHTML = '';
+      list.appendChild(el('p', { class: 'muted', text: 'Non sono riuscito a caricare la Community: ' + err.message }));
+    });
+  }
+  function renderCommunityList() {
+    const list = $('#community-list');
+    list.innerHTML = '';
+    const rows = COMM.rows || [];
+    const mine = CLOUD.user && CLOUD.user.id;
+    const others = rows.filter(function (r) { return r.owner !== mine; });
+    if (!rows.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione pubblicata ancora: quando un insegnante pubblica una lezione, comparirà qui.' })); return; }
+    const q = L.normalize(($('#comm-search') && $('#comm-search').value) || '');
+    const items = others.filter(function (r) { return !q || L.normalize((r.title || '')).indexOf(q) !== -1; });
+    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Niente che corrisponda alla ricerca (o le pubblicate sono solo tue).' })); return; }
+    const KIND_LABEL = { video: '🎬 Lezione', act: '🎲 Attività', conv: '💬 Conversazione', chal: '📱 Sfida' };
+    items.forEach(function (r) {
+      const ls = r.data || {};
+      const label = KIND_LABEL[homeKind(ls)] || '🎬 Lezione';
+      const card = el('div', { class: 'lesson-card' },
+        el('div', { class: 'thumb act-thumb' }, label.split(' ')[0]),
+        el('div', { class: 'body' },
+          el('div', { class: 'title', text: ls.title || '(senza titolo)' }),
+          el('div', { class: 'meta', text: label + (r.updated_at ? ' · ' + new Date(r.updated_at).toLocaleDateString('it-IT') : '') }),
+          el('div', { class: 'actions' },
+            el('button', { class: 'small primary', text: '+ Copia nelle tue lezioni', onclick: function () { copyFromCommunity(r); } }))));
+      list.appendChild(card);
+    });
+  }
+  /** Copia una lezione pubblicata da un altro insegnante nella propria libreria: nuovo id, non più "pubblicata" (la copia parte privata). */
+  function copyFromCommunity(row) {
+    const ls = JSON.parse(JSON.stringify(row.data || {}));
+    ls.id = uid();
+    delete ls.published;
+    ls.updatedAt = new Date().toISOString();
+    S.lessons[ls.id] = ls;
+    saveLessons();
+    toast('Copiata tra le tue lezioni: "' + (ls.title || 'senza titolo') + '"');
   }
   $('#import-file').addEventListener('change', function (e) {
     const f = e.target.files[0]; if (!f) return;
@@ -1018,6 +1103,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   });
   $('#btn-new-act').addEventListener('click', function () { openActNew(newActivity); });
   $('#home-search').addEventListener('input', function () { S.homeSearch = this.value; renderHome(); });
+  $('#comm-search').addEventListener('input', function () { renderCommunityList(); });
   // (la card #svc-qr e' agganciata nel blocco Sfida in classe, piu' sotto)
   $('#btn-demo').addEventListener('click', function () {
     if (!window.VL_DEMO) return toast('Dati demo non trovati');
