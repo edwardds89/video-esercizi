@@ -2697,6 +2697,23 @@ async function noOverflow(page, where) {
   assert.ok(await po.$eval('#acc-step2', function (d) { return d.style.display === 'none'; }), 'entrati, il campo del codice sparisce');
   await ctxOtp.close();
 
+  console.log('28. menu ☰ sotto i 640px: nav chiusa di default, si apre e si richiude da sola alla scelta');
+  const ctxMob = await browser.newContext({ viewport: { width: 375, height: 800 } });
+  await ctxMob.addInitScript(tourSeen);
+  const pm = await ctxMob.newPage();
+  pm.on('pageerror', function (e) { errors.push('pageerror(mob): ' + e.message); });
+  await pm.goto(BASE + '?mock=1&speed=8');
+  await pm.waitForSelector('#view-home.active');
+  assert.ok(await pm.$eval('#nav-toggle', function (b) { return b.offsetParent !== null; }), 'sotto i 640px il pulsante ☰ e\' visibile');
+  assert.ok(await pm.$eval('#nav', function (n) { return !n.classList.contains('open') && getComputedStyle(n).display === 'none'; }), 'la nav e\' chiusa di default (niente 6 pulsanti sopra il contenuto)');
+  await pm.click('#nav-toggle');
+  assert.ok(await pm.$eval('#nav', function (n) { return n.classList.contains('open') && getComputedStyle(n).display !== 'none'; }), 'il click su ☰ apre il pannello');
+  assert.strictEqual(await pm.$eval('#nav-toggle', function (b) { return b.getAttribute('aria-expanded'); }), 'true', 'aria-expanded segue lo stato aperto');
+  await pm.click('#nav button[data-view=new]');
+  await pm.waitForSelector('#view-new.active');
+  assert.ok(await pm.$eval('#nav', function (n) { return !n.classList.contains('open'); }), 'scegliendo una voce il pannello si richiude da solo');
+  await ctxMob.close();
+
   console.log('errori console/pagina:', errors.length ? errors : 'nessuno');
   assert.strictEqual(errors.filter(function (e) { return !/youtube|iframe_api|net::ERR/i.test(e); }).length, 0, 'nessun errore JS');
   await browser.close();
