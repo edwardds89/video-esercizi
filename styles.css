@@ -44,7 +44,30 @@ code, kbd { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-
 .dot.bad { background: #d64545; }
 @keyframes dotpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 body.standalone .topbar nav { display: none; }
-@media (max-width: 640px) { .topbar { padding: 8px 12px; } .topbar nav button { padding: 6px 9px; font-size: 13px; } main { padding: 12px; } h1 { font-size: 20px; } }
+/* v106 (Edoardo, screenshot da telefono: "la versione mobile con la barra in alto fa davvero pieta', occupa troppo spazio
+   la parte in alto"): coi 6 pulsanti della nav (Le tue lezioni, Community, Nuova lezione, Impostazioni AI, ?, account) il
+   vecchio flex-wrap li spezzava su 3-4 righe SOPRA il contenuto, alte quanto meta' schermo su un telefono. Non bastava
+   stringere i margini (quello che chiedeva Edoardo alla lettera): il problema e' strutturale, sei pulsanti non stanno
+   affiancati sotto i 640px con testo leggibile. Ora sotto i 640px la nav e' un pannello a tendina chiuso di default
+   (#nav senza .open = display:none, non ".hidden": deve restare invisibile anche se qualcosa gli togliesse altre classi),
+   aperto dal pulsante ☰ (.nav-toggle, esiste SOLO nell'HTML sotto i 640px in termini d'uso ma e' sempre nel markup:
+   nascosto qui col display:none e mostrato solo dentro il media query, cosi' su schermi larghi non compare per niente).
+   Il pallino di stato dell'account (v101) resta visibile sul pulsante ☰ stesso (v106b sotto) cosi' lo stato "connesso"
+   si vede anche a menu chiuso. */
+.nav-toggle { display: none; }
+@media (max-width: 640px) {
+  .topbar { padding: 8px 12px; }
+  .topbar nav button { padding: 9px 12px; font-size: 14px; }
+  main { padding: 12px; }
+  h1 { font-size: 20px; }
+  .nav-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 5px; width: auto; min-width: 42px; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
+  .nav-toggle .dot { margin-left: 1px; }
+  .topbar nav { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; padding: 10px 12px 14px; background: #fff; border-bottom: 1px solid var(--line); box-shadow: 0 10px 18px rgba(0, 0, 0, .1); }
+  .topbar nav.open { display: flex; }
+  .topbar nav button { width: 100%; text-align: left; }
+  #btn-account { max-width: none; }
+}
+body.standalone .nav-toggle { display: none; }
 main { max-width: 1320px; margin: 0 auto; padding: 18px; }
 .view { display: none; }
 .view.active { display: block; }
@@ -1394,3 +1417,14 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 #acc-otp { width: 7.2em; font: 800 26px/1.2 var(--font, inherit); letter-spacing: .22em; text-align: center; font-variant-numeric: tabular-nums; padding: 10px 12px; }
 #acc-otp::placeholder { color: #c7cdd6; letter-spacing: .22em; font-weight: 700; }
 #acc-step2 label { display: block; margin-bottom: 4px; }
+
+/* v102: dove stanno le lezioni, detto sopra le card invece che in fondo alla pagina in grigio.
+   Giallo = solo in questo browser (una pulizia della cronologia le cancella), verde = anche nel cloud. */
+.stor { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 14px; border: 1px solid; border-radius: 10px; font-size: 14px; line-height: 1.45; }
+.stor.warn { border-color: #e6cf8a; background: #fff8e6; color: #6b5412; }
+.stor.ok { border-color: #bfe3c6; background: #f1faf2; color: #24603a; }
+.stor-ico { font-size: 17px; line-height: 1; flex: 0 0 auto; }
+.stor-txt { flex: 1 1 260px; min-width: 0; }
+.stor-go { flex: 0 0 auto; }
+.stor-ver { flex: 0 0 auto; font-size: 11px; opacity: .55; font-variant-numeric: tabular-nums; }
+@media print { .stor { display: none !important; } }

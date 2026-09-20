@@ -495,6 +495,10 @@
     const b = $('#btn-account'); if (!b) return;
     const on = cloudConfigured() && !S.standalone;
     b.style.display = on ? '' : 'none';
+    // v106: sotto i 640px il pallino di stato vive anche sul pulsante ☰ (la nav e' chiusa dentro un pannello a
+    // tendina), altrimenti l'accesso "connesso"/"in corso"/"errore" sarebbe invisibile a menu chiuso.
+    const td = $('#nav-toggle-dot');
+    if (td) td.style.display = on ? '' : 'none';
     if (!on) return;
     const st = CLOUD.sync ? CLOUD.sync.status : null, u = CLOUD.user;
     const dot = !u ? 'off' : st && st.state === 'error' ? 'bad' : st && (st.state === 'syncing' || st.pending) ? 'busy' : 'ok';
@@ -502,6 +506,7 @@
     b.appendChild(el('span', { class: 'dot ' + dot }));
     b.appendChild(document.createTextNode(' ' + (u ? (u.email || 'account') : 'Accedi')));
     b.title = u ? cloudStatusText() : 'Salva le lezioni nel cloud per ritrovarle su ogni computer';
+    if (td) td.className = 'dot ' + dot;
     renderStorageBanner();
     if ($('#dlg-account').open) fillAccountDialog();
   }
@@ -873,6 +878,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     else if (v === 'new') openNew();
     else if (v === 'community') renderCommunity();
   });
+  // v106 (Edoardo, screenshot da telefono: la nav sotto i 640px e' un pannello a tendina dietro il pulsante ☰,
+  // vedi styles.css). Si chiude da sola alla scelta di una voce (ogni pulsante dentro #nav naviga o apre un dialogo,
+  // quindi lasciarla aperta sarebbe solo confusione), non solo ricliccando ☰.
+  (function () {
+    const toggle = $('#nav-toggle'), nav = $('#nav');
+    if (!toggle || !nav) return;
+    function setOpen(open) { nav.classList.toggle('open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    toggle.addEventListener('click', function () { setOpen(!nav.classList.contains('open')); });
+    nav.addEventListener('click', function (e) { if (e.target.closest('button')) setOpen(false); });
+  })();
 
   // ---------- HOME ----------
   function bookmarkletUrl() {
