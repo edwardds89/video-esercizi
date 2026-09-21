@@ -2641,7 +2641,9 @@ async function noOverflow(page, where) {
       verifyOtp: function (o) {
         window.__auth.provati.push(o);
         return Promise.resolve(o.token === '123456' ? { error: null } : { error: { message: 'Token has expired or is invalid' } });
-      }
+      },
+      signInWithPassword: function () { return Promise.resolve({ error: { message: 'Invalid login credentials' } }); },
+      updateUser: function () { return Promise.resolve({ error: null }); }
     } };
   });
 
@@ -2697,9 +2699,71 @@ async function noOverflow(page, where) {
   const provato = await po.evaluate(function () { return window.__auth.provati[window.__auth.provati.length - 1]; });
   assert.strictEqual(provato.type, 'email', 'verifyOtp col tipo giusto');
   assert.strictEqual(provato.token, '123456', 'il codice arriva pulito a verifyOtp');
+  // v113: PRIMA di "Connesso come...", si offre di impostare una password (si può sempre saltare)
+  await po.waitForFunction(function () { return document.querySelector('#acc-step3').style.display !== 'none'; }, null, { timeout: 5000 });
+  assert.ok(await po.$eval('#acc-in', function (d) { return d.style.display === 'none'; }), 'prima dell\'offerta della password non si vede ancora "Connesso come..."');
+  await po.click('#acc-skippw');
   await po.waitForFunction(function () { return document.querySelector('#acc-in').style.display !== 'none'; }, null, { timeout: 5000 });
   assert.ok(await po.$eval('#acc-step2', function (d) { return d.style.display === 'none'; }), 'entrati, il campo del codice sparisce');
+  assert.ok(await po.$eval('#acc-step3', function (d) { return d.style.display === 'none'; }), 'saltata la password: il passo 3 si chiude');
   await ctxOtp.close();
+
+  console.log('27b. accesso con password (v113): "invia un codice" resta sempre visibile, password sbagliata = errore leggibile, dopo il codice si può impostarne una');
+  const ctxPw = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await ctxPw.addInitScript(tourSeen);
+  await ctxPw.addInitScript('(function () { window.__rows = {}; window.__vlCloud = {' +
+    ' user: async function () { return null; },' +
+    ' list: async function () { return []; }, get: async function () { return []; },' +
+    ' upsert: async function () {}, remove: async function () {} }; })();');
+  const ppw = await ctxPw.newPage();
+  ppw.on('pageerror', function (e) { errors.push('pageerror(pw): ' + e.message); });
+  await ppw.goto(BASE + '?mock=1&speed=8');
+  await ppw.waitForFunction(function () { return window.VLApp && window.VLApp.cloud.sync; }, null, { timeout: 8000 });
+  await ppw.evaluate(function () {
+    window.__pwauth = { tentativi: [], aggiornamenti: [] };
+    window.VLApp.cloud.client = { auth: {
+      signInWithOtp: function () { return Promise.resolve({ error: null }); },
+      verifyOtp: function (o) { window.VLApp.cloud.user = { id: 'u2', email: o.email }; return Promise.resolve({ error: null }); },
+      signInWithPassword: function (o) {
+        window.__pwauth.tentativi.push(o);
+        if (o.password !== 'segreta123') return Promise.resolve({ error: { message: 'Invalid login credentials' } });
+        window.VLApp.cloud.user = { id: 'u2', email: o.email };
+        return Promise.resolve({ error: null });
+      },
+      updateUser: function (o) { window.__pwauth.aggiornamenti.push(o); return Promise.resolve({ error: null }); },
+      signOut: function () { window.VLApp.cloud.user = null; return Promise.resolve({ error: null }); }
+    } };
+  });
+  await ppw.click('#btn-account');
+  await ppw.waitForSelector('#dlg-account[open]');
+  assert.ok(await ppw.$eval('#acc-password', function (i) { return i.offsetParent !== null; }), 'il campo password è sempre visibile, non solo dopo un codice');
+  assert.ok(await ppw.$eval('#acc-send', function (b) { return /codice/i.test(b.textContent); }), '"invia un codice" resta sempre un\'alternativa');
+  // password sbagliata: errore leggibile, si resta sul primo passo
+  await ppw.fill('#acc-email', 'prof@esempio.it');
+  await ppw.fill('#acc-password', 'sbagliata');
+  await ppw.click('#acc-login');
+  await ppw.waitForFunction(function () { return /password sbagliate/i.test(document.querySelector('#acc-msg').textContent); }, null, { timeout: 5000 });
+  assert.strictEqual(await ppw.evaluate(function () { return window.VLApp.cloud.user; }), null, 'password sbagliata: non si entra');
+  // password giusta: si entra direttamente, senza mai passare dal codice
+  await ppw.fill('#acc-password', 'segreta123');
+  await ppw.click('#acc-login');
+  await ppw.waitForFunction(function () { return window.VLApp.cloud.user && window.VLApp.cloud.user.email === 'prof@esempio.it'; }, null, { timeout: 5000 });
+  assert.strictEqual(await ppw.evaluate(function () { return window.__pwauth.tentativi.length; }), 2, 'due tentativi di password (uno sbagliato, uno giusto), zero codici mandati');
+  // via il codice: dopo il codice si può impostare una password (updateUser, non un secondo signUp)
+  await ppw.click('#acc-logout');
+  await ppw.waitForFunction(function () { return document.querySelector('#dlg-account').open === false; }, null, { timeout: 5000 });
+  await ppw.click('#btn-account');
+  await ppw.fill('#acc-email', 'prof2@esempio.it');
+  await ppw.click('#acc-send');
+  await ppw.waitForFunction(function () { return document.querySelector('#acc-step2').style.display !== 'none'; }, null, { timeout: 5000 });
+  await ppw.fill('#acc-otp', '123456');
+  await ppw.waitForFunction(function () { return document.querySelector('#acc-step3').style.display !== 'none'; }, null, { timeout: 5000 });
+  await ppw.fill('#acc-newpw', 'nuovapw123');
+  await ppw.click('#acc-setpw');
+  await ppw.waitForFunction(function () { return document.querySelector('#acc-in').style.display !== 'none'; }, null, { timeout: 5000 });
+  const aggiornamento = await ppw.evaluate(function () { return window.__pwauth.aggiornamenti[0]; });
+  assert.strictEqual(aggiornamento.password, 'nuovapw123', 'updateUser riceve la nuova password, non un nuovo signUp');
+  await ctxPw.close();
 
   console.log('28. menu ☰ sotto i 640px: nav chiusa di default, si apre e si richiude da sola alla scelta');
   const ctxMob = await browser.newContext({ viewport: { width: 375, height: 800 } });
@@ -2817,7 +2881,7 @@ async function noOverflow(page, where) {
   assert.ok(/solo le tue/.test(msgOwn) && !/Niente che corrisponda/.test(msgOwn), 'messaggio dedicato quando le pubblicate sono solo tue: ' + msgOwn);
   await ctxOwn.close();
 
-  console.log('34. fascia "non ancora pubblicata" (v110): non bloccante, sparisce pubblicando o scegliendo "Non proporla più"');
+  console.log('34. fascia "non ancora pubblicata" (v110/v112): non bloccante, sparisce pubblicando o scegliendo "Ricordamelo più tardi" (snooze temporaneo, non un opt-out permanente)');
   const ctxNudge = await browser.newContext({ viewport: { width: 1200, height: 900 } });
   await ctxNudge.addInitScript(tourSeen);
   await ctxNudge.addInitScript(fakeCloud2('prof-nudge', {}));
@@ -2832,12 +2896,19 @@ async function noOverflow(page, where) {
   await pnu.waitForFunction(function () { return document.querySelectorAll('#lesson-list .lesson-card').length === 1; }, null, { timeout: 8000 });
   assert.ok(await pnu.$eval('.pub-nudge', function (n) { return /Non ancora pubblicata/.test(n.textContent); }), 'lezione appena creata, mai pubblicata: la fascia compare');
   assert.strictEqual((await pnu.$$('dialog[open]')).length, 0, 'niente pop-up modale: si può continuare a lavorare senza chiudere nulla');
-  // "Non proporla più": la fascia sparisce e NON torna al giro successivo di renderHome
-  await pnu.click('.pub-nudge button:has-text("Non proporla più")');
+  // "Ricordamelo più tardi": la fascia sparisce e NON torna al giro successivo di renderHome (snooze di alcuni giorni, non per sempre)
+  await pnu.click('.pub-nudge button:has-text("Ricordamelo più tardi")');
   await pnu.waitForFunction(function () { return document.querySelector('.pub-nudge') === null; }, null, { timeout: 5000 });
+  const snoozeUntil = await pnu.evaluate(function () {
+    const id = Object.keys(window.VLApp.S.lessons)[0];
+    return window.VLApp.S.lessons[id].publishSnoozeUntil;
+  });
+  assert.ok(snoozeUntil, '"Ricordamelo più tardi" registra una data di ripresentazione (non un flag permanente)');
+  const daysAhead = (new Date(snoozeUntil).getTime() - Date.now()) / 86400000;
+  assert.ok(daysAhead > 1 && daysAhead <= 4, 'lo snooze è di alcuni giorni, non istantaneo né a vita: ' + daysAhead);
   await pnu.click('#nav button[data-view=community]');
   await pnu.click('button[data-view=home]');
-  assert.strictEqual((await pnu.$$('.pub-nudge')).length, 0, '"Non proporla più" resta valido: la fascia non ricompare da sola');
+  assert.strictEqual((await pnu.$$('.pub-nudge')).length, 0, 'entro la finestra di snooze la fascia non ricompare da sola');
   // il pulsante "Pubblica" nella riga delle azioni resta comunque disponibile dopo il dismiss
   await pnu.click('#lesson-list .lesson-card button:has-text("🌐 Pubblica")');
   await pnu.waitForFunction(function () { return /Pubblicata ✓/.test(document.querySelector('#lesson-list .lesson-card').textContent); }, null, { timeout: 5000 });
