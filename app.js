@@ -564,35 +564,74 @@
     if (APP_VER) b.appendChild(el('span', { class: 'stor-ver', text: 'v' + APP_VER }));
   }
 
-  // v101: l'accesso ha due passi (email, poi codice di 6 cifre), quindi il dialogo ha tre stati e non piu' due.
-  // ACC.step vale 'email' | 'code'; appena c'e' l'utente vince sempre lo stato "connesso".
-  const ACC = { step: 'email', email: '' };
+  // v101: l'accesso ha due passi (email, poi codice di 6 cifre). v113 (Edoardo: "vorrei che il codice fosse solo la
+  // prima volta poi dopo aver messo il codice faccia scegliere la password"): scelta fra tre modi possibili discussa
+  // in chat (memoria nel browser / tabella pubblica con rischio di enumerazione / scelta manuale) — Edoardo ha
+  // scelto la terza, quella senza automatismi e senza schema nuovo: il dialogo mostra SEMPRE sia il campo password
+  // sia "invia un codice", decide l'insegnante quale usare, non l'app. Il codice resta comunque la via per chi la
+  // password non l'ha mai impostata o l'ha dimenticata (funziona anche da "recupero password": rientrando col
+  // codice si arriva di nuovo al passo 3 e si può impostarne una nuova, che sovrascrive la vecchia).
+  // ACC.step vale 'email' | 'code'. ACC.offerPw e' INDIPENDENTE da ACC.step: diventa true appena un verifyOtp riesce
+  // e resta true (mostrando il passo 3, "imposta una password") finche' l'insegnante non salva o salta — DOPO
+  // quel momento vince comunque lo stato "connesso" (acc-in), quindi va controllato PRIMA di controllare `u`.
+  const ACC = { step: 'email', email: '', offerPw: false };
   function fillAccountDialog() {
-    const u = CLOUD.user, code = !u && ACC.step === 'code';
-    $('#acc-out').style.display = u || code ? 'none' : '';
+    const u = CLOUD.user, offer = u && ACC.offerPw, code = !u && ACC.step === 'code';
+    $('#acc-out').style.display = (u || code) ? 'none' : '';
     $('#acc-step2').style.display = code ? '' : 'none';
-    $('#acc-in').style.display = u ? '' : 'none';
+    $('#acc-step3').style.display = offer ? '' : 'none';
+    $('#acc-in').style.display = (u && !offer) ? '' : 'none';
     if (code) $('#acc-sent-to').textContent = ACC.email;
     if (u) { $('#acc-who').textContent = u.email || ''; $('#acc-state').textContent = cloudStatusText(); }
   }
   $('#btn-account').addEventListener('click', function () {
     initCloud().then(function () {
-      ACC.step = 'email'; clearTimeout(ACC.otpTimer); $('#acc-otp').value = ''; $('#acc-msg2').textContent = '';   // riaprendo si ricomincia da capo: un codice vecchio non vale piu'
+      // riaprendo si ricomincia da capo: un codice vecchio non vale piu', e l'offerta della password (se non e' la
+      // prima apertura dopo un accesso col codice) non deve ripresentarsi da sola a ogni riapertura del dialogo
+      ACC.step = 'email'; ACC.offerPw = false; clearTimeout(ACC.otpTimer);
+      $('#acc-otp').value = ''; $('#acc-msg2').textContent = ''; $('#acc-password').value = ''; $('#acc-newpw').value = ''; $('#acc-msg3').textContent = '';
       fillAccountDialog(); $('#acc-msg').textContent = ''; $('#dlg-account').showModal();
       if (!CLOUD.user) $('#acc-email').focus();
     });
   });
   $$('#acc-close, #acc-close2').forEach(function (b) { b.addEventListener('click', function () { $('#dlg-account').close(); }); });
-  $('#acc-email').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#acc-send').click(); } });
+  $('#acc-email').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#acc-login').click(); } });
+  $('#acc-password').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#acc-login').click(); } });
 
-  /** Messaggio leggibile per gli errori dell'accesso: quelli veri che capitano sono due, il tetto di invii e il codice sbagliato. */
+  /** Messaggio leggibile per gli errori dell'accesso: codice sbagliato/scaduto, password sbagliata, tetto di invii. */
   function authError(e) {
     const m = String(e && e.message || e);
     if (/rate limit|too many/i.test(m)) return 'Troppe richieste in poco tempo. Se il codice ti è già arrivato usalo (vale un\'ora, guarda anche nello spam); altrimenti riprova fra qualche minuto.';
+    if (/invalid login credentials/i.test(m)) return 'Email o password sbagliate. Se non hai ancora impostato una password, usa "Invia un codice".';
     if (/expired|invalid/i.test(m)) return 'Codice sbagliato o scaduto. Controlla le cifre, oppure fattene mandare un altro.';
     if (/signups? not allowed|disabled/i.test(m)) return 'Le registrazioni nuove sono chiuse in questo momento.';
+    if (/password.*(least|short|length|characters)/i.test(m)) return 'La password è troppo corta per i requisiti del progetto: provane una più lunga.';
     return 'Non ha funzionato: ' + m;
   }
+
+  /** v113: accesso con la password, per chi l'ha già impostata (passo 3, dopo un codice). Stesso account di sempre:
+      Supabase Auth non distingue "utenti col codice" da "utenti con password", sono due modi di entrare nello
+      STESSO account con la stessa email. */
+  $('#acc-login').addEventListener('click', function () {
+    const email = $('#acc-email').value.trim(), pw = $('#acc-password').value, msg = $('#acc-msg'), btn = $('#acc-login');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Scrivi un indirizzo email valido.'; return; }
+    if (!pw) { msg.textContent = 'Scrivi la password, oppure usa "Invia un codice" se non ne hai ancora una.'; return; }
+    if (!CLOUD.client) { msg.textContent = 'Cloud non disponibile in questo momento.'; return; }
+    btn.disabled = true; msg.textContent = 'Accesso in corso…';
+    CLOUD.client.auth.signInWithPassword({ email: email, password: pw })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        // onAuthStateChange (SIGNED_IN) e' quello che aggiorna CLOUD.user e lancia la sincronizzazione: se e' gia'
+        // arrivato quando questa promessa si risolve, il dialogo si aggiorna SUBITO invece di aspettare il giro
+        // dell'evento; se non e' ancora arrivato, non si tocca nulla qui (mai mostrare "sloggato" per un attimo:
+        // sarebbe peggio di aspettare) e ci pensa renderAccount(), chiamato dall'evento appena arriva.
+        $('#acc-password').value = ''; msg.textContent = '';
+        if (CLOUD.user) fillAccountDialog();
+        toast('Sei dentro: le lezioni si stanno allineando');
+      })
+      .catch(function (e) { msg.textContent = authError(e); })
+      .then(function () { btn.disabled = false; });
+  });
 
   /** Passo 1: chiede il codice. NIENTE emailRedirectTo: l'app vive su due indirizzi (dominio nuovo e vecchio URL di GitHub)
       e un redirect non autorizzato farebbe fallire l'accesso; col codice non c'è nessun indirizzo da autorizzare. */
@@ -640,9 +679,10 @@
       .then(function (res) {
         if (res.error) throw res.error;
         // Da qui in poi fa tutto onAuthStateChange (SIGNED_IN): aggiorna CLOUD.user e lancia la sincronizzazione.
-        ACC.step = 'email'; msg.textContent = '';
+        // v113: PRIMA di mostrare "Connesso come...", si offre di impostare una password (passo 3) — chi la
+        // password non l'ha mai voluta puo' sempre saltare, e da qui in avanti tornera' a usare il codice.
+        ACC.step = 'email'; ACC.offerPw = true; msg.textContent = '';
         fillAccountDialog();
-        toast('Sei dentro: le lezioni si stanno allineando');
       })
       .catch(function (e) { msg.textContent = authError(e); $('#acc-otp').select(); })
       .then(function () { $('#acc-verify').disabled = false; });
@@ -655,6 +695,30 @@
   });
   $('#acc-back').addEventListener('click', function () {
     ACC.step = 'email'; $('#acc-msg').textContent = ''; fillAccountDialog(); $('#acc-email').focus(); $('#acc-email').select();
+  });
+
+  /** v113, passo 3: imposta una password sull'account appena verificato col codice. updateUser() su una sessione
+      GIA' autenticata non manda nessuna email di conferma (a differenza di un signUp): e' esattamente il motivo
+      per cui questa via non consuma la quota di 2 email/ora di Supabase, a differenza di un altro codice. */
+  $('#acc-setpw').addEventListener('click', function () {
+    const pw = $('#acc-newpw').value, msg = $('#acc-msg3'), btn = $('#acc-setpw');
+    if (pw.length < 8) { msg.textContent = 'La password deve avere almeno 8 caratteri.'; return; }
+    if (!CLOUD.client) { msg.textContent = 'Cloud non disponibile in questo momento.'; return; }
+    btn.disabled = true; msg.textContent = 'Salvo…';
+    CLOUD.client.auth.updateUser({ password: pw })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        ACC.offerPw = false; $('#acc-newpw').value = ''; msg.textContent = '';
+        fillAccountDialog();
+        toast('Password impostata: la prossima volta entri subito con email e password');
+      })
+      .catch(function (e) { msg.textContent = authError(e); })
+      .then(function () { btn.disabled = false; });
+  });
+  $('#acc-skippw').addEventListener('click', function () {
+    ACC.offerPw = false; $('#acc-newpw').value = ''; $('#acc-msg3').textContent = '';
+    fillAccountDialog();
+    toast('Sei dentro: le lezioni si stanno allineando');
   });
   $('#acc-sync').addEventListener('click', function () { CLOUD.announce = true; runSync().then(function () { if ($('#dlg-account').open) fillAccountDialog(); }); });
   $('#acc-logout').addEventListener('click', function () {
