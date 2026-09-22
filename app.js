@@ -402,6 +402,55 @@
   // Le lezioni restano in localStorage (cache); con l'accesso vengono anche caricate nel cloud e unite tra i computer (vince l'ultima modifica).
   const CLOUD = { client: null, sync: null, user: null, ready: null, announce: false, lastRun: 0 };
   function cloudConfigured() { return !!(window.VLSync && (window.VLSync.CONFIG.url || (S.mock && window.__vlCloud))); }
+  /* v115 (Edoardo, dopo il caso di Mariachiara: "senza accesso non si può aprire una lezione, si può vedere che c'è
+     ma per aprirla si deve fare il log in... si deve scrivere qualcosa che incentiva a fare un log in"): NON un muro
+     prima di creare o guardare una lezione (ribalterebbe la v102, "l'app funziona SENZA account per scelta", e col
+     tetto Supabase di 2 email di codice/ora rischierebbe di intasare proprio il primo utilizzo, il momento in cui i
+     Reel devono convincere un insegnante a provare il prodotto). Il blocco riguarda SOLO l'EDITOR della video-lezione
+     (dove si personalizzano esercizi, tagli, parole): senza account la si può generare, aprirla e usarla in classe
+     così com'è, ma non modificarla. `lessonEditLocked()` è vera solo quando il cloud esiste come funzione (altrimenti
+     bloccare non avrebbe senso: non ci sarebbe nessun accesso da fare) E non c'è un utente connesso.
+     In modalità test (S.mock) NON si usa cloudConfigured() as-is: quella vede sempre "configurato" perché
+     VLSync.CONFIG.url è l'indirizzo VERO di produzione, caricato comunque anche dal server statico dei test — la
+     stragrande maggioranza degli scenari smoke apre l'editor senza mai simulare un login (mai avevano bisogno di
+     cloud finto per testare il motore degli esercizi) e si bloccherebbe qui in massa. In mock, quindi, il cloud
+     conta come "attivo" solo se lo scenario lo dichiara ESPLICITAMENTE con window.__vlCloud (la stessa convenzione
+     già usata da cloudConfigured() per il ramo mock, e dagli scenari cloud/community/login esistenti): chi vuole
+     testare DAVVERO questo blocco lo fa in un contesto isolato con __vlCloud presente e user() che risolve null. */
+  function lessonEditLocked() { const cloudActive = S.mock ? !!window.__vlCloud : cloudConfigured(); return cloudActive && !CLOUD.user; }
+  /* Href per aprire una PROPRIA lezione (video/attività/conversazione) in un'altra scheda col tasto destro: usa
+     l'id locale via ?id=&mode=student, un meccanismo che esisteva già in init() per altri scopi (link "salvato nei
+     preferiti"/ricaricato) — qui esteso a comprendere anche le conversazioni. Funziona solo su QUESTO browser
+     (l'id è locale, non portabile): per condividere con altri c'è già "🔗 Condividi" (v78), che incorpora i dati.
+     Le sfide in classe restano ESCLUSE apposta: aprirle non "mostra" la lezione, la METTE IN ONDA (una sessione dal
+     vivo con un PIN), e due schede che ospitano la stessa sfida in parallelo confonderebbero solo gli studenti. */
+  function localOpenHref(ls) { return '?id=' + encodeURIComponent(ls.id) + '&mode=student'; }
+  /* Href per aprire in un'altra scheda una lezione ALTRUI vista in Community: qui l'id locale non serve a niente
+     (quella lezione non è in questo browser), quindi si riusa lo stesso formato #d= già collaudato da "🔗 Condividi"
+     — i dati viaggiano incorporati nel link, la scheda nuova li legge da sola in init() senza bisogno di rete né di
+     essere connessi. Copre solo video e attività (stesso payload di studentPayload/actPayload, stesso ramo #d= che
+     l'app sa già interpretare): conversazioni e sfide in classe restano senza anteprima per ora, come oggi. */
+  function communityHref(r) {
+    const ls = r.data || {}; const kind = homeKind(ls);
+    try {
+      if (kind === 'act') return '#d=' + b64url(JSON.stringify(actPayload(ls)));
+      if (kind === 'video') return '#d=' + b64url(JSON.stringify(studentPayload(ls)));
+    } catch (e) { /* payload non costruibile (dati corrotti): niente link, resta solo "+ Copia" */ }
+    return null;
+  }
+  /** Anteprima in pagina di una lezione della Community (clic sinistro): NIENTE S.standalone = true qui, a
+   *  differenza del link #d= aperto a freddo in una scheda nuova — quello è pensato per chi non ha nessun contesto
+   *  app (uno studente), questo per un insegnante già connesso che sta solo guardando il lavoro di un collega.
+   *  S.standalone resta un interruttore "acceso una volta sola all'avvio" (mai spento altrove nel codice): se lo
+   *  accendessi qui rimarrebbe acceso per il resto della sessione, nascondendo barre e pulsanti che dovrebbero
+   *  restare visibili una volta tornati alla Community. Il pulsante "✎ Modifica" resta comunque nascosto da solo
+   *  (openStudent/openActPlay lo mostrano solo se S.lessons[ls.id] esiste, ed essendo una lezione non sua non
+   *  esisterà mai): la protezione "non è tua" non dipende da standalone. */
+  function openCommunityPreview(r) {
+    const ls = r.data || {}; const kind = homeKind(ls);
+    if (kind === 'act') return openActPlay(null, ls);
+    if (kind === 'video') return openStudent(null, false, Object.assign({}, ls, { options: ls.options || {}, cuts: ls.cuts || [] }));
+  }
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       const sc = document.createElement('script'); sc.src = src; sc.async = true;
@@ -1087,11 +1136,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const t = ACT.TYPES[ls.activity.type] || { emoji: '🎲', label: 'Attività' };
         const th = ACT.THEMES.find(function (x) { return x.id === ls.activity.theme; });
         const openA = function () { openActPlay(ls.id); };
+        const hrefA = localOpenHref(ls);   // v115: tasto destro → apri in un'altra scheda (stesso browser)
         const nItems = (ls.activity.data.pairs || ls.activity.data.questions || ls.activity.data.words || ls.activity.data.items || []).length;
         const cardA = el('div', { class: 'lesson-card' },
-          el('div', { class: 'thumb act-thumb', onclick: openA, title: 'Gioca' }, t.emoji),
+          el('a', { class: 'thumb act-thumb', href: hrefA, onclick: function (e) { e.preventDefault(); openA(); }, title: 'Gioca' }, t.emoji),
           el('div', { class: 'body' },
-            el('div', { class: 'title', text: ls.title || '(attività senza titolo)', onclick: openA }),
+            el('a', { class: 'title', href: hrefA, text: ls.title || '(attività senza titolo)', onclick: function (e) { e.preventDefault(); openA(); } }),
             el('div', { class: 'meta', text: t.label + ' · ' + nItems + ' elementi' + (th ? ' · tema ' + th.name : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
             publishNudge(ls),
             el('div', { class: 'actions' },
@@ -1126,12 +1176,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (ls.conv && !Array.isArray(ls.exercises)) {
         const u = ls.conv;
         const openC = function () { openConvPrint(ls.id); };
+        const hrefC = localOpenHref(ls);   // v115: tasto destro → apri in un'altra scheda (stesso browser)
         // anteprima: la prima foto dell'unita' (v66, 'perch\u00E9 non c'\u00E8 nessuna anteprima?'); senza foto resta il fumetto
         const convPh = (u.photos || []).find(function (p) { return p.url; });
         const cardC = el('div', { class: 'lesson-card' },
-          el('div', { class: 'thumb act-thumb conv-thumb', style: convPh ? 'background-image:url(' + convPh.url.replace(/["\\)]/g, '') + ');background-size:cover;background-position:center' : '', onclick: openC, title: 'Apri il foglio' }, convPh ? '' : '\uD83D\uDCAC'),
+          el('a', { class: 'thumb act-thumb conv-thumb', href: hrefC, style: convPh ? 'background-image:url(' + convPh.url.replace(/["\\)]/g, '') + ');background-size:cover;background-position:center' : '', onclick: function (e) { e.preventDefault(); openC(); }, title: 'Apri il foglio' }, convPh ? '' : '\uD83D\uDCAC'),
           el('div', { class: 'body' },
-            el('div', { class: 'title', text: ls.title || '(conversazione senza titolo)', onclick: openC }),
+            el('a', { class: 'title', href: hrefC, text: ls.title || '(conversazione senza titolo)', onclick: function (e) { e.preventDefault(); openC(); } }),
             el('div', { class: 'meta', text: 'Conversazione \u00b7 ' + (u.questions || []).length + ' domande \u00b7 livello ' + (u.level || 'B1') + (u.focus ? ' \u00b7 ' + u.focus : '') + (ls.updatedAt ? ' \u00b7 ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
             publishNudge(ls),
             el('div', { class: 'actions' },
@@ -1146,15 +1197,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const eff = G.effectiveDuration(ls.cuts || [], ls.duration);
       const thumbStyle = ls.videoId && ls.videoId !== 'demo' ? 'background-image:url(https://i.ytimg.com/vi/' + ls.videoId + '/mqdefault.jpg)' : '';
       const open = function () { openStudent(ls.id); };
+      const href = localOpenHref(ls);   // v115: tasto destro → apri in un'altra scheda (stesso browser)
       const card = el('div', { class: 'lesson-card' },
-        el('div', { class: 'thumb', style: thumbStyle, onclick: open, title: 'Apri la lezione' }, el('div', { class: 'play', text: '▶' })),
+        el('a', { class: 'thumb', href: href, style: thumbStyle, onclick: function (e) { e.preventDefault(); open(); }, title: 'Apri la lezione' }, el('div', { class: 'play', text: '▶' })),
         el('div', { class: 'body' },
-          el('div', { class: 'title', text: ls.title || '(senza titolo)', onclick: open }),
+          el('a', { class: 'title', href: href, text: ls.title || '(senza titolo)', onclick: function (e) { e.preventDefault(); open(); } }),
           el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (LEVEL_LABELS[ls.levelBand] ? ' · ' + LEVEL_LABELS[ls.levelBand] : '') + (audienceLabel(ls.audience) ? ' · ' + audienceLabel(ls.audience) : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
           publishNudge(ls),
           el('div', { class: 'actions' },
             el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
-            el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openEditor(ls.id); } }),
+            el('button', { class: 'small', text: '✎ Modifica', onclick: function () { if (lessonEditLocked()) return openEditLockedDialog(ls); openEditor(ls.id); } }),
             el('button', { class: 'small', text: '🔗 Condividi', title: 'Link studente', onclick: function () { openShare(ls); } }),   // v78
             el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
             publishBtn(ls),
@@ -1220,13 +1272,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const ls = r.data || {};
       const label = KIND_LABEL[homeKind(ls)] || '🎬 Lezione';
       const thumbStyle = ls.videoId && ls.videoId !== 'demo' ? 'background-image:url(https://i.ytimg.com/vi/' + ls.videoId + '/mqdefault.jpg)' : '';
+      // v115: "apri in un'altra scheda" col tasto destro, anche in Community (finora nessuna card era cliccabile:
+      // solo "+ Copia alla cieca"). href non null solo per video/attività (v. communityHref); conv/chal restano
+      // come prima, senza anteprima: il tag resta 'div', non 'a'.
+      const href = communityHref(r);
+      const openPreview = href ? function () { openCommunityPreview(r); } : null;
+      const thumbTag = href ? 'a' : 'div';
+      const thumbBase = { class: 'thumb' + (thumbStyle ? '' : ' act-thumb'), title: href ? 'Anteprima' : undefined };
+      if (href) { thumbBase.href = href; thumbBase.onclick = function (e) { e.preventDefault(); openPreview(); }; }
       const thumb = thumbStyle
-        ? el('div', { class: 'thumb', style: thumbStyle }, el('div', { class: 'play', text: '▶' }))
-        : el('div', { class: 'thumb act-thumb' }, label.split(' ')[0]);
+        ? el(thumbTag, Object.assign({ style: thumbStyle }, thumbBase), el('div', { class: 'play', text: '▶' }))
+        : el(thumbTag, thumbBase, label.split(' ')[0]);
+      const titleAttrs = Object.assign({ class: 'title', text: ls.title || '(senza titolo)' }, href ? { href: href, onclick: function (e) { e.preventDefault(); openPreview(); } } : {});
       const card = el('div', { class: 'lesson-card' },
         thumb,
         el('div', { class: 'body' },
-          el('div', { class: 'title', text: ls.title || '(senza titolo)' }),
+          el(href ? 'a' : 'div', titleAttrs),
           el('div', { class: 'meta', text: label + (r.updated_at ? ' · ' + new Date(r.updated_at).toLocaleDateString('it-IT') : '') }),
           el('div', { class: 'actions' },
             el('button', { class: 'small primary', text: '+ Copia nelle tue lezioni', onclick: function () { copyFromCommunity(r); } }))));
@@ -1541,8 +1602,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
     ls.params = { tricky: $('#f-tricky').checked, n: $('#f-nauto').checked ? 'auto' : Math.max(1, parseInt($('#f-n').value, 10) || 10), target: target, tolerance: $('#f-range').value === 'custom' ? 0 : Math.round(target * 0.1), types: types, range: G.RANGES[$('#f-words').value] || null, contextBefore: parseInt($('#f-ctx').value, 10) || 25, ai: $('#f-ai').checked, focus: $('#f-focus').value.trim() };
     overlay(true);
-    generate(ls, ls.params.ai).then(function () { overlay(false); openEditor(ls.id); })
-      .catch(function (e) { overlay(false); toast('Errore: ' + e.message); console.error(e); });
+    generate(ls, ls.params.ai).then(function () {
+      overlay(false);
+      // v115: senza accesso la bozza appena generata si apre così com'è (non nell'editor) — vedi lessonEditLocked
+      if (lessonEditLocked()) { openStudent(ls.id); openEditLockedDialog(ls); } else { openEditor(ls.id); }
+    }).catch(function (e) { overlay(false); toast('Errore: ' + e.message); console.error(e); });
   });
 
   // ---------- TIMELINE ----------
@@ -4091,6 +4155,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   $('#btn-share').addEventListener('click', function () { openShare(current()); });
   $('#share-close').addEventListener('click', function () { $('#dlg-share').close(); });
+  /* v115: il dialogo che spiega perché l'editor è bloccato senza account, e incentiva l'accesso invece di limitarsi
+     a impedire il click. "Accedi ora" chiude questo dialogo e apre subito quello di login (#btn-account), così
+     l'insegnante non deve prima chiudere e poi cercare da sola il pulsante in alto. */
+  function openEditLockedDialog(ls) {
+    $('#el-title').textContent = 'Accedi per modificare' + (ls && ls.title ? ' "' + ls.title + '"' : '');
+    $('#dlg-edit-locked').showModal();
+  }
+  $('#el-login').addEventListener('click', function () { $('#dlg-edit-locked').close(); $('#btn-account').click(); });
+  $('#el-close').addEventListener('click', function () { $('#dlg-edit-locked').close(); });
 
   // impostazioni
   $('#btn-settings').addEventListener('click', function () {
@@ -7379,6 +7452,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (id && S.lessons[id]) {
       const it = S.lessons[id];
       if (it.activity && !Array.isArray(it.exercises)) return q.get('mode') === 'student' ? openActPlay(id) : openActEditor(id);
+      if (it.conv && !Array.isArray(it.exercises)) return openConvPrint(id);   // v115: il foglio A4 non ha una "modalità studente" separata da aprirlo e basta
       return q.get('mode') === 'student' ? openStudent(id) : openEditor(id);
     }
     renderHome();
