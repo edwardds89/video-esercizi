@@ -309,6 +309,14 @@ button.play { padding: 4px 12px; color: var(--accent); font-weight: 700; }
 @media (max-width: 480px) { .services { grid-template-columns: 1fr; } }
 
 .lesson-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+/* v114 (Edoardo: "sulla community la scritta 'le lezioni pubblicate...' va a capo ma non capisco perché dato che
+   c'è spazio"): i messaggi segnaposto (<p class="muted">, es. "Carico…", "Nessuna lezione…", il messaggio "solo le
+   tue" in Community) vengono appesi DENTRO #lesson-list/#community-list, che sono griglie (.lesson-grid). Senza
+   questa regola quel <p> diventa una cella di griglia come le altre: la colonna gli assegna minmax(250px, 1fr), cioè
+   la stessa larghezza di UNA card, e il testo va a capo stretto anche se a destra restano tracce di colonna vuote
+   (la griglia auto-fill le crea comunque, semplicemente non hanno altre card dentro). grid-column: 1 / -1 fa
+   occupare al paragrafo l'intera riga, come un titolo. */
+.lesson-grid > p.muted { grid-column: 1 / -1; }
 .lesson-card { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff; display: flex; flex-direction: column; }
 .lesson-card .thumb { aspect-ratio: 16 / 9; background: #10141a center / cover no-repeat; cursor: pointer; position: relative; }
 .lesson-card .thumb .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 40px; text-shadow: 0 2px 8px rgba(0,0,0,.6); opacity: .9; }
