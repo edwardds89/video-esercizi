@@ -1,5 +1,14 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- DESELEZIONA + GAP ADATTIVI (v117, 24/9). Due fix studente: (1) "trova la parola in più" / "trova quella
+  sbagliata": ri-cliccare una parola selezionata ora la DESELEZIONA (prima restava bloccata su "sel"). Il toggle e'
+  selected = (selected === i ? -1 : i) nell'onclick del chip; il campo di correzione (wrong) non si apre se si e'
+  appena deselezionato. (2) "completa gli spazi semplificato con le parole": i gap ora si ALLARGANO quando la parola
+  inserita e' più lunga dello spazio iniziale — prima le parole lunghe venivano tagliate. Funziona: il gap parte con
+  width e min-width fissi (non svela la risposta), poi un listener input (fitGap) ricalcola width a
+  max(originale, value.length + 2) ch ad ogni modifica (anche quando il chip del gapbank viene cliccato, perche'
+  dispatchEvent('input') era gia' presente). La ✕ che svuota il gap lo riporta alla larghezza originale.
+
 - CARICAMENTO = LA SCRITTA PAUSELEARN "IN GARA" (v116, 24/9). Edoardo, con screenshot dell'overlay v84 e il PNG del
   marchio: "la U è diversa nella scritta. Io vorrei la scritta Pauselearn con una specie di competizione tra la U e il
   tasto play che a rotazione vanno uno davanti all'altro... quando c'è davanti Play tutte le lettere si muovono, poi torna

@@ -4792,8 +4792,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const lastTok = L.tokenize(d.tokens[run.indices[run.indices.length - 1]])[0] || { pre: '', post: '' };
         if (firstTok.pre) sent.appendChild(document.createTextNode(firstTok.pre));
         // larghezza uguale per tutti gli spazi di una parola (la lunghezza non si deve indovinare); più largo se le parole sono più di una
+        // v117: la casella parte con una min-width fissa (non svela la risposta) e si ALLARGA quando la parola
+        // inserita e' più lunga — prima le parole lunghe venivano tagliate ('i gap si devono adattare').
         const width = Math.min(11 * run.indices.length, 34);
-        const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', style: 'width:' + width + 'ch', 'data-words': String(run.indices.length) });
+        const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', style: 'width:' + width + 'ch;min-width:' + width + 'ch', 'data-words': String(run.indices.length) });
+        const fitGap = function () { inp.style.width = inp.value.length > width ? (inp.value.length + 2) + 'ch' : width + 'ch'; };
+        inp.addEventListener('input', fitGap);
         // v77 ('che senso ha lasciare la funzione per rimuovere i caratteri se c'e' la x?'): nel gapbank la casella
         // e' in sola lettura — le parole entrano col click sul chip, escono con la ✕; niente tastiera (nemmeno sul telefono).
         if (ex.type === 'gapbank') inp.readOnly = true;
@@ -5229,7 +5233,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         chips.innerHTML = '';
         d.shown.forEach(function (w, i) {
           const inZone = zone && i >= zone.from && i <= zone.to;
-          chips.appendChild(el('span', { class: 'chip' + (i === selected ? ' sel' : '') + (inZone ? ' zone' : ''), text: w, onclick: function () { selected = i; render(); if (ex.type === 'wrong') { corr.style.display = ''; corr.focus(); } } }));
+          chips.appendChild(el('span', { class: 'chip' + (i === selected ? ' sel' : '') + (inZone ? ' zone' : ''), text: w, onclick: function () { selected = (selected === i ? -1 : i); render(); if (ex.type === 'wrong' && selected !== -1) { corr.style.display = ''; corr.focus(); } } }));
         });
       };
       const flashZone = function () {
