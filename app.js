@@ -58,8 +58,28 @@
   // v87 (Edoardo, 17/9: "sta caricando da troppo tempo"): l'attesa dev'essere leggibile e interrompibile.
   // L'overlay dice a che punto e', da quanto aspetta, e offre una via d'uscita quando chi chiama ne registra una.
   let ovT0 = 0, ovTimer = null, ovCancel = null;
+  /**
+   * v116: il ritmo della gara U/Play nella scritta del caricamento. Parte con la U davanti (il marchio fermo, leggibile),
+   * dopo poco Play salta davanti e le lettere ballano; poi la U si riprende il posto e tutto si ferma. Gira SOLO mentre
+   * l'overlay e' aperto (niente timer a vuoto) e per chi ha chiesto meno animazioni resta il marchio fermo.
+   */
+  let plTimer = null;
+  function plRun(on) {
+    const st = $('#pl-stage');
+    if (on && plTimer) return;   // overlay(true, 'altro testo') mentre gira gia': la gara continua, non riparte
+    if (plTimer) { clearTimeout(plTimer); plTimer = null; }
+    if (!st) return;
+    st.classList.remove('go');
+    if (!on) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // U davanti 0,7 s la prima volta (poi 1,9 s: il tempo di vedere la pausa), Play davanti 2,6 s
+    (function tick(go, wait) {
+      plTimer = setTimeout(function () { st.classList.toggle('go', go); tick(!go, go ? 2600 : 1900); }, wait);
+    })(true, 700);
+  }
   function overlay(show, text) {
     $('#overlay').classList.toggle('show', !!show);
+    plRun(!!show);
     if (text) $('#overlay-text').textContent = text;
     const step = $('#overlay-step'), time = $('#overlay-time'), btn = $('#overlay-cancel');
     if (ovTimer) { clearInterval(ovTimer); ovTimer = null; }

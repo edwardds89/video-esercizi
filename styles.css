@@ -372,41 +372,42 @@ body.undo-open #toast { bottom: 76px; }   /* l'avviso normale sale sopra la barr
 .app-bar .later { background: transparent; color: rgba(255,255,255,.85); border: 1px solid rgba(255,255,255,.4); border-radius: 8px; padding: 5px 10px; font-size: 13px; white-space: nowrap; }
 #overlay { position: fixed; inset: 0; background: #fff; display: none; align-items: center; justify-content: center; z-index: 40; font-size: 18px; text-align: center; padding: 20px; }
 #overlay.show { display: flex; }
-/* v84: Pausa e Play — le mascotte del caricamento (SVG animato, niente asset esterni) */
-.pp-stage { position: relative; width: 190px; height: 120px; margin: 0 auto 6px; }
-.pp-char { position: absolute; bottom: 10px; transform-origin: 50% 100%; will-change: transform; }
-.pp-play { left: 18px; animation: pp-play 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
-.pp-pausa { right: 18px; animation: pp-pausa 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
-.pp-ombra { position: absolute; bottom: 2px; width: 70px; height: 10px; border-radius: 50%; background: rgba(28,35,48,.10); }
-.pp-ombra.a { left: 24px; animation: pp-ombra-a 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
-.pp-ombra.b { right: 24px; animation: pp-ombra-b 3.2s cubic-bezier(.45,.05,.35,1) infinite; }
-.pp-eye { animation: pp-blink 3.2s linear infinite; transform-origin: center; transform-box: fill-box; }
-@keyframes pp-play {
-  0%, 8%   { transform: translateX(42px) scale(1.08); z-index: 3; }
-  38%      { transform: translateX(42px) scale(1.08) rotate(0deg); z-index: 3; }
-  46%      { transform: translateX(6px) scale(.94, 1.02) rotate(-12deg); z-index: 1; }
-  52%, 86% { transform: translateX(0) translateY(-4px) scale(.9); z-index: 1; }
-  90%      { transform: translateX(8px) scale(1.12, .88) rotate(8deg); z-index: 3; }
-  100%     { transform: translateX(42px) scale(1.08); z-index: 3; }
+/* v116: la scritta PauseLearn "in gara". Stato di riposo = marchio normale (U al suo posto, Play nascosto dietro).
+   .go = Play davanti: le lettere ballano. Senza .go = la U torna davanti e le lettere si FERMANO dove sono
+   (animation-play-state: paused, non un ritorno a zero: e' il gag del video in pausa), mentre Play dietro scalpita.
+   Il cambio di stato lo fa plTick() in app.js solo mentre l'overlay e' aperto. */
+.pl-stage { width: min(340px, 82vw); margin: 0 auto 14px; padding-top: 26px; }
+.pl-wrap { position: relative; }
+.pl-word { display: block; width: 100%; height: auto; overflow: visible; position: relative; z-index: 2; }
+.wl { transform-box: fill-box; transform-origin: 50% 100%;
+  animation: wl-dance .9s ease-in-out infinite; animation-delay: calc(var(--i) * .07s); animation-play-state: paused; }
+.pl-stage.go .wl { animation-play-state: running; }
+@keyframes wl-dance {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-16%) rotate(-5deg); }
+  50% { transform: translateY(0) scale(1.05, .94); }
+  75% { transform: translateY(-7%) rotate(4deg); }
 }
-@keyframes pp-pausa {
-  0%, 8%   { transform: translateX(0) translateY(-4px) scale(.9); z-index: 1; }
-  38%      { transform: translateX(-6px) scale(1.1, .9) rotate(-8deg); z-index: 1; }
-  46%      { transform: translateX(-44px) scale(1.06, 1.02) rotate(6deg); z-index: 3; }
-  52%, 86% { transform: translateX(-42px) scale(1.08); z-index: 3; }
-  92%      { transform: translateX(-34px) scale(.96) rotate(10deg); z-index: 1; }
-  100%     { transform: translateX(0) translateY(-4px) scale(.9); z-index: 1; }
-}
-@keyframes pp-ombra-a {
-  0%, 8% { transform: translateX(42px) scale(1.05); } 38% { transform: translateX(42px); }
-  52%, 86% { transform: translateX(0) scale(.85); } 100% { transform: translateX(42px) scale(1.05); }
-}
-@keyframes pp-ombra-b {
-  0%, 8% { transform: translateX(0) scale(.85); } 38% { transform: translateX(-6px) scale(.9); }
-  52%, 86% { transform: translateX(-42px) scale(1.05); } 100% { transform: translateX(0) scale(.85); }
-}
+.pl-slot { position: absolute; display: block; line-height: 0;
+  transition: transform .5s cubic-bezier(.34,1.5,.64,1), z-index 0s linear .18s; }
+.pl-slot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* la U occupa esattamente il suo posto nella scritta (x 290-432 su 1523) */
+.pl-u { left: 19.04%; width: 9.32%; top: 0; height: 100%; z-index: 3; }
+.pl-play { left: 16.4%; width: 14.6%; top: -9.5%; height: 118%; z-index: 1; transform: translate(-34%, -30%) scale(.78) rotate(-8deg); }
+.pl-stage.go .pl-u { z-index: 1; transform: translate(34%, -30%) scale(.8) rotate(6deg); }
+.pl-stage.go .pl-play { z-index: 4; transform: none; }
+/* dentro lo slot, il movimento "di carattere": Play scalpita quando e' dietro, saltella felice quando e' davanti */
+.pl-play svg { transform-origin: 50% 100%; animation: pl-fidget .45s ease-in-out infinite; }
+.pl-stage.go .pl-play svg { animation: pl-bob .9s ease-in-out infinite; }
+@keyframes pl-fidget { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg) translateX(6%); } }
+@keyframes pl-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8%) scale(1.03); } }
+.u-eye { transform-box: fill-box; transform-origin: center; animation: pp-blink 3.2s linear infinite; }
+.p-eye { transform-box: fill-box; transform-origin: center; animation: pp-blink 2.6s linear infinite; }
 @keyframes pp-blink { 0%, 91%, 100% { transform: scaleY(1); } 93%, 95% { transform: scaleY(.12); } }
-@media (prefers-reduced-motion: reduce) { .pp-char, .pp-ombra, .pp-eye { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .wl, .pl-play svg, .u-eye, .p-eye { animation: none !important; }
+  .pl-slot { transition: none; }
+}
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
 /* Spinner piccolo accanto a un messaggio di stato (v66, 'quando clicca su genera unità non appare nessun logo di
    caricamento'): il testo da solo non dice che il lavoro STA andando avanti. */

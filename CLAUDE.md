@@ -1,5 +1,20 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- CARICAMENTO = LA SCRITTA PAUSELEARN "IN GARA" (v116, 24/9). Edoardo, con screenshot dell'overlay v84 e il PNG del
+  marchio: "la U è diversa nella scritta. Io vorrei la scritta Pauselearn con una specie di competizione tra la U e il
+  tasto play che a rotazione vanno uno davanti all'altro... quando c'è davanti Play tutte le lettere si muovono, poi torna
+  davanti la U (che rappresenta pause) e tutte le lettere si fermano ma si ricomincia a muovere il simbolo play".
+  Le due mascotte separate (.pp-*) sono sparite: in #overlay ora c'e' #pl-stage, generato dalle STESSE path di
+  wordmark.svg (non ridisegnate: una lettera per <g class="wl">, e la U con occhi/bocca in uno slot a parte .pl-u con
+  viewBox "290 0 142 188", cioe' esattamente il suo posto nella scritta). Play (.pl-play) e' lo slot che le contende il
+  posto. Stato senza .go = U davanti (marchio leggibile), Play dietro in alto a sinistra che scalpita (pl-fidget);
+  con .go = Play davanti, U dietro in alto a destra, lettere che ballano. REGOLA DEL GAG: quando torna la U le lettere
+  NON tornano a zero, si congelano dove sono (animation-play-state: paused), come un video messo in pausa; e' voluto.
+  Il ritmo lo da' plRun() in app.js (0,7 s la prima volta, poi Play 2,6 s / U 1,9 s), agganciato a overlay(): gira solo
+  a overlay aperto, non riparte se overlay(true) viene richiamato per cambiare il testo, e con prefers-reduced-motion
+  resta il marchio fermo. z-index: la scritta e' a 2, lo slot dietro a 1 (quindi si nasconde dietro le lettere vicine),
+  quello davanti a 3-4. Test: smoke scenario 36.
+
 - EDITOR CHE CHIEDE L'ACCESSO, LINK VERI PER "APRI IN UN'ALTRA SCHEDA", PARLIAMONE CENTRATO (v115, 22/9). Tre
   richieste nello stesso messaggio, dopo la discussione sul caso di Mariachiara (v114): "senza accesso non si può
   aprire una lezione, si può vedere che c'è ma per aprirla si deve fare il log in... si deve scrivere qualcosa che
