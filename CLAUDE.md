@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- PDF SOLUZIONI: LOGO + NO DATE BROWSER (v118, 24/9). Due fix nel foglio stampato delle soluzioni:
+  (1) Logo rotto (due rettangoli vuoti): le <img> puntavano a m-play.svg e wordmark.svg con path relativi; nella
+  finestra di stampa Chrome non li caricava. Ora i src sono data URI base64 inline, zero dipendenze di rete.
+  (2) Data/URL nell'intestazione/pie' di pagina ("24/09/26, 16:53" + indirizzo): sono scritte automatiche che Chrome
+  piazza nei margini @page. Fix: @page { margin: 0 15mm } (top/bottom a zero taglia le scritte, left/right resta
+  15mm). Il padding-top/bottom di #print-area copre la prima e l'ultima pagina; dalla pag 2 in poi i .sol-row hanno
+  4mm di padding che, col margine hardware della stampante, danno ~9mm dal bordo fisico del foglio.
+
 - DESELEZIONA + GAP ADATTIVI (v117, 24/9). Due fix studente: (1) "trova la parola in più" / "trova quella
   sbagliata": ri-cliccare una parola selezionata ora la DESELEZIONA (prima restava bloccata su "sel"). Il toggle e'
   selected = (selected === i ? -1 : i) nell'onclick del chip; il campo di correzione (wrong) non si apre se si e'
