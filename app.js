@@ -4252,7 +4252,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const st = S.student; if (!st) return;
     renderTimeline($('#s-timeline'), st.lesson, {
       done: st.done, results: st.results, activeId: st.activeId, collapseCuts: true,   // lo studente non vede i tagli: la barra è il video che resta
-      onSeek: function (t) { if (S.player) S.player.seek(t); },
+      // v119: se il sommario è visibile (.cards nasconde il player), mostra il video prima di cercare
+      onSeek: function (t) {
+        if (!S.player) return;
+        var stg = $('#s-stage');
+        var wasSummary = stg && stg.classList.contains('cards');
+        if (wasSummary) {
+          stg.classList.remove('cards');
+          dock('#s-stage', false);
+          $('#s-panel').innerHTML = '';
+          panelTheme(null);
+        }
+        S.player.seek(t);
+        if (wasSummary) S.player.play();
+      },
       onMarker: function (ex) { goToExercise(ex); }
     });
   }

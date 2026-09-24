@@ -1,5 +1,12 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- VIDEO VISIBILE DOPO SOMMARIO (v119, 24/9). Bug: dopo tutti gli esercizi il sommario (verde/rosso) copre il video.
+  Se lo studente clicca la barra del tempo per rivedere un pezzo, sente l'audio ma non vede il video perché
+  .cards su #s-stage nasconde il player (CSS: .stage.docked.cards .player-box { display: none }). Fix: onSeek
+  in renderStudentTimeline() ora controlla se .cards è presente; se sì rimuove .cards, chiama dock('#s-stage', false),
+  svuota il pannello sommario e fa play(). Se la barra viene cliccata durante il video normale, il comportamento
+  non cambia (solo seek, niente play forzato).
+
 - PDF SOLUZIONI: LOGO + NO DATE BROWSER (v118, 24/9). Due fix nel foglio stampato delle soluzioni:
   (1) Logo rotto (due rettangoli vuoti): le <img> puntavano a m-play.svg e wordmark.svg con path relativi; nella
   finestra di stampa Chrome non li caricava. Ora i src sono data URI base64 inline, zero dipendenze di rete.
