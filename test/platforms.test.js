@@ -101,4 +101,28 @@ test('islSlim: dalla risorsa ISL al payload piccolo, domande nascoste escluse', 
   assert.strictEqual(s.level, 'A2');
 });
 
+console.log('Rilevamento lingua (v122)');
+test('lezione italiana → it, sicuro (il campo language ISL dice "en" e va ignorato)', function () {
+  const d = P.detectLanguage(ISL);
+  assert.strictEqual(d.lang, 'it');
+  assert.ok(d.sure, JSON.stringify(d.score));
+});
+test('lezione inglese → en, sicuro', function () {
+  const en = { site: 'islcollective', title: 'Despicable Me 2 - Simple Present', questions: [
+    { type: 'Q_GAP_FILL', time: 10, hint: 5, data: { parts: [{ gap: false, part: 'The girls are in the kitchen and' }, { gap: true, part: 'they are making' }, { gap: false, part: 'breakfast for the whole family.' }] } },
+    { type: 'Q_SORTABLE', time: 20, hint: 15, data: { sentence: 'He does not want to go to the party with them' } },
+    { type: 'Q_CORRECT_THE_WRONG_WORD', time: 30, hint: 25, data: { sentence: 'She #***# a very good friend of mine.', answer: 'is', fakeWord: 'are' } }
+  ] };
+  const d = P.detectLanguage(en);
+  assert.strictEqual(d.lang, 'en');
+  assert.ok(d.sure, JSON.stringify(d.score));
+});
+test('poche parole → non sicuro', function () {
+  const d = P.detectLanguage({ site: 'islcollective', title: 'x', questions: [{ type: 'Q_SORTABLE', time: 1, hint: 0, data: { sentence: 'Zoo tigre leone' } }] });
+  assert.strictEqual(d.sure, false);
+});
+test('la lingua scelta finisce nella lezione', function () {
+  assert.strictEqual(P.convert(ISL, { lang: 'en' }).lesson.lang, 'en');
+});
+
 console.log('\n' + passed + ' test passati' + (process.exitCode ? ', con errori' : ''));
