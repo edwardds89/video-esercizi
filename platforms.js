@@ -71,14 +71,17 @@
       const b = EX.buildExercise('scramble', sentence, { lang: lang, seed: 7 });
       return b ? { type: 'scramble', sentence: sentence, data: b.data } : null;
     }
+    // Q_MULTI_SELECT (ISL): options[{text, right}]. PauseLearn ha UNA risposta giusta: con più "right" non si converte
+    // (verrebbe un esercizio che segna sbagliata una risposta giusta), va in skipped.
     const opts = d.options || d.answers;
     if (Array.isArray(opts) && opts.length >= 2) {
       const options = opts.map(function (o) { return clean(typeof o === 'string' ? o : (o.text || o.answer || o.label)); });
-      let correct = 0;
-      opts.forEach(function (o, k) { if (o && typeof o === 'object' && (o.correct || o.isCorrect)) correct = k; });
-      if (d.correctAnswer != null && !isNaN(+d.correctAnswer)) correct = +d.correctAnswer;
+      const rights = [];
+      opts.forEach(function (o, k) { if (o && typeof o === 'object' && (o.right || o.correct || o.isCorrect)) rights.push(k); });
+      if (d.correctAnswer != null && !isNaN(+d.correctAnswer)) rights.push(+d.correctAnswer);
+      if (rights.length !== 1) return null;
       const question = clean(q.question || d.question);
-      const b = EX.buildExercise('mc', 'x x x', { choices: { question: question, options: options, correct: correct } });
+      const b = EX.buildExercise('mc', 'x x x', { choices: { question: question, options: options, correct: rights[0] } });
       return b ? { type: 'mc', sentence: question, data: b.data } : null;
     }
     return null;

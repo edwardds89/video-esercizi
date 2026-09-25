@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IMPORT: SCELTA MULTIPLA ISL, RISPOSTA GIUSTA DAL FLAG `right` (v123, 25/9). Scoperto importando "Come funziona
+  Neuralink": ISL chiama la scelta multipla Q_MULTI_SELECT con options[{text, right}]; la v120 cercava
+  correct/isCorrect e finiva sempre su correct=0 (prima opzione). Ora si legge `right`; se le risposte giuste sono
+  più di una (multi-select vero) l'esercizio va in skipped, perché PauseLearn ha una sola risposta giusta e segnerebbe
+  sbagliata una risposta giusta. Le opzioni restano 3 se ISL ne ha 3 (l'editor le porta a 4 con una vuota: normale).
+  Le due lezioni importate prima del fix (Zoo: nessuna mc; Neuralink: 2 mc) sono state eliminate e reimportate.
+  Test: 17 in test/platforms.test.js.
+
 - IMPORT: LINGUA DI STUDIO RILEVATA E CONFERMATA (v122, 25/9). Edoardo: "se una persona vuole importare una lezione in
   inglese o in tedesco, come può fare se il sito ha soltanto una regola?". La v120 metteva lang='it' fisso. Ora
   importFromPlatform() chiama VLPlat.detectLanguage(payload, lingue di #f-lang) (conteggio delle parole funzionali di
