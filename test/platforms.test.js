@@ -125,4 +125,19 @@ test('la lingua scelta finisce nella lezione', function () {
   assert.strictEqual(P.convert(ISL, { lang: 'en' }).lesson.lang, 'en');
 });
 
+console.log('Scelta multipla ISL (v123)');
+test('Q_MULTI_SELECT con una sola "right" → mc con correct giusto (dati reali, Neuralink 1242627)', function () {
+  const r = P.fromISL({ site: 'islcollective', questions: [{ type: 'Q_MULTI_SELECT', time: 194, hint: 181, question: 'Che cosa evita il robot?', data: { options: [{ text: 'I fili', right: false }, { text: 'I vasi sanguigni', right: true }, { text: 'Gli elettrodi', right: false }, { text: 'I chirurghi', right: false }] } }] });
+  const e = r.lesson.exercises[0];
+  assert.strictEqual(e.type, 'mc');
+  assert.strictEqual(e.data.correct, 1);
+  assert.strictEqual(e.data.options[1], 'I vasi sanguigni');
+  assert.strictEqual(e.data.question, 'Che cosa evita il robot?');
+});
+test('Q_MULTI_SELECT con più risposte giuste → skipped (PauseLearn ha una sola risposta)', function () {
+  const r = P.fromISL({ site: 'islcollective', questions: [{ type: 'Q_MULTI_SELECT', time: 10, hint: 5, question: 'Quali?', data: { options: [{ text: 'a', right: true }, { text: 'b', right: true }, { text: 'c', right: false }] } }] });
+  assert.strictEqual(r.lesson.exercises.length, 0);
+  assert.strictEqual(r.skipped.length, 1);
+});
+
 console.log('\n' + passed + ' test passati' + (process.exitCode ? ', con errori' : ''));
