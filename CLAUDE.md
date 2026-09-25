@@ -1,5 +1,16 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IMPORT: LINGUA DI STUDIO RILEVATA E CONFERMATA (v122, 25/9). Edoardo: "se una persona vuole importare una lezione in
+  inglese o in tedesco, come può fare se il sito ha soltanto una regola?". La v120 metteva lang='it' fisso. Ora
+  importFromPlatform() chiama VLPlat.detectLanguage(payload, lingue di #f-lang) (conteggio delle parole funzionali di
+  L.stopwords per lingua sulle frasi degli esercizi + titolo; sure = ≥5 parole e almeno il doppio della seconda) e apre
+  #dlg-platform-lang: "In che lingua è questa lezione?" con la lingua rilevata preselezionata e le STESSE opzioni di
+  "Nuova lezione" (una lingua nuova aggiunta a #f-lang e lang.js arriva qui da sola). Il campo `language` di
+  ISLCollective NON si usa: vale "en" anche per le lezioni in italiano (è la lingua del sito). Poi
+  finishPlatformImport(payload, lang) fa il resto (convert, dedup, newLesson, editor). Annulla → home.
+  Tedesco e altre lingue: il limite non è dell'importatore ma di lang.js (regole solo it/en), vedi roadmap i18n.
+  Test: 15 in test/platforms.test.js (4 nuovi sul rilevamento).
+
 - DEDUP IMPORT: ID NUMERO/STRINGA (v121, 25/9). Il controllo "già importata" confrontava importedFrom.id con ===: la
   prima lezione (prototipo del 25/9) aveva l'id come numero, il bookmarklet lo manda come stringa → duplicato creato.
   Ora String(a) === String(b). Verificato dal vero: bookmarklet sulla pagina ISL 1213463 → v120 ha creato un doppione

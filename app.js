@@ -1082,8 +1082,26 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
      video non hanno materiale. Stessa lezione importata due volte: si apre quella già presente, non si duplica. */
   function importFromPlatform(payload) {
     if (!window.VLPlat) return toast('Modulo di importazione non caricato: ricarica la pagina', 6000);
+    // v122 (Edoardo: "se una persona vuole importare una lezione in inglese o in tedesco, come può fare se il sito ha
+    // soltanto una regola?"): la lingua di studio NON è fissa. Si rileva dalle frasi (VLPlat.detectLanguage) e si
+    // chiede conferma in un dialogo con le stesse lingue di "Nuova lezione" (#f-lang): una lingua nuova aggiunta lì
+    // (e in lang.js) arriva qui da sola. Il campo `language` di ISLCollective non si usa: dice "en" anche per l'italiano.
+    const langs = Array.prototype.map.call($('#f-lang').options, function (o) { return { value: o.value, label: o.textContent }; });
+    const det = VLPlat.detectLanguage(payload, langs.map(function (l) { return l.value; }));
+    const sel = $('#pl-lang'); sel.innerHTML = '';
+    langs.forEach(function (l) { sel.appendChild(el('option', { value: l.value, text: l.label, selected: l.value === det.lang ? 'selected' : null })); });
+    $('#pl-title').textContent = payload.title || '(senza titolo)';
+    $('#pl-detect').textContent = det.sure ? 'Rilevata dalle frasi degli esercizi: ' + (langs.find(function (l) { return l.value === det.lang; }) || {}).label + '. Cambiala se non è giusta.' : 'Non sono sicuro della lingua: controlla prima di continuare.';
+    const dlg = $('#dlg-platform-lang');
+    const ok = $('#pl-ok'), cancel = $('#pl-cancel');
+    ok.onclick = function () { dlg.close(); finishPlatformImport(payload, sel.value); };
+    cancel.onclick = function () { dlg.close(); renderHome(); toast('Importazione annullata'); };
+    show('home'); renderHome();
+    dlg.showModal();
+  }
+  function finishPlatformImport(payload, lang) {
     let out;
-    try { out = VLPlat.convert(payload, { lang: 'it', uid: uid }); } catch (e) { return toast('Importazione non riuscita: ' + e.message, 6000); }
+    try { out = VLPlat.convert(payload, { lang: lang, uid: uid }); } catch (e) { return toast('Importazione non riuscita: ' + e.message, 6000); }
     const src = out.lesson.importedFrom || {};
     const already = Object.keys(S.lessons).find(function (id) { const l = S.lessons[id]; return l && l.importedFrom && l.importedFrom.site === src.site && src.id && String(l.importedFrom.id) === String(src.id); });   // v121: id numero o stringa
     if (already) {

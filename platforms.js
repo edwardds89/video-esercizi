@@ -115,6 +115,25 @@
     };
   }
 
+  /** v122: lingua di studio rilevata dalle frasi (parole funzionali per lingua: L.stopwords). Il campo `language` di
+   *  ISLCollective NON è affidabile (dice "en" anche per una lezione in italiano: è la lingua del sito, non del video).
+   *  Restituisce {lang, score:{it:n,en:n}, sure:bool}; sure = una lingua ha almeno il doppio dell'altra e ≥ 5 parole. */
+  function detectLanguage(payload, langs) {
+    langs = langs || ['it', 'en'];
+    const text = (payload.questions || []).map(function (q) {
+      const d = q.data || {};
+      if (Array.isArray(d.parts)) return d.parts.map(function (p) { return p.part; }).join(' ');
+      return [d.sentence, q.question, d.question].filter(Boolean).join(' ');
+    }).join(' ') + ' ' + (payload.title || '');
+    const ws = L.words(text);
+    const score = {};
+    langs.forEach(function (l) { const sw = L.stopwords(l); score[l] = ws.filter(function (w) { return sw.has(w); }).length; });
+    const sorted = langs.slice().sort(function (a, b) { return score[b] - score[a]; });
+    const best = sorted[0], second = sorted[1];
+    const sure = score[best] >= 5 && (second == null || score[best] >= 2 * score[second]);
+    return { lang: best, score: score, sure: sure };
+  }
+
   /** Punto d'ingresso unico: payload con .site → lezione. */
   function convert(payload, opts) {
     if (!payload || !payload.site) throw new Error('piattaforma non indicata');
@@ -122,5 +141,5 @@
     throw new Error('piattaforma non supportata: ' + payload.site);
   }
 
-  return { PLATFORMS: PLATFORMS, islSlim: islSlim, fromISL: fromISL, convert: convert };
+  return { PLATFORMS: PLATFORMS, islSlim: islSlim, fromISL: fromISL, convert: convert, detectLanguage: detectLanguage };
 });
