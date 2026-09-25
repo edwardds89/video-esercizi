@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-119">
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-120">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260919-119">
+<link rel="stylesheet" href="styles.css?v=20260919-120">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-119" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-119" alt="PauseLearn" width="178" height="22"></div>
+  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-120" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-120" alt="PauseLearn" width="178" height="22"></div>
   <button id="nav-toggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav" title="Menu">☰<span id="nav-toggle-dot" class="dot off" style="display:none"></span></button>
   <nav id="nav">
     <button data-view="home">Le tue lezioni</button>
@@ -68,6 +68,7 @@
       <div id="storage-banner" class="stor" hidden></div>
       <div id="lesson-list" class="lesson-grid"></div>
       <div class="row" style="margin-top:12px">
+        <button id="btn-platform" class="chip" type="button" style="margin:0">⬇ Importa da altre piattaforme</button>
         <label for="import-file" class="chip" style="margin:0">Importa JSON…</label>
         <input id="import-file" type="file" accept="application/json,.json" class="sr">
         <button id="btn-demo">Crea lezione demo (player finto)</button>
@@ -77,7 +78,7 @@
     <div class="card" id="bookmarklet-card">
       <h2>Pulsante per il browser: dal video alla bozza senza copia-incolla</h2>
       <p>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla; funziona in Chrome, Safari, Opera, Firefox, Edge): <a id="bookmarklet-link" class="chip" href="#" style="font-weight:600">▶ PauseLearn</a></p>
-      <p class="hint">Poi, su un video di YouTube, cliccalo: legge titolo, durata e trascrizione dal pannello di YouTube e apre qui la nuova lezione già compilata. Se il video non ha la trascrizione ti avvisa che non è utilizzabile (a meno di incollarla a mano). È l'unica via senza copia-incolla: la trascrizione si può leggere solo dentro la pagina di YouTube.</p>
+      <p class="hint">Poi, su un video di YouTube, cliccalo: legge titolo, durata e trascrizione dal pannello di YouTube e apre qui la nuova lezione già compilata. Se il video non ha la trascrizione ti avvisa che non è utilizzabile (a meno di incollarla a mano). È l'unica via senza copia-incolla: la trascrizione si può leggere solo dentro la pagina di YouTube. Lo stesso pulsante, sulla pagina di una tua lezione fatta su un'altra piattaforma, la porta qui (vedi "Importa da altre piattaforme"). Se lo avevi già nei preferiti da prima, trascinalo di nuovo: quello vecchio non conosce le altre piattaforme.</p>
       <details><summary class="hint">Non riesci a trascinarlo? Crea un preferito a mano</summary>
         <p class="hint">Aggiungi un preferito qualsiasi, poi modificalo: nome "PauseLearn", indirizzo = il codice qui sotto.</p>
         <div id="bookmarklet-code" class="linkbox"></div>
@@ -445,6 +446,20 @@
     <div id="ap-stage" class="ap-stage"></div>
   </section>
 </main>
+
+<!-- v120: "Importa da altre piattaforme". La lettura della lezione avviene nella pagina dell'altro sito tramite il
+     pulsante dei preferiti (l'app non può leggere altri siti da sola); la conversione è in platforms.js. -->
+<dialog id="dlg-platform">
+  <h2>Importa da altre piattaforme</h2>
+  <p class="hint">Le lezioni che hai già fatto altrove arrivano qui con esercizi, tempi e tagli: niente da rifare. Piattaforme riconosciute per ora: <b>ISLCollective</b> (video-lezioni). Altre in arrivo.</p>
+  <ol class="plat-steps">
+    <li>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla), se non l'hai già fatto per YouTube: <a id="plat-bookmarklet" class="chip" href="#" style="font-weight:600">▶ PauseLearn</a><br><span class="hint">Se lo avevi già, trascinalo di nuovo: la versione vecchia conosce solo YouTube.</span></li>
+    <li>Apri sull'altra piattaforma la pagina di una <b>tua</b> lezione (quella dove si vede il video con le domande).</li>
+    <li>Clicca il pulsante nei preferiti: torni qui con la lezione già nell'editor. Controlla tempi e frasi e salva.</li>
+  </ol>
+  <p class="hint">Cosa arriva: completa gli spazi, parola sbagliata, parola in più, riordina la frase, scelta multipla, parti saltate del video. Cosa non arriva: la trascrizione del video (gli esercizi portano le loro frasi, per lo studente non cambia nulla) e i tipi di esercizio che PauseLearn non ha. Importa solo lezioni tue.</p>
+  <div class="row" style="margin-top:12px"><button id="plat-close">Chiudi</button></div>
+</dialog>
 
 <dialog id="dlg-act-new">
   <h2 id="an-title">Nuova attività</h2>
@@ -825,17 +840,18 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260919-119"></script>
-<script src="exercises.js?v=20260919-119"></script>
-<script src="generator.js?v=20260919-119"></script>
-<script src="activities.js?v=20260919-119"></script>
-<script src="ai.js?v=20260919-119"></script>
-<script src="demo-data.js?v=20260919-119"></script>
-<script src="bookmarklet.js?v=20260919-119"></script>
-<script src="sync.js?v=20260919-119"></script>
-<script src="qr.js?v=20260919-119"></script>
-<script src="challenge.js?v=20260919-119"></script>
-<script src="app.js?v=20260919-119"></script>
+<script src="lang.js?v=20260919-120"></script>
+<script src="exercises.js?v=20260919-120"></script>
+<script src="generator.js?v=20260919-120"></script>
+<script src="activities.js?v=20260919-120"></script>
+<script src="ai.js?v=20260919-120"></script>
+<script src="demo-data.js?v=20260919-120"></script>
+<script src="platforms.js?v=20260919-120"></script>
+<script src="bookmarklet.js?v=20260919-120"></script>
+<script src="sync.js?v=20260919-120"></script>
+<script src="qr.js?v=20260919-120"></script>
+<script src="challenge.js?v=20260919-120"></script>
+<script src="app.js?v=20260919-120"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 

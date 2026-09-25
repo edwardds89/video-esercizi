@@ -1455,3 +1455,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .stor-go { flex: 0 0 auto; }
 .stor-ver { flex: 0 0 auto; font-size: 11px; opacity: .55; font-variant-numeric: tabular-nums; }
 @media print { .stor { display: none !important; } }
+
+/* v120: passi del dialogo "Importa da altre piattaforme" */
+.plat-steps { margin: 10px 0 0 18px; padding: 0; display: grid; gap: 8px; }
+.plat-steps li { line-height: 1.45; }

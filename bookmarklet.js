@@ -1,11 +1,33 @@
 /* bookmarklet.js — pulsante per la barra dei preferiti: da una pagina "watch" di YouTube legge titolo, durata e
    pannello trascrizione (nel browser dell'utente, senza server) e apre l'app con tutto già compilato.
+   v120: sulla pagina di una video-lezione ISLCollective legge invece la lezione (esercizi, tempi, tagli) dal
+   <script id="__NEXT_DATA__"> e apre l'app con #platform=… ("Importa da altre piattaforme", vedi platforms.js).
    L'app costruisce il link "javascript:" da questa funzione (vedi app.js → bookmarkletUrl). */
 window.VL_BOOKMARKLET = function (APP) {
   function b64url(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  if (/(^|\.)islcollective\.com$/i.test(location.hostname)) {
+    var res = null;
+    try {
+      var nd = JSON.parse(document.getElementById('__NEXT_DATA__').textContent);
+      res = nd.props.pageProps.initialState.resource.resourceProfile.resource;
+    } catch (e) { /* struttura diversa: gestito sotto */ }
+    if (!res || !res.questions || !res.questions.length) { alert('Apri la pagina di una TUA video-lezione su ISLCollective (quella con il video e le domande), poi clicca il pulsante.'); return; }
+    var c = function (s) { return String(s || '').replace(/\s+/g, ' ').trim(); };
+    var slim = {
+      site: 'islcollective', id: String(res.resourceId || res.id || ''), url: res.frontendUrl || '',
+      title: c(res.videoTitle || res.title || res.headline), videoUrl: res.videoUrl || '', language: res.language || '',
+      duration: res.duration || res.videoLength || 0, level: ((res.levels || [])[0] || {}).text || '',
+      skips: (res.skips || []).map(function (s) { return { start: s.start, end: s.end }; }),
+      questions: res.questions.filter(function (q) { return q && !q.hidden; }).map(function (q) {
+        return { type: q.questionType, time: q.time, hint: q.hint, question: q.question || '', data: q.questionData || {} };
+      })
+    };
+    location.href = APP + '#platform=' + b64url(JSON.stringify(slim));
+    return;
+  }
   var id = null;
   try { id = new URL(location.href).searchParams.get('v'); } catch (e) { /* ignore */ }
-  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video), poi clicca il pulsante.'); return; }
+  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video) o una tua video-lezione su ISLCollective, poi clicca il pulsante.'); return; }
   var title = document.title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube\s*$/, '');
   var video = document.querySelector('video');
   var duration = (video && video.duration) || 0;

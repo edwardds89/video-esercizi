@@ -1,5 +1,35 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IMPORTA DA ALTRE PIATTAFORME: ISLCOLLECTIVE (v120, 25/9). Edoardo: "voglio su PauseLearn un tasto importa da altre
+  piattaforme, che inizialmente è compatibile con ISLCollective" (scopo: chi ha già lezioni altrove le porta qui senza
+  rifarle; nei testi NON si parla di migrazione, solo di "porta qui le lezioni che hai già fatto altrove").
+  ARCHITETTURA: l'app è statica e non può leggere la pagina di un altro sito (niente CORS su islcollective.com), quindi
+  "incolla il link" NON è possibile senza server: si potrà fare quando ci sarà la Edge Function Supabase (roadmap cassa)
+  con un proxy che restituisce il payload. Oggi la lettura la fa il pulsante dei preferiti DENTRO la pagina ISL, come
+  per YouTube: bookmarklet.js riconosce hostname islcollective.com, legge <script id="__NEXT_DATA__"> →
+  props.pageProps.initialState.resource.resourceProfile.resource (dati presenti nell'HTML anche senza login),
+  ne fa un payload piccolo (site, id, url, title, videoUrl, language, duration, level, skips, questions[{type,time,
+  hint,question,data}]) e apre APP#platform=<b64url>. app.js: init() gestisce #platform= → importFromPlatform(payload)
+  → VLPlat.convert (platforms.js, modulo UMD browser+Node) → newLesson + saveLessons + openEditor + toast con conteggi.
+  Stessa lezione (importedFrom.site+id) già presente → si apre quella, niente duplicati. Home: bottone #btn-platform →
+  #dlg-platform (3 passi, il bookmarklet è lo stesso di YouTube: #plat-bookmarklet riceve lo stesso href). Chi aveva il
+  pulsante vecchio nei preferiti deve ritrascinarlo (il vecchio conosce solo YouTube; scritto nella card e nel dialogo).
+  CONVERSIONE (platforms.js → fromISL): Q_CORRECT_THE_WRONG_WORD → wrong (la frase ha #***# al posto della parola
+  giusta: answer = giusta, fakeWord = mostrata; indice = n. token prima del segnaposto; maiuscola conservata);
+  Q_FIND_THE_EXTRA_WORD → extra (#***# = dove va la parola in più); Q_GAP_FILL → gap (parts[{gap,part}]: buchi a più
+  parole = indici adiacenti = una casella sola via gapRuns); Q_SORTABLE → scramble (EX.buildExercise, seed 7);
+  opzioni → mc. Tempi: ISL `time` = pausa = segment.end = markerTime, `hint` = inizio riascolto = segment.start
+  (se manca: end-8). skips → cuts. Livello dal tag ISL ("Intermediate (B1)" → B1). Esercizi nascosti esclusi; tipi
+  non riconosciuti o dati incoerenti → skipped (nel toast: "n. X non convertibili"), mai un esercizio rotto.
+  LIMITE NOTO: la lezione arriva SENZA trascrizione (lines/chunks vuoti, non inventati): per lo studente è completa
+  (ogni esercizio porta la sua frase), nell'editor Helper/"Altra frase"/"Proponi le parole" dal video non hanno
+  materiale e "Aggiorna testo" non ha nulla da confrontare (textForRange vuoto → non si accende). Una funzione
+  "aggiungi la trascrizione a una lezione esistente" è la candidata naturale come passo successivo.
+  Test: node test/platforms.test.js (11 test, dati reali della lezione ISL 1213463). Il 25/9 la prima lezione
+  ("Come social e AI stanno rallentando il cervello", 9 esercizi) è stata importata con un prototipo dello stesso
+  convertitore (id mugsf3tft8crt, nel cloud di Edoardo). index.html: 15 tag ?v= (non 14) + platforms.js prima di
+  bookmarklet.js.
+
 - VIDEO VISIBILE DOPO SOMMARIO (v119, 24/9). Bug: dopo tutti gli esercizi il sommario (verde/rosso) copre il video.
   Se lo studente clicca la barra del tempo per rivedere un pezzo, sente l'audio ma non vede il video perché
   .cards su #s-stage nasconde il player (CSS: .stage.docked.cards .player-box { display: none }). Fix: onSeek

@@ -1071,7 +1071,37 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     a.onclick = function (e) { e.preventDefault(); toast('Trascina il pulsante nella barra dei preferiti, poi usalo su YouTube'); };
     $('#bookmarklet-code').textContent = url;
     $('#bookmarklet-copy').onclick = function () { copyText(url); };
+    const a2 = $('#plat-bookmarklet');
+    if (a2) { a2.setAttribute('href', url); a2.onclick = function (e) { e.preventDefault(); toast('Trascina il pulsante nella barra dei preferiti, poi usalo sulla pagina della tua lezione'); }; }
   }
+  /* v120 "Importa da altre piattaforme" (Edoardo: "voglio su PauseLearn un tasto importa da altre piattaforme, che
+     inizialmente è compatibile con ISLCollective"). Senza server l'app non può leggere la pagina di un altro sito
+     (CORS), quindi la lettura la fa il pulsante dei preferiti DENTRO quella pagina (bookmarklet.js), come per YouTube;
+     la conversione è in platforms.js (VLPlat, testato in test/platforms.test.js). La lezione arriva senza trascrizione:
+     gli esercizi portano le loro frasi, quindi per lo studente è completa; nell'editor Helper/"Altra frase"/parole dal
+     video non hanno materiale. Stessa lezione importata due volte: si apre quella già presente, non si duplica. */
+  function importFromPlatform(payload) {
+    if (!window.VLPlat) return toast('Modulo di importazione non caricato: ricarica la pagina', 6000);
+    let out;
+    try { out = VLPlat.convert(payload, { lang: 'it', uid: uid }); } catch (e) { return toast('Importazione non riuscita: ' + e.message, 6000); }
+    const src = out.lesson.importedFrom || {};
+    const already = Object.keys(S.lessons).find(function (id) { const l = S.lessons[id]; return l && l.importedFrom && l.importedFrom.site === src.site && l.importedFrom.id === src.id && src.id; });
+    if (already) {
+      toast('Questa lezione era già stata importata da ' + platformName(src.site) + ': apro quella. Per reimportarla, prima eliminala.', 7000);
+      return openEditor(already);
+    }
+    if (!out.lesson.exercises.length) return toast('Nessun esercizio convertibile in questa lezione' + (out.skipped.length ? ' (' + out.skipped.length + ' non riconosciuti)' : ''), 7000);
+    const ls = newLesson(out.lesson);
+    saveLessons();
+    openEditor(ls.id);
+    const msg = 'Importata da ' + platformName(src.site) + ': ' + out.lesson.exercises.length + ' esercizi' + (out.lesson.cuts.length ? ', ' + out.lesson.cuts.length + (out.lesson.cuts.length === 1 ? ' taglio' : ' tagli') : '')
+      + (out.skipped.length ? ' · ' + out.skipped.length + ' non convertibili (' + out.skipped.map(function (s) { return 'n.' + s.n; }).join(', ') + ')' : '')
+      + '. Controlla tempi e frasi: la trascrizione del video non c\'è, ma per lo studente la lezione è completa.';
+    toast(msg, 9000);
+  }
+  function platformName(site) { return (window.VLPlat && VLPlat.PLATFORMS[site] && VLPlat.PLATFORMS[site].name) || site || 'altra piattaforma'; }
+  $('#btn-platform').addEventListener('click', function () { $('#dlg-platform').showModal(); });
+  $('#plat-close').addEventListener('click', function () { $('#dlg-platform').close(); });
   /* v105 (community, Edoardo: "voglio che la mia collega trovi le mie lezioni online anche quando si registra"): pubblicare
      una lezione la rende leggibile a CHIUNQUE abbia un account (non solo alla collega, e non a chi non si è registrato:
      regola nel database, non un filtro dell'interfaccia), ma resta una scelta per singola voce, spenta di default — niente
@@ -7460,6 +7490,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         history.replaceState(null, '', location.pathname + location.search);
         return openNew(data);
       } catch (e) { toast('Importazione da YouTube non riuscita: ' + e.message); }
+    }
+    if (h.indexOf('#platform=') === 0) {
+      // v120: il pulsante dei preferiti su una lezione fatta altrove (oggi ISLCollective) → lezione PauseLearn
+      let payload = null;
+      try { payload = JSON.parse(unb64url(h.slice(10))); } catch (e) { toast('Importazione non riuscita: ' + e.message, 6000); }
+      history.replaceState(null, '', location.pathname + location.search);
+      if (payload) return importFromPlatform(payload);
     }
     if (h.indexOf('#c=') === 0) {
       const pin = h.slice(3).trim().toUpperCase();
