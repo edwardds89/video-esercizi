@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- DEDUP IMPORT: ID NUMERO/STRINGA (v121, 25/9). Il controllo "già importata" confrontava importedFrom.id con ===: la
+  prima lezione (prototipo del 25/9) aveva l'id come numero, il bookmarklet lo manda come stringa → duplicato creato.
+  Ora String(a) === String(b). Verificato dal vero: bookmarklet sulla pagina ISL 1213463 → v120 ha creato un doppione
+  (eliminato), v121 apre quella esistente.
+
 - IMPORTA DA ALTRE PIATTAFORME: ISLCOLLECTIVE (v120, 25/9). Edoardo: "voglio su PauseLearn un tasto importa da altre
   piattaforme, che inizialmente è compatibile con ISLCollective" (scopo: chi ha già lezioni altrove le porta qui senza
   rifarle; nei testi NON si parla di migrazione, solo di "porta qui le lezioni che hai già fatto altrove").

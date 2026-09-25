@@ -1085,7 +1085,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     let out;
     try { out = VLPlat.convert(payload, { lang: 'it', uid: uid }); } catch (e) { return toast('Importazione non riuscita: ' + e.message, 6000); }
     const src = out.lesson.importedFrom || {};
-    const already = Object.keys(S.lessons).find(function (id) { const l = S.lessons[id]; return l && l.importedFrom && l.importedFrom.site === src.site && l.importedFrom.id === src.id && src.id; });
+    const already = Object.keys(S.lessons).find(function (id) { const l = S.lessons[id]; return l && l.importedFrom && l.importedFrom.site === src.site && src.id && String(l.importedFrom.id) === String(src.id); });   // v121: id numero o stringa
     if (already) {
       toast('Questa lezione era già stata importata da ' + platformName(src.site) + ': apro quella. Per reimportarla, prima eliminala.', 7000);
       return openEditor(already);
