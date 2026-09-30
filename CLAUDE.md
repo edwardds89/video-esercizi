@@ -31,6 +31,17 @@
   "✓ Consegnato" o "Non inviato … Riprova"; "Ricomincia" = nuovo tentativo (nuovo id). Verificato end-to-end in
   locale con ?mock=1 (docente assegna, studente in altra scheda, report corretto con la risposta sbagliata scritta).
 
+- PROGETTO SUPABASE GIUSTO (30/9, correzione importante). Il sito usa il progetto "pauselearn"
+  (ytryyxgkhhvgqieodhkk, org PauseLearn, account Supabase edoardo@pauselearn.com), come dice VLSync.CONFIG in sync.js.
+  NON "video-lezioni" (raakqcqrcgbfncevxauz, account edoardo@myself.com): è il progetto vecchio, non più usato dal sito.
+  La v125 (classi/compiti/risultati) e il keep-alive sono stati eseguiti PRIMA per errore su video-lezioni e POI sul
+  progetto giusto (sql/2026-09-30-classi-compiti.sql + tabella/funzione keepalive). Su video-lezioni restano tabelle
+  classes/assignments/results vuote e innocue. keepalive.yml v3 pinga pauselearn (bloccante) e video-lezioni (non
+  bloccante, finché Edoardo non decide se metterlo in pausa). Verificato dal vero il 30/9: classe creata, lezione
+  assegnata (codice), studente anonimo dal link, report con risposte sbagliate; dati di prova cancellati.
+  Il progetto "video-esercizi" (eu-central-1, account myself.com) è vecchio e in pausa: non serve.
+  REGOLA: prima di toccare Supabase, leggere VLSync.CONFIG.url dal sito LIVE, non dalle note.
+
 - KEEP-ALIVE SUPABASE v2 (30/9, nessun cambio di versione dell'app). Il 30/9 Supabase ha mandato il preavviso di pausa
   per inattività nonostante il workflow keepalive.yml girasse ogni 3 giorni con esito verde: la sua lettura anonima di
   lessons rispondeva 200 ma vuota (RLS) e Supabase non la contava come attività. Ora: tabella public.keepalive (una riga,
