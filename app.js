@@ -538,6 +538,7 @@
           // v105: il pulsante "Pubblica" dipende da CLOUD.user (senza account non c'e' dove pubblicare) — se la home e' gia'
           // disegnata quando l'accesso cambia, va ridisegnata anche lei, non solo il pallino dell'account.
           if (S.view === 'home' && CLOUD.user && CLOUD.user.id !== before) renderHome();
+          if (S.view === 'classes' && CLOUD.user && CLOUD.user.id !== before) renderClasses();   // v125
           if (ev === 'SIGNED_IN' && CLOUD.user && CLOUD.user.id !== before) { CLOUD.announce = true; runSync(); }
         });
       }
@@ -549,6 +550,7 @@
       // v105: la sessione si puo' ripristinare DOPO il primo renderHome() (fatto all'avvio, prima che initCloud finisca):
       // senza questo, il pulsante "Pubblica" resta assente finche' qualcos'altro non ridisegna la home (es. un cambio di vista).
       if (CLOUD.user && S.view === 'home') renderHome();
+      if (CLOUD.user && S.view === 'classes') renderClasses();   // v125: la sessione arriva dopo il primo disegno
       if (CLOUD.user) { CLOUD.announce = !CLOUD.sync.state.lastSync; runSync(); }
       return CLOUD.sync;
     })().catch(function (e) { toast(e.message); CLOUD.ready = null; return null; });
@@ -1031,6 +1033,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (v === 'home') renderHome();
     else if (v === 'new') openNew();
     else if (v === 'community') renderCommunity();
+    else if (v === 'classes') renderClasses();   // v125
   });
   // v106 (Edoardo, screenshot da telefono: la nav sotto i 640px e' un pannello a tendina dietro il pulsante ☰,
   // vedi styles.css). Si chiude da sola alla scelta di una voce (ogni pulsante dentro #nav naviga o apre un dialogo,
@@ -1276,6 +1279,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { if (lessonEditLocked()) return openEditLockedDialog(ls); openEditor(ls.id); } }),
             el('button', { class: 'small', text: '🔗 Condividi', title: 'Link studente', onclick: function () { openShare(ls); } }),   // v78
+            el('button', { class: 'small', text: '📋 Assegna', title: 'Assegna a una classe come compito: vedi chi l\'ha fatto e cosa ha sbagliato', onclick: function () { openAssignDialog(ls); } }),   // v125
             el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
             publishBtn(ls),
             el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + ls.title + '"?')) deleteLesson(ls); } }))));
@@ -4568,9 +4572,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         mode: 'student', lesson: ls, index: ls.exercises.indexOf(next), total: ls.exercises.length,
         replay: replaySegment, attempts: st.attempts, hints: st.hints,
         review: st.done.has(next.id) ? (st.results[next.id] || { correct: false }) : null,   // già fatto: si riascolta, non si rifà
-        onDone: function (correct) { finishExercise(next, correct); },
+        onDone: function (correct) { finishExercise(next, correct, correct ? 'solved' : 'revealed'); },
+        onAttempt: function (a, ok) { assignAttempt(next, a, ok); },
         onContinue: continueVideo,
-        onSkip: function () { finishExercise(next, false); continueVideo(); }
+        onSkip: function () { finishExercise(next, false, 'skipped'); continueVideo(); }
       });
       return;
     }
@@ -4650,11 +4655,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     S.player.seek(sg.start);
     S.player.play();
   }
-  function finishExercise(ex, correct) {
+  function finishExercise(ex, correct, how) {
     const st = S.student;
     if (st.results[ex.id]) return;   // il risultato è definitivo: si può riascoltare, non rifare
     st.results[ex.id] = { correct: correct, attempts: st.attempts[ex.id] || 1, hints: st.hints[ex.id] || 0 };
     st.done.add(ex.id);
+    assignFinish(ex, correct, how, st.hints[ex.id] || 0);
   }
   function continueVideo() {
     const st = S.student;
@@ -5392,6 +5398,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (a == null || a === '' || a === -1 || (Array.isArray(a) && !a.length) || (typeof a === 'object' && !Array.isArray(a) && a.index === -1)) { fb.textContent = 'Prima rispondi.'; fb.style.color = 'var(--muted)'; return; }
       attempts[ex.id] = (attempts[ex.id] || 0) + 1;
       const res = EX.check(ex, a, { strict: strict });
+      if (opts.onAttempt) opts.onAttempt(a, res.correct);   // v125: compiti con report (ogni risposta data finisce nel registro)
       markResult(res);
       if (res.correct) {
         solved = true;
@@ -6466,9 +6473,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       list.appendChild(el('div', { class: 'notice ' + (r && r.correct ? 'ok' : 'bad'), text: (i + 1) + '. ' + EX.LABELS[e.type] + ' — ' + (r && r.correct ? 'giusto' : 'da rivedere') + (r && r.attempts > 1 ? ' (' + r.attempts + ' tentativi)' : '') + (r && r.hints ? ' (' + r.hints + (r.hints === 1 ? ' aiuto' : ' aiuti') + ')' : '') + ' · soluzione: ' + EX.solution(e) }));
     });
     p.appendChild(list);
+    if (S.assign) p.appendChild(assignSummaryBox());   // v125: il compito si consegna da solo; qui si vede se è arrivato
     renderWordList(p, ls, st.stars);
     p.appendChild(el('div', { class: 'actions' },
-      el('button', { class: 'primary', text: 'Ricomincia', onclick: function () { openStudent(ls.id, false, ls); } })));
+      el('button', { class: 'primary', text: 'Ricomincia', onclick: function () { if (S.assign) assignNewAttempt(); openStudent(ls.id, false, ls); } })));
   }
 
   // ---------- ESERCIZI DA UNA FOTO O SCREENSHOT (v70, 'ho una chiave API, voglio inserire screenshot
@@ -7493,6 +7501,389 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
 
   // ---------- avvio ----------
+  // ---------- CLASSI E COMPITI (v125) ----------
+  // Edoardo (30/9, per i corsi PoliMi): "compiti a casa con report, che io posso vedere chi ha fatto i compiti ... voglio
+  // vedere l'errore di ogni studente ... il nome e cognome lo scrive lo studente, sono io che creo le classi e assegno
+  // un'esercitazione o un compito a una classe che poi posso riutilizzare per un'altra classe".
+  // Dati e regole in classroom.js (VLClass); tabelle e funzioni in sql/2026-09-30-classi-compiti.sql.
+  // Docente: vista #view-classes (classi → compiti) e #view-report (studenti × esercizi). Studente: #a=CODICE →
+  // #view-assign (nome e cognome) → la solita vista studente; ogni esercizio chiuso viene inviato (S.assign).
+  const CLS = { classes: null, assignments: null, counts: {}, qrOpen: null, report: null, repTimer: null };
+  function classBackend() {
+    if (S.mock) return VLClass.memoryBackend(localStorage);
+    if (!CLOUD.client || !CLOUD.user) return null;
+    return VLClass.supabaseBackend(CLOUD.client);
+  }
+  function studentBackend(cb) {
+    if (S.mock) return cb(VLClass.memoryBackend(localStorage));
+    loadSupaLib(function (ok) {
+      if (!ok) return cb(null);
+      const client = window.supabase.createClient(VLSync.CONFIG.url, VLSync.CONFIG.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      cb(VLClass.supabaseBackend(client));
+    });
+  }
+  function assignUrl(code) { return location.origin + location.pathname + '#a=' + code; }
+  /** Eliminazione in due passi SENZA confirm() nativo (bloccherebbe l'automazione e sul telefono è brutto). */
+  function twoStep(label, fn, cls) {
+    const b = el('button', { class: 'small danger' + (cls ? ' ' + cls : ''), text: label });
+    let armed = null;
+    b.addEventListener('click', function () {
+      if (armed) { clearTimeout(armed); armed = null; b.disabled = true; fn(); return; }
+      b.textContent = 'Sicuro? Clicca ancora';
+      armed = setTimeout(function () { armed = null; b.textContent = label; }, 4000);
+    });
+    return b;
+  }
+  function qrSvg(text) { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); }
+  function fmtDate(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); }
+  function needLogin(root, retry) {
+    root.appendChild(el('div', { class: 'notice' },
+      el('p', { style: 'margin:0 0 8px', text: 'Per usare classi e compiti accedi al tuo account (pulsante in alto a destra): le classi e i risultati degli studenti stanno nel tuo cloud, non in questo browser.' }),
+      el('button', { class: 'small', text: '↻ Riprova', onclick: retry })));
+  }
+
+  // --- vista docente: classi e compiti ---
+  function renderClasses() {
+    show('classes');
+    const root = $('#cls-root'); root.innerHTML = '';
+    const be = classBackend();
+    if (!be) { needLogin(root, renderClasses); return; }
+    const nameIn = el('input', { type: 'text', placeholder: 'Nome della classe (es. PoliMi Lun-Mer)', maxlength: '80', style: 'flex:1;min-width:220px' });
+    const add = el('button', { class: 'primary', text: '+ Crea classe' });
+    const doAdd = function () {
+      const n = nameIn.value.trim(); if (!n) { nameIn.focus(); return toast('Scrivi il nome della classe'); }
+      add.disabled = true;
+      be.createClass(n).then(function () { toast('Classe creata'); renderClasses(); }, function (e) { add.disabled = false; toast('Non creata: ' + e.message, 6000); });
+    };
+    add.addEventListener('click', doAdd);
+    nameIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') doAdd(); });
+    root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;margin-bottom:6px' }, nameIn, add));
+    root.appendChild(el('p', { class: 'hint', text: 'Per dare un compito: nelle tue lezioni clicca "📋 Assegna" e scegli la classe. Gli studenti aprono il link, scrivono nome e cognome e fanno la lezione; qui vedi chi l\'ha fatta e cosa ha sbagliato.' }));
+    const list = el('div', { class: 'cls-list' }, el('p', { class: 'hint', text: 'Carico…' }));
+    root.appendChild(list);
+    Promise.all([be.listClasses(), be.listAssignments()]).then(function (r) {
+      CLS.classes = r[0] || []; CLS.assignments = r[1] || [];
+      const ids = CLS.assignments.map(function (a) { return a.id; });
+      return ids.length ? be.countResults(ids) : [];
+    }).then(function (rows) {
+      CLS.counts = {};
+      (rows || []).forEach(function (r) {
+        const c = CLS.counts[r.assignment_id] = CLS.counts[r.assignment_id] || { students: {}, finished: {} };
+        const k = VLClass.normName(r.student_name); c.students[k] = 1; if (r.finished) c.finished[k] = 1;
+      });
+      paintClassList(be, list);
+    }).catch(function (e) { list.innerHTML = ''; list.appendChild(el('div', { class: 'notice bad', text: 'Non riesco a caricare le classi: ' + e.message })); });
+  }
+  function paintClassList(be, list) {
+    list.innerHTML = '';
+    if (!CLS.classes.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna classe ancora: creane una qui sopra.' })); return; }
+    CLS.classes.forEach(function (c) {
+      const title = el('h3', { style: 'margin:0', text: c.name });
+      const renameBtn = el('button', { class: 'small', text: '✎ Rinomina' });
+      renameBtn.addEventListener('click', function () {
+        const inp = el('input', { type: 'text', value: c.name, maxlength: '80' });
+        const ok = el('button', { class: 'small primary', text: 'Salva', onclick: function () {
+          const n = inp.value.trim(); if (!n) return;
+          be.renameClass(c.id, n).then(function () { renderClasses(); }, function (e) { toast('Non salvato: ' + e.message, 6000); });
+        } });
+        title.replaceWith(el('div', { class: 'row', style: 'gap:6px' }, inp, ok)); renameBtn.remove(); inp.focus();
+      });
+      const as = CLS.assignments.filter(function (a) { return a.class_id === c.id; });
+      const card = el('div', { class: 'card cls-card' },
+        el('div', { class: 'row', style: 'gap:8px;align-items:center;flex-wrap:wrap' }, title, el('span', { class: 'muted', text: as.length + (as.length === 1 ? ' compito' : ' compiti') }),
+          el('span', { style: 'flex:1' }), renameBtn,
+          twoStep('Elimina classe', function () { be.deleteClass(c.id).then(function () { toast('Classe eliminata'); renderClasses(); }, function (e) { toast('Non eliminata: ' + e.message, 6000); }); })));
+      if (!as.length) card.appendChild(el('p', { class: 'hint', text: 'Nessun compito: dalle tue lezioni, "📋 Assegna".' }));
+      as.forEach(function (a) { card.appendChild(assignmentRow(be, a)); });
+      list.appendChild(card);
+    });
+  }
+  function assignmentRow(be, a) {
+    const cnt = CLS.counts[a.id] || { students: {}, finished: {} };
+    const nS = Object.keys(cnt.students).length, nF = Object.keys(cnt.finished).length;
+    const url = assignUrl(a.code);
+    const qrBox = el('div', { class: 'cls-qr', hidden: CLS.qrOpen === a.id ? null : '' });
+    if (CLS.qrOpen === a.id) qrBox.innerHTML = qrSvg(url);
+    const toggle = el('button', { class: 'small', text: a.open ? '🔓 Aperto' : '🔒 Chiuso', title: a.open ? 'Gli studenti possono farlo: clicca per chiuderlo' : 'Nessuno può più inviare risultati: clicca per riaprirlo' });
+    toggle.addEventListener('click', function () {
+      toggle.disabled = true;
+      be.updateAssignment(a.id, { open: !a.open }).then(function () { a.open = !a.open; toast(a.open ? 'Compito riaperto' : 'Compito chiuso: nessuno può più inviare risultati'); renderClasses(); }, function (e) { toggle.disabled = false; toast(e.message, 6000); });
+    });
+    const others = (CLS.classes || []).filter(function (c) { return c.id !== a.class_id; });
+    const reuse = el('select', { class: 'small', title: 'Assegna la stessa lezione a un\'altra classe (compito nuovo, report separato)' });
+    reuse.appendChild(el('option', { value: '', text: 'Assegna anche a…' }));
+    others.forEach(function (c) { reuse.appendChild(el('option', { value: c.id, text: c.name })); });
+    reuse.addEventListener('change', function () {
+      const cid = reuse.value; if (!cid) return;
+      reuse.disabled = true;
+      const local = S.lessons[a.lesson_id];
+      (local ? Promise.resolve(studentPayload(local)) : be.getAssignmentFull(a.id).then(function (full) { return full.lesson; }))
+        .then(function (lesson) { return be.createAssignment({ class_id: cid, lesson_id: a.lesson_id, title: a.title, kind: a.kind, lesson: lesson }); })
+        .then(function (na) { toast('Assegnato anche a ' + ((others.find(function (c) { return c.id === cid; }) || {}).name || 'un\'altra classe') + ' · codice ' + na.code, 5000); renderClasses(); },
+          function (e) { reuse.disabled = false; toast('Non assegnato: ' + e.message, 6000); });
+    });
+    return el('div', { class: 'cls-asg' + (a.open ? '' : ' closed') },
+      el('div', { class: 'cls-asg-main' },
+        el('a', { class: 'cls-asg-title', href: '#', text: a.title || '(senza titolo)', onclick: function (e) { e.preventDefault(); renderReport(a.id); } }),
+        el('div', { class: 'meta', text: fmtDate(a.created_at) + ' · codice ' + a.code + ' · ' + (nS ? nS + (nS === 1 ? ' studente' : ' studenti') + ', ' + nF + ' ' + (nF === 1 ? 'ha consegnato' : 'hanno consegnato') : 'nessuno ancora') })),
+      el('div', { class: 'actions' },
+        el('button', { class: 'small primary', text: '📊 Report', onclick: function () { renderReport(a.id); } }),
+        el('button', { class: 'small', text: '🔗 Copia link', onclick: function () { copyText(url); } }),
+        el('button', { class: 'small', text: 'QR', onclick: function () { CLS.qrOpen = CLS.qrOpen === a.id ? null : a.id; if (CLS.qrOpen) { qrBox.innerHTML = qrSvg(url); qrBox.hidden = false; } else qrBox.hidden = true; } }),
+        toggle,
+        others.length ? reuse : null,
+        twoStep('Elimina', function () { be.deleteAssignment(a.id).then(function () { toast('Compito eliminato (con i suoi risultati)'); renderClasses(); }, function (e) { toast(e.message, 6000); }); })),
+      qrBox);
+  }
+
+  // --- dialogo "Assegna" dalla card della lezione ---
+  function openAssignDialog(ls) {
+    const dlg = $('#dlg-assign'), body = $('#asg-body');
+    body.innerHTML = '';
+    $('#asg-title').textContent = 'Assegna: ' + (ls.title || 'lezione');
+    dlg.showModal();
+    const be = classBackend();
+    if (!be) { needLogin(body, function () { dlg.close(); openAssignDialog(ls); }); return; }
+    if (!(ls.exercises || []).length) { body.appendChild(el('div', { class: 'notice bad', text: 'Questa lezione non ha esercizi: non c\'è niente da correggere.' })); return; }
+    body.appendChild(el('p', { class: 'hint', text: 'Carico le classi…' }));
+    be.listClasses().then(function (classes) {
+      body.innerHTML = '';
+      const sel = el('select', { style: 'min-width:240px' });
+      classes.forEach(function (c) { sel.appendChild(el('option', { value: c.id, text: c.name })); });
+      sel.appendChild(el('option', { value: '__new', text: '+ Nuova classe…' }));
+      const newIn = el('input', { type: 'text', placeholder: 'Nome della nuova classe (es. PoliMi Mar-Gio)', maxlength: '80', style: 'min-width:240px' });
+      const newRow = el('div', { class: 'row', style: 'margin-top:6px' + (classes.length ? ';display:none' : '') }, newIn);
+      if (!classes.length) sel.value = '__new';
+      sel.addEventListener('change', function () { newRow.style.display = sel.value === '__new' ? '' : 'none'; if (sel.value === '__new') newIn.focus(); });
+      const go = el('button', { class: 'primary', text: 'Assegna' });
+      go.addEventListener('click', function () {
+        const creating = sel.value === '__new';
+        if (creating && !newIn.value.trim()) { newIn.focus(); return toast('Scrivi il nome della classe'); }
+        go.disabled = true;
+        (creating ? be.createClass(newIn.value.trim()) : Promise.resolve({ id: sel.value, name: sel.options[sel.selectedIndex].textContent }))
+          .then(function (cls) {
+            return be.createAssignment({ class_id: cls.id, lesson_id: ls.id, title: ls.title || '', kind: 'homework', lesson: studentPayload(ls) })
+              .then(function (a) { showAssigned(body, a, cls); });
+          }, function (e) { throw e; })
+          .catch(function (e) { go.disabled = false; toast('Non assegnato: ' + e.message, 6000); });
+      });
+      body.appendChild(el('label', { text: 'Classe' }));
+      body.appendChild(el('div', { class: 'row' }, sel));
+      body.appendChild(newRow);
+      body.appendChild(el('p', { class: 'hint', text: 'Gli studenti ricevono un link: scrivono nome e cognome, fanno la lezione e i risultati arrivano a te (chi l\'ha fatta, punteggio, ogni risposta sbagliata). La lezione viene "fotografata" adesso: se poi la modifichi, questo compito resta com\'è.' }));
+      body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, go));
+    }, function (e) { body.innerHTML = ''; body.appendChild(el('div', { class: 'notice bad', text: 'Non riesco a caricare le classi: ' + e.message })); });
+  }
+  function showAssigned(body, a, cls) {
+    const url = assignUrl(a.code);
+    body.innerHTML = '';
+    body.appendChild(el('div', { class: 'notice ok', text: '✓ Assegnato a ' + cls.name + ' · codice ' + a.code }));
+    body.appendChild(el('p', { class: 'hint', text: 'Manda questo link agli studenti (o mostra il QR):' }));
+    body.appendChild(el('div', { class: 'linkbox', text: url }));
+    const qr = el('div', { class: 'cls-qr' }); qr.innerHTML = qrSvg(url);
+    body.appendChild(qr);
+    body.appendChild(el('div', { class: 'row', style: 'gap:8px;margin-top:8px' },
+      el('button', { class: 'primary', text: '🔗 Copia link', onclick: function () { copyText(url); } }),
+      el('button', { text: '📋 Vai a classi e compiti', onclick: function () { $('#dlg-assign').close(); renderClasses(); } })));
+  }
+  $('#asg-close').addEventListener('click', function () { $('#dlg-assign').close(); });
+
+  // --- report: studenti × esercizi ---
+  function renderReport(id) {
+    show('report');
+    clearInterval(CLS.repTimer); CLS.repTimer = null;
+    const root = $('#rep-root'); root.innerHTML = '';
+    const be = classBackend();
+    if (!be) { needLogin(root, function () { renderReport(id); }); return; }
+    root.appendChild(el('p', { class: 'hint', text: 'Carico i risultati…' }));
+    const load = function (quiet) {
+      return Promise.all([be.getAssignmentFull(id), be.listResults([id])]).then(function (r) {
+        const a = r[0]; if (!a) throw new Error('compito non trovato');
+        CLS.report = { a: a, rows: r[1] || [], sel: CLS.report && CLS.report.a && CLS.report.a.id === id ? CLS.report.sel : null };
+        paintReport(be);
+      }).catch(function (e) { if (!quiet) { root.innerHTML = ''; root.appendChild(el('div', { class: 'notice bad', text: 'Non riesco a caricare il report: ' + e.message })); } });
+    };
+    load(false);
+    // aggiornamento da solo ogni 30 s finché il report è aperto (durante una lezione si vedono arrivare gli studenti)
+    CLS.repTimer = setInterval(function () { if (S.view !== 'report') { clearInterval(CLS.repTimer); CLS.repTimer = null; return; } load(true); }, 30000);
+    CLS.reload = load;
+  }
+  function paintReport(be) {
+    const R = CLS.report, a = R.a, root = $('#rep-root');
+    const m = VLClass.reportMatrix(a.lesson, R.rows);
+    const cls = (CLS.classes || []).find(function (c) { return c.id === a.class_id; });
+    root.innerHTML = '';
+    const url = assignUrl(a.code);
+    root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
+      el('button', { class: 'small', text: '← Classi e compiti', onclick: renderClasses }),
+      el('h2', { style: 'margin:0;flex:1;min-width:200px', text: a.title || '(senza titolo)' }),
+      el('button', { class: 'small', text: '↻ Aggiorna', onclick: function () { CLS.reload(false); } }),
+      el('button', { class: 'small', text: '⬇ CSV (Excel)', onclick: function () {
+        const b = el('a', { href: URL.createObjectURL(new Blob([VLClass.toCSV(m)], { type: 'text/csv;charset=utf-8' })), download: slugify(a.title || 'compito') + '-risultati.csv' });
+        document.body.appendChild(b); b.click(); setTimeout(function () { URL.revokeObjectURL(b.href); b.remove(); }, 500);
+      } })));
+    const fin = m.students.filter(function (s) { return s.finished; });
+    const avg = fin.length ? (fin.reduce(function (t, s) { return t + s.score; }, 0) / fin.length) : null;
+    root.appendChild(el('p', { class: 'meta', text: (cls ? cls.name + ' · ' : '') + 'codice ' + a.code + ' · ' + (a.open ? 'aperto' : 'chiuso') + ' · '
+      + m.students.length + (m.students.length === 1 ? ' studente' : ' studenti') + ', ' + fin.length + ' ' + (fin.length === 1 ? 'ha consegnato' : 'hanno consegnato')
+      + (avg != null ? ' · media ' + avg.toFixed(1).replace('.', ',') + ' su ' + m.exercises.length : '') }));
+    root.appendChild(el('div', { class: 'row', style: 'gap:8px;margin-bottom:8px' },
+      el('div', { class: 'linkbox', style: 'flex:1', text: url }), el('button', { class: 'small', text: '🔗 Copia link', onclick: function () { copyText(url); } })));
+    if (!m.students.length) { root.appendChild(el('p', { class: 'muted', text: 'Nessuno ha ancora aperto il compito. Il report si aggiorna da solo ogni 30 secondi.' })); return; }
+    const detail = el('div', { class: 'rep-detail' });
+    const table = el('table', { class: 'rep-table' });
+    const hr = el('tr', {}, el('th', { class: 'rep-name', text: 'Studente' }), el('th', { text: 'Punti' }));
+    m.exercises.forEach(function (e) {
+      hr.appendChild(el('th', { class: 'rep-ex', title: e.n + '. ' + e.label + ' · clicca per vedere le risposte di tutti' },
+        el('button', { class: 'rep-exbtn', text: String(e.n), onclick: function () { R.sel = { ex: e.id }; paintDetail(m, detail); } })));
+    });
+    hr.appendChild(el('th', {}));
+    table.appendChild(el('thead', {}, hr));
+    const tb = el('tbody');
+    m.students.forEach(function (s) {
+      const tr = el('tr', { class: s.finished ? '' : 'rep-unfinished' },
+        el('td', { class: 'rep-name' }, el('div', { text: s.name }), el('div', { class: 'meta', text: (s.finished ? 'consegnato ' : 'in corso · ') + fmtDate(s.updated_at) + (s.attempts > 1 ? ' · ' + s.attempts + ' tentativi' : '') })),
+        el('td', { class: 'rep-score', text: s.score + '/' + s.total }));
+      m.exercises.forEach(function (e) {
+        const c = s.cells[e.id];
+        const sym = { ok: '✓', 'ok-late': '✓', ko: '✗', none: '·' }[c.state];
+        const tip = c.state === 'none' ? 'non ancora fatto' : c.state === 'ok' ? 'giusto al primo tentativo' : c.state === 'ok-late' ? 'giusto al ' + c.tries.length + '° tentativo' : (c.how === 'skipped' ? 'saltato' : 'ha guardato la soluzione');
+        tr.appendChild(el('td', { class: 'rep-cell ' + c.state },
+          el('button', { class: 'rep-cellbtn', title: tip, text: sym + (c.state === 'ok-late' ? c.tries.length : ''), onclick: function () { R.sel = { ex: e.id, st: s.key }; paintDetail(m, detail); } })));
+      });
+      tr.appendChild(el('td', {}, twoStep('✕', function () {
+        const ids = R.rows.filter(function (r) { return VLClass.normName(r.student_name) === s.key; }).map(function (r) { return r.id; });
+        be.deleteResults(ids).then(function () { toast('Risultati di ' + s.name + ' eliminati'); CLS.reload(false); }, function (e) { toast(e.message, 6000); });
+      }, 'rep-del')));
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    const fr = el('tr', {}, el('td', { class: 'rep-name meta', text: '% giusti' }), el('td', {}));
+    m.perExercise.forEach(function (p) { fr.appendChild(el('td', { class: 'meta rep-pct' + (p.pct != null && p.pct < 60 ? ' low' : ''), text: p.pct == null ? '' : p.pct + '%' })); });
+    fr.appendChild(el('td', {}));
+    table.appendChild(el('tfoot', {}, fr));
+    root.appendChild(el('div', { class: 'rep-wrap' }, table));
+    root.appendChild(el('p', { class: 'hint', text: '✓ giusto al primo colpo · ✓2 giusto al 2° tentativo · ✗ soluzione guardata o saltato · · non ancora fatto. Clicca una casella per vedere le risposte, o il numero dell\'esercizio per vedere quelle di tutti. Se uno studente l\'ha fatto più volte, vale l\'ultimo tentativo consegnato.' }));
+    root.appendChild(detail);
+    if (R.sel) paintDetail(m, detail);
+  }
+  function paintDetail(m, box) {
+    const R = CLS.report, sel = R.sel; box.innerHTML = '';
+    const e = m.exercises.find(function (x) { return x.id === sel.ex; }); if (!e) return;
+    box.appendChild(el('h3', { text: e.n + '. ' + e.label }));
+    if (e.sentence) box.appendChild(el('p', { class: 'meta', text: 'Frase: ' + e.sentence }));
+    box.appendChild(el('p', { class: 'meta', text: 'Soluzione: ' + e.solution }));
+    const who = sel.st ? m.students.filter(function (s) { return s.key === sel.st; }) : m.students;
+    who.forEach(function (s) {
+      const c = s.cells[e.id];
+      const line = el('div', { class: 'rep-ans ' + c.state }, el('b', { text: s.name + ': ' }));
+      if (c.state === 'none') line.appendChild(document.createTextNode('non ancora fatto'));
+      else {
+        const wrong = c.tries.filter(function (t) { return !t.ok; });
+        const outcome = c.state === 'ko' ? (c.how === 'skipped' ? 'saltato' : 'ha guardato la soluzione') : (c.tries.length > 1 ? 'giusto al ' + c.tries.length + '° tentativo' : 'giusto al primo tentativo');
+        line.appendChild(document.createTextNode(outcome + (c.hints ? ' · ' + c.hints + (c.hints === 1 ? ' aiuto' : ' aiuti') : '')));
+        if (wrong.length) line.appendChild(el('ul', {}, wrong.map(function (t) { return el('li', { text: '✗ ' + t.a }); })));
+      }
+      box.appendChild(line);
+    });
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  // --- studente: link #a=CODICE ---
+  function assignMsg(text, bad) {
+    const box = $('#as-box'); box.innerHTML = '';
+    box.appendChild(el('div', { class: 'notice' + (bad ? ' bad' : ''), text: text }));
+  }
+  function openAssignmentStudent(code) {
+    document.body.classList.add('standalone');   // lo studente non vede la barra del docente
+    show('assign');
+    assignMsg('Carico il compito…');
+    code = String(code || '').trim().toUpperCase();
+    if (!VLClass.validCode(code)) return assignMsg('Codice del compito non valido: controlla il link che ti ha dato il docente.', true);
+    studentBackend(function (be) {
+      if (!be) return assignMsg('Non riesco a collegarmi: controlla la connessione e ricarica la pagina.', true);
+      be.getAssignment(code).then(function (a) {
+        if (!a) return assignMsg('Questo compito non esiste o è stato eliminato: controlla il link.', true);
+        if (!a.open || !a.lesson) return assignMsg('Il compito "' + (a.title || '') + '" è chiuso: chiedi al docente di riaprirlo.', true);
+        renderAssignStart(be, a);
+      }, function (e) { assignMsg('Non riesco a caricare il compito: ' + e.message, true); });
+    });
+  }
+  function renderAssignStart(be, a) {
+    const box = $('#as-box'); box.innerHTML = '';
+    let saved = ''; try { saved = localStorage.getItem('vle.studentName') || ''; } catch (e) { /* ignora */ }
+    const inp = el('input', { type: 'text', value: saved, placeholder: 'Nome e cognome', autocomplete: 'name', maxlength: '80', style: 'width:100%;font-size:18px' });
+    const go = el('button', { class: 'primary', text: 'Inizia ▶', style: 'font-size:17px' });
+    const start = function () {
+      const name = VLClass.cleanName(inp.value);
+      if (!VLClass.validName(name)) { inp.focus(); return toast('Scrivi nome e cognome'); }
+      try { localStorage.setItem('vle.studentName', name); } catch (e) { /* ignora */ }
+      S.assign = { be: be, code: a.code, id: VLClass.uuid(), name: name, detail: {}, lesson: a.lesson, status: null, timer: null, err: '' };
+      assignSend(false);
+      openStudent(null, false, a.lesson);
+    };
+    go.addEventListener('click', start);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') start(); });
+    box.appendChild(el('h2', { style: 'margin-top:0', text: a.title || 'Compito' }));
+    box.appendChild(el('p', { class: 'meta', text: (a.className ? a.className + ' · ' : '') + (a.lesson.exercises || []).length + ' esercizi' }));
+    box.appendChild(el('label', { text: 'Il tuo nome e cognome' }));
+    box.appendChild(inp);
+    box.appendChild(el('p', { class: 'hint', text: 'Il tuo nome e le tue risposte li vede solo il docente. Nessun account, nessuna email.' }));
+    box.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, go));
+    setTimeout(function () { inp.focus(); }, 50);
+  }
+  function assignCell(ex) {
+    const d = S.assign.detail;
+    return d[ex.id] || (d[ex.id] = { t: ex.type, ok: null, tries: [], hints: 0 });
+  }
+  function assignAttempt(ex, a, ok) {
+    if (!S.assign) return;
+    const c = assignCell(ex);
+    if (c.tries.length < 30) c.tries.push({ a: VLClass.answerText(ex, a).slice(0, 300), ok: !!ok });
+  }
+  function assignFinish(ex, correct, how, hints) {
+    if (!S.assign) return;
+    const c = assignCell(ex);
+    c.ok = !!correct; c.how = how || (correct ? 'solved' : 'revealed'); c.hints = hints || 0;
+    clearTimeout(S.assign.timer);
+    S.assign.timer = setTimeout(function () { assignSend(false); }, 700);
+  }
+  function assignSend(finished) {
+    const A = S.assign; if (!A) return Promise.resolve(false);
+    const sc = VLClass.scoreOf(A.lesson, A.detail);
+    if (finished) A.status = 'sending';
+    paintAssignStatus();
+    return A.be.submitResult({ code: A.code, id: A.id, name: A.name, detail: A.detail, score: sc.score, total: sc.total, finished: !!finished })
+      .then(function (ok) {
+        if (!ok) A.status = 'closed';
+        else if (finished) A.status = 'done';
+        paintAssignStatus(); return ok;
+      }, function (e) { if (finished) { A.status = 'error'; A.err = e.message; } paintAssignStatus(); return false; });
+  }
+  function assignSummaryBox() {
+    clearTimeout(S.assign.timer);
+    const box = el('div', { id: 'as-status', class: 'notice' });
+    setTimeout(function () { assignSend(true); }, 0);
+    return box;
+  }
+  function paintAssignStatus() {
+    const box = $('#as-status'); const A = S.assign; if (!box || !A) return;
+    box.innerHTML = ''; box.className = 'notice';
+    if (A.status === 'done') { box.classList.add('ok'); box.textContent = '✓ Consegnato: il docente vede i tuoi risultati (' + A.name + ').'; }
+    else if (A.status === 'closed') { box.classList.add('bad'); box.textContent = 'Il docente ha chiuso questo compito: i risultati non sono stati inviati.'; }
+    else if (A.status === 'error') {
+      box.classList.add('bad');
+      box.appendChild(document.createTextNode('Non inviato (' + A.err + '). '));
+      box.appendChild(el('button', { class: 'small', text: 'Riprova', onclick: function () { assignSend(true); } }));
+    } else box.textContent = 'Invio dei risultati al docente…';
+  }
+  function assignNewAttempt() {
+    if (!S.assign) return;
+    clearTimeout(S.assign.timer);
+    S.assign.id = VLClass.uuid(); S.assign.detail = {}; S.assign.status = null;
+    assignSend(false);
+  }
+
   function init() {
     loadState();
     bindOverlayCancel();   // v87: la via d'uscita dall'attesa
@@ -7520,6 +7911,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const pin = h.slice(3).trim().toUpperCase();
       if (VLChal.validPin(pin)) { S.standalone = true; return openChalPlay(pin); }
       toast('PIN della sfida non valido');
+    }
+    if (h.indexOf('#a=') === 0) {   // v125: compito assegnato a una classe (lo studente scrive il nome, i risultati vanno al docente)
+      S.standalone = true;
+      return openAssignmentStudent(decodeURIComponent(h.slice(3)));
     }
     if (h.indexOf('#d=') === 0) {
       try {

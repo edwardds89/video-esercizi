@@ -1465,3 +1465,38 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v120: passi del dialogo "Importa da altre piattaforme" */
 .plat-steps { margin: 10px 0 0 18px; padding: 0; display: grid; gap: 8px; }
 .plat-steps li { line-height: 1.45; }
+
+/* ---- v125: classi, compiti e report ---- */
+.cls-list { display: grid; gap: 12px; margin-top: 10px; }
+.cls-card { margin: 0; }
+.cls-asg { border-top: 1px solid var(--line); padding: 10px 0 4px; display: grid; gap: 6px; }
+.cls-asg.closed .cls-asg-title { color: var(--muted); }
+.cls-asg-title { font-weight: 700; font-size: 16px; color: var(--ink); text-decoration: none; }
+.cls-asg-title:hover { text-decoration: underline; }
+.cls-asg .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cls-asg select.small { padding: 5px 8px; font-size: 14px; width: auto; }
+.cls-qr { width: 200px; max-width: 100%; background: #fff; }
+.cls-qr[hidden] { display: none; }
+.cls-qr svg { width: 100%; height: auto; display: block; }
+.rep-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); margin: 8px 0; }
+.rep-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.rep-table th, .rep-table td { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.rep-table .rep-name { text-align: left; position: sticky; left: 0; background: #fff; min-width: 170px; white-space: normal; }
+.rep-table thead th { background: var(--chip); position: sticky; top: 0; }
+.rep-table thead th.rep-name { background: var(--chip); z-index: 1; }
+.rep-exbtn { padding: 2px 8px; border-radius: 6px; font-weight: 700; }
+.rep-score { font-weight: 700; }
+.rep-cellbtn { border: 0; background: transparent; padding: 4px 8px; font-weight: 700; font-size: 15px; border-radius: 6px; min-width: 34px; }
+.rep-cell.ok .rep-cellbtn { color: var(--ok); background: var(--ok-bg); }
+.rep-cell.ok-late .rep-cellbtn { color: #7a5b00; background: var(--warn-bg); }
+.rep-cell.ko .rep-cellbtn { color: var(--bad); background: var(--bad-bg); }
+.rep-cell.none .rep-cellbtn { color: var(--muted); }
+.rep-unfinished .rep-name > div:first-child { color: var(--muted); }
+.rep-pct.low { color: var(--bad); font-weight: 700; }
+.rep-del { padding: 2px 8px; }
+.rep-detail { margin-top: 10px; }
+.rep-detail h3 { margin: 6px 0; }
+.rep-ans { padding: 6px 0; border-top: 1px dashed var(--line); }
+.rep-ans ul { margin: 4px 0 0 18px; padding: 0; color: var(--bad); }
+.as-card { max-width: 520px; margin: 40px auto; }
+.as-card label { font-weight: 600; display: block; margin: 12px 0 6px; }

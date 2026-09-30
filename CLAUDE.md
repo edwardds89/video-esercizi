@@ -1,5 +1,36 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- CLASSI, COMPITI E REPORT (v125, 30/9). Edoardo, per i corsi PoliMi (dal 5/10): "compiti a casa con report, che io
+  posso vedere chi ha fatto i compiti ... voglio vedere l'errore di ogni studente per ogni sessione live o per ogni
+  sessione di compiti ... il nome e cognome lo scrive lo studente, sono io che creo le classi e assegno un'esercitazione
+  o un compito a una classe che poi posso riutilizzare per un'altra classe". Obiettivo dichiarato: smettere di pagare
+  Wayground. FASE 1 (questa): compiti a casa. FASE 2 (da fare): sessioni live (sfida in classe) nello stesso registro.
+  DATABASE (sql/2026-09-30-classi-compiti.sql, eseguito dal SQL editor): classes (owner), assignments (code 6 car.
+  unico, class_id, lesson_id, title, kind homework|live, lesson jsonb = FOTOGRAFIA della lezione al momento
+  dell'assegnazione via studentPayload, open), results (id generato dal browser dello studente = un tentativo,
+  assignment_id, student_name, detail jsonb, score, total, finished). RLS: il docente vede/gestisce solo le sue righe;
+  gli ANONIMI non hanno grant sulle tabelle: usano solo get_assignment(code) (lezione solo se aperto) e
+  submit_result(code, id, name, detail, score, total, finished) SECURITY DEFINER: scrive solo in compiti aperti,
+  un id non può passare a un altro compito, finished una volta vero resta vero, detail max 200 kB. GRANT espliciti.
+  CODICE: classroom.js (VLClass, UMD, test/classroom.test.js 7 test): newCode (alfabeto senza 0/O/1/I), normName
+  (stessa persona = stesso nome senza maiuscole/spazi/accenti), answerText (risposta leggibile per tipo), reportMatrix
+  (studenti × esercizi; per più tentativi della stessa persona vale l'ULTIMO CONSEGNATO, se nessuno è consegnato quello
+  più avanti), toCSV (";" + BOM per Excel), supabaseBackend e memoryBackend (stesse regole; ?mock=1 lo usa, condiviso
+  tra schede via localStorage 'vle.mockClassroom'). app.js: nav "📋 Classi" → renderClasses (crea/rinomina/elimina
+  classe, per ogni compito: Report, Copia link, QR, Aperto/Chiuso, "Assegna anche a…" = compito nuovo per un'altra
+  classe con la lezione ATTUALE se è nel browser, altrimenti la stessa fotografia, Elimina). Card lezione "📋 Assegna"
+  → #dlg-assign (classe esistente o nuova) → link pauselearn.com/#a=CODICE + QR. Report (#view-report): tabella con
+  ✓ / ✓N (giusto all'N° tentativo) / ✗ (soluzione guardata o saltato) / · (non fatto), % giusti per esercizio,
+  clic su casella = risposte di quello studente, clic sul numero = risposte di tutti; ✕ per studente (due clic) cancella
+  i suoi tentativi; si aggiorna da solo ogni 30 s. Eliminazioni SEMPRE a due clic (twoStep), niente confirm().
+  STUDENTE: #a=CODICE → S.standalone + body.standalone → #view-assign (nome e cognome, ricordato in 'vle.studentName';
+  "lo vede solo il docente") → openStudent con la fotografia. Registrazione: renderExerciseInto chiama
+  opts.onAttempt(risposta, giusto) a ogni Controlla (assignAttempt, max 30 risposte per esercizio);
+  finishExercise(ex, correct, how) con how solved|revealed|skipped → assignFinish → invio dopo 700 ms (finished=false);
+  primo invio subito all'inizio (il docente vede "in corso"); riepilogo → assignSummaryBox invia finished=true e dice
+  "✓ Consegnato" o "Non inviato … Riprova"; "Ricomincia" = nuovo tentativo (nuovo id). Verificato end-to-end in
+  locale con ?mock=1 (docente assegna, studente in altra scheda, report corretto con la risposta sbagliata scritta).
+
 - KEEP-ALIVE SUPABASE v2 (30/9, nessun cambio di versione dell'app). Il 30/9 Supabase ha mandato il preavviso di pausa
   per inattività nonostante il workflow keepalive.yml girasse ogni 3 giorni con esito verde: la sua lettura anonima di
   lessons rispondeva 200 ma vuota (RLS) e Supabase non la contava come attività. Ora: tabella public.keepalive (una riga,
