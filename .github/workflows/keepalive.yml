@@ -1,8 +1,8 @@
 # Tiene sveglio il progetto Supabase del piano gratuito (si mette in pausa dopo 7 giorni senza attività).
-# v2 (30/9/2026): la vecchia lettura anonima della tabella lessons rispondeva 200 ma vuota (RLS) e Supabase NON la
-# contava come attività (mail di preavviso pausa del 30/9). Ora ogni 2 giorni chiama la funzione keepalive_ping(),
-# che SCRIVE la data del ping in public.keepalive (una riga sola, RLS senza policy: invisibile da fuori).
-# Funzione e tabella create dal SQL editor il 30/9 (vedi CLAUDE.md, voce "KEEP-ALIVE SUPABASE").
+# v3 (30/9/2026): il sito usa il progetto "pauselearn" (ytryyxgkhhvgqieodhkk, account edoardo@pauselearn.com),
+# non più "video-lezioni" (raakqcqrcgbfncevxauz, account edoardo@myself.com). La v2 teneva sveglio solo quello vecchio.
+# Ogni 2 giorni chiama keepalive_ping(), che SCRIVE la data in public.keepalive (una riga, RLS senza policy).
+# Il job fallisce se il progetto principale non risponde 200; quello vecchio è pingato finché non si decide cosa farne.
 name: Supabase keep-alive
 on:
   schedule:
@@ -12,12 +12,18 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Scrive il ping nel progetto video-lezioni
+      - name: Ping progetto pauselearn (quello usato dal sito)
         run: |
+          K="sb_publishable_ui2DOBm4ruFSwDrrcGWgkQ_yv0392uW"
           out=$(curl -sS -w "\nHTTP %{http_code}" -X POST \
-            -H "apikey: sb_publishable_40BFSphEmaZ0u7FU9MI8_w_ZHEwunq-" \
-            -H "Authorization: Bearer sb_publishable_40BFSphEmaZ0u7FU9MI8_w_ZHEwunq-" \
-            -H "Content-Type: application/json" -d '{}' \
-            "https://raakqcqrcgbfncevxauz.supabase.co/rest/v1/rpc/keepalive_ping")
+            -H "apikey: $K" -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+            -d '{}' https://ytryyxgkhhvgqieodhkk.supabase.co/rest/v1/rpc/keepalive_ping)
           echo "$out"
-          echo "$out" | tail -1 | grep -q "HTTP 200"
+          echo "$out" | tail -n1 | grep -q "HTTP 200"
+      - name: Ping progetto vecchio video-lezioni (non blocca)
+        continue-on-error: true
+        run: |
+          K="sb_publishable_40BFSphEmaZ0u7FU9MI8_w_ZHEwunq-"
+          curl -sS -w "\nHTTP %{http_code}\n" -X POST \
+            -H "apikey: $K" -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+            -d '{}' https://raakqcqrcgbfncevxauz.supabase.co/rest/v1/rpc/keepalive_ping
