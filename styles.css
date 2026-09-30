@@ -1563,3 +1563,12 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .fix-name.sel { background: #fff3f3; }
 .fix-ans { margin-top: 10px; font-size: 20px; }
 @media (max-width: 720px) { .live-row { grid-template-columns: 1fr 60px; } .live-dots { grid-column: 1 / -1; order: 3; } .fix-q { font-size: 22px; } }
+
+/* v130: aiuto automatico → arancione (giusto con l'aiuto) e marrone (sbagliato anche con l'aiuto) */
+.rep-cell.ok-help .rep-cellbtn { color: #fff; background: #f08c00; }
+.rep-cell.ko-help .rep-cellbtn { color: #fff; background: #8b5a2b; }
+.ld.ok-help { background: #f08c00; } .ld.ko-help { background: #8b5a2b; }
+.fix-name.ok-help { border-color: #f08c00; } .fix-name.ko-help { border-color: #8b5a2b; }
+.as-hint { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #fff4e5; border: 1px solid #f5c27a; color: #6b3d00; font-weight: 600; white-space: pre-line; }
+.chp-mc.off { opacity: .25; pointer-events: none; }
+.as-dot.okh { background: #f08c00; } .as-dot.badh { background: #8b5a2b; }

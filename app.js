@@ -7401,7 +7401,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       let sel = -1;
       const grid = el('div', { class: 'chp-mcgrid' });
       for (let i = 0; i < (pub.n || 4); i++) {
-        const b = el('button', { class: 'chp-mc o' + i }, el('span', { class: 'lt', text: 'ABCD'[i] }), pub.options ? el('span', { class: 'tx', text: pub.options[i] || '' }) : null);
+        const b = el('button', { class: 'chp-mc o' + i + (opts.mcOff && opts.mcOff.indexOf(i) !== -1 ? ' off' : '') }, el('span', { class: 'lt', text: 'ABCD'[i] }), pub.options ? el('span', { class: 'tx', text: pub.options[i] || '' }) : null);
         b.addEventListener('click', function () { sel = i; $$('.chp-mc', grid).forEach(function (x, j) { x.classList.toggle('sel', j === i); }); });
         grid.appendChild(b);
       }
@@ -7767,12 +7767,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     it: { name: 'Il tuo nome e cognome', namePh: 'Nome e cognome', privacy: 'Il tuo nome e le tue risposte li vede solo il docente. Nessun account, nessuna email.', start: 'Inizia ▶', exercises: 'esercizi', needName: 'Scrivi nome e cognome',
       check: 'Controlla', retry: '✗ Non è giusto: riprova.', almost: '✗ Quasi ({p}% giusto): riprova.', ok: '✓ Giusto!', okLate: '✓ Giusto al secondo tentativo', wrong: '✗ Sbagliato', solution: 'Soluzione: ', next: 'Avanti ▶', result: 'Vedi il risultato ▶',
       review: 'Da ripassare', youWrote: 'Hai scritto: ', correct: 'Giusto: ', again: '↻ Rifai da capo', accents: ' Attenzione agli accenti (è ≠ e).', answerFirst: 'Prima rispondi', wrongPh: 'Scrivi la parola giusta', missPh: 'La parola che manca', scrHint: 'Tocca le parole qui sotto nell’ordine giusto',
+      hint: '💡 Aiuto', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
+      hExtraA: 'La parola in più è nella prima metà della frase', hExtraB: 'La parola in più è nella seconda metà della frase', hScr: 'La frase comincia con «{w}»', hMatch: 'Una coppia giusta: {w}', hMc: 'Ho tolto {n} risposte sbagliate', okHelp: '✓ Giusto, con l\'aiuto', koHelp: '✗ Sbagliato anche con l\'aiuto',
       done: '✓ Consegnato: il docente vede i tuoi risultati ({n}).', closed: 'Il docente ha chiuso questo compito: i risultati non sono stati inviati.', notSent: 'Non inviato ({e}). ', resend: 'Riprova', sending: 'Invio dei risultati al docente…',
       k: { gap: 'Completa gli spazi', gapbank: 'Completa con le parole', mc: 'Scelta multipla', scramble: 'Riordina la frase', extra: 'Trova la parola in più', missing: 'Trova la parola mancante', wrong: 'Trova la parola sbagliata', match: 'Abbina le coppie' },
       i: { gap: 'Scrivi la parola che manca.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' } },
     en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. No account, no email.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
       check: 'Check', retry: '✗ Not quite: try again.', almost: '✗ Almost ({p}% right): try again.', ok: '✓ Correct!', okLate: '✓ Correct on the second try', wrong: '✗ Wrong', solution: 'Answer: ', next: 'Next ▶', result: 'See your result ▶',
       review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
+      hint: '💡 Hint', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
+      hExtraA: 'The extra word is in the first half of the sentence', hExtraB: 'The extra word is in the second half of the sentence', hScr: 'The sentence starts with «{w}»', hMatch: 'One right pair: {w}', hMc: 'I removed {n} wrong answers', okHelp: '✓ Correct, with the hint', koHelp: '✗ Wrong, even with the hint',
       done: '✓ Submitted: your teacher can see your results ({n}).', closed: 'Your teacher has closed this assignment: your results were not sent.', notSent: 'Not sent ({e}). ', resend: 'Try again', sending: 'Sending your results to your teacher…',
       k: { gap: 'Fill in the gaps', gapbank: 'Fill in with the words', mc: 'Multiple choice', scramble: 'Put the sentence in order', extra: 'Find the extra word', missing: 'Find the missing word', wrong: 'Find the wrong word', match: 'Match the pairs' },
       i: { gap: 'Write the missing word.', gapbank: 'Complete with the words in the list.', mc: 'Choose the right answer.', scramble: 'Put the words in the right order.', extra: 'Tap the extra word.', missing: 'Tap where a word is missing and write it.', wrong: 'Tap the wrong word and write the right one.', match: 'Match each word on the left with one on the right.' } }
@@ -7930,8 +7934,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('td', { class: 'rep-score', text: s.score + '/' + s.total }));
       m.exercises.forEach(function (e) {
         const c = s.cells[e.id];
-        const sym = { ok: '✓', 'ok-late': '✓', ko: '✗', none: '·' }[c.state];
-        const tip = c.state === 'none' ? 'non ancora fatto' : c.state === 'ok' ? 'giusto al primo tentativo' : c.state === 'ok-late' ? 'giusto al ' + c.tries.length + '° tentativo' : (c.how === 'skipped' ? 'saltato' : 'ha guardato la soluzione');
+        const sym = { ok: '✓', 'ok-late': '✓', 'ok-help': '✓', ko: '✗', 'ko-help': '✗', none: '·' }[c.state];
+        const tip = c.state === 'none' ? 'non ancora fatto' : c.state === 'ok' ? 'giusto al primo tentativo' : c.state === 'ok-late' ? 'giusto al ' + c.tries.length + '° tentativo' : c.state === 'ok-help' ? 'giusto con l\'aiuto' : c.state === 'ko-help' ? 'sbagliato anche con l\'aiuto' : (c.how === 'skipped' ? 'saltato' : 'ha guardato la soluzione');
         tr.appendChild(el('td', { class: 'rep-cell ' + c.state },
           el('button', { class: 'rep-cellbtn', title: tip, text: sym + (c.state === 'ok-late' ? c.tries.length : ''), onclick: function () { R.sel = { ex: e.id, st: s.key }; paintDetail(m, detail); } })));
       });
@@ -7947,7 +7951,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     fr.appendChild(el('td', {}));
     table.appendChild(el('tfoot', {}, fr));
     root.appendChild(el('div', { class: 'rep-wrap' }, table));
-    root.appendChild(el('p', { class: 'hint', text: '✓ giusto al primo colpo · ✓2 giusto al 2° tentativo · ✗ soluzione guardata o saltato · · non ancora fatto. Clicca una casella per vedere le risposte, o il numero dell\'esercizio per vedere quelle di tutti. Se uno studente l\'ha fatto più volte, vale l\'ultimo tentativo consegnato.' }));
+    root.appendChild(el('p', { class: 'hint', text: '✓ giusto al primo colpo · arancione = giusto con l\'aiuto · marrone = sbagliato anche con l\'aiuto · ✓2 giusto al 2° tentativo · ✗ soluzione guardata o saltato · · non ancora fatto. Clicca una casella per vedere le risposte, o il numero dell\'esercizio per vedere quelle di tutti. Se uno studente l\'ha fatto più volte, vale l\'ultimo tentativo consegnato.' }));
     root.appendChild(detail);
     if (R.sel) paintDetail(m, detail);
   }
@@ -7984,7 +7988,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('div', { class: 'live-score', text: s.finished ? '✓ ' + s.score + '/' + s.total : s.done + '/' + s.total })));
     });
     root.appendChild(list);
-    root.appendChild(el('p', { class: 'hint', text: 'Verde = giusto · giallo = giusto al 2° tentativo · rosso = sbagliato · grigio = non ancora fatto. Si aggiorna ogni 5 secondi.' }));
+    root.appendChild(el('p', { class: 'hint', text: 'Verde = giusto · arancione = giusto con l\'aiuto · marrone = sbagliato anche con l\'aiuto · rosso = sbagliato · giallo = giusto al 2° tentativo · grigio = non ancora fatto. Si aggiorna ogni 5 secondi.' }));
   }
   /** v129 CORREZIONE DI GRUPPO ("alla fine voglio poter fare una correzione di gruppo in modo che posso chiamare gli
    *  studenti che hanno sbagliato e farli riprovare"): una domanda alla volta, proiettata SENZA soluzione; sotto, chi
@@ -7996,7 +8000,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const F = R.fix;
     root.innerHTML = '';
     const stat = m.exercises.map(function (e, k) {
-      const wrong = m.students.filter(function (s) { const c = s.cells[e.id]; return c.state === 'ko' || c.state === 'ok-late'; });
+      const wrong = m.students.filter(function (s) { const c = s.cells[e.id]; return c.state !== 'ok' && c.state !== 'none'; });
       return { e: e, p: m.perExercise[k], wrong: wrong };
     });
     let list = F.onlyErr ? stat.filter(function (x) { return x.wrong.length; }).sort(function (x, y) { return (x.p.pct == null ? 101 : x.p.pct) - (y.p.pct == null ? 101 : y.p.pct); }) : stat;
@@ -8023,7 +8027,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const chips = el('div', { class: 'chips' });
     x.wrong.forEach(function (s) {
       const c = s.cells[e.id];
-      chips.appendChild(el('button', { class: 'fix-name ' + c.state + (F.who === s.key ? ' sel' : ''), text: s.name + (c.state === 'ok-late' ? ' (2°)' : ''), onclick: function () { F.who = F.who === s.key ? null : s.key; paintReport(be); } }));
+      chips.appendChild(el('button', { class: 'fix-name ' + c.state + (F.who === s.key ? ' sel' : ''), text: s.name + (c.state === 'ok-late' ? ' (2°)' : c.state === 'ok-help' ? ' (con aiuto)' : c.state === 'ko-help' ? ' (anche con aiuto)' : ''), onclick: function () { F.who = F.who === s.key ? null : s.key; paintReport(be); } }));
     });
     who.appendChild(chips);
     if (F.who) {
@@ -8051,7 +8055,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (c.state === 'none') line.appendChild(document.createTextNode('non ancora fatto'));
       else {
         const wrong = c.tries.filter(function (t) { return !t.ok; });
-        const outcome = c.state === 'ko' ? (c.how === 'skipped' ? 'saltato' : 'ha guardato la soluzione') : (c.tries.length > 1 ? 'giusto al ' + c.tries.length + '° tentativo' : 'giusto al primo tentativo');
+        const outcome = c.state === 'ok-help' ? '🟠 giusto con l\'aiuto' : c.state === 'ko-help' ? '🟤 sbagliato anche con l\'aiuto' : c.state === 'ko' ? (c.how === 'skipped' ? 'saltato' : 'ha guardato la soluzione') : (c.tries.length > 1 ? 'giusto al ' + c.tries.length + '° tentativo' : 'giusto al primo tentativo');
         line.appendChild(document.createTextNode(outcome + (c.hints ? ' · ' + c.hints + (c.hints === 1 ? ' aiuto' : ' aiuti') : '')));
         if (wrong.length) line.appendChild(el('ul', {}, wrong.map(function (t) { return el('li', { text: '✗ ' + t.a }); })));
       }
@@ -8118,6 +8122,30 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#view-assign').classList.add('as-set');
     let i = 0;
     const MAX_TRIES = 2;
+    /** v130 (Edoardo: "se lo studente non riesce a rispondere si attivi un aiuto e io devo vedere un puntino arancione…
+     *  se continua a sbagliare anche con l'aiuto un puntino marrone"): dopo il primo errore arriva UN aiuto per tipo;
+     *  cell.hints = 1 fa diventare la casella del report arancione (giusto) o marrone (sbagliato). */
+    const fill = function (t, o) { Object.keys(o).forEach(function (k) { t = t.split('{' + k + '}').join(o[k]); }); return t; };
+    const hintFor = function (item, pub) {
+      const d = item.data || {}, out = { text: [], mcOff: null };
+      if (item.kind === 'gap' || item.kind === 'gapbank') {
+        EX.gapRuns(d).forEach(function (r) {
+          const w = String(r.answer || ''); const k = Math.max(1, Math.ceil(w.length / 3));
+          out.text.push(fill(T.hStart, { w: w.slice(0, k), n: w.replace(/\s/g, '').length }));
+        });
+      } else if (item.kind === 'mc') {
+        const n = (d.options || []).filter(Boolean).length, wrong = [];
+        for (let j = 0; j < n; j++) if (j !== d.correct) wrong.push(j);
+        const off = VLChal.shuffleArr(wrong, Math.random).slice(0, wrong.length >= 3 ? 2 : wrong.length === 2 ? 1 : 0);   // resta sempre almeno una sbagliata
+        if (off.length) { out.mcOff = off; out.text.push(fill(T.hMc, { n: off.length })); }
+      } else if (item.kind === 'wrong') out.text.push(fill(T.hWrong, { w: (d.shown || [])[d.wrongIndex] || '' }));
+      else if (item.kind === 'missing') out.text.push(d.missingIndex > 0 ? fill(T.hMiss, { w: (d.tokens || [])[d.missingIndex - 1] || '' }) : T.hMiss0);
+      else if (item.kind === 'extra') out.text.push(d.extraIndex < (d.shown || []).length / 2 ? T.hExtraA : T.hExtraB);
+      else if (item.kind === 'scramble') out.text.push(fill(T.hScr, { w: (d.words || [])[0] || '' }));
+      else if (item.kind === 'match') { const p0 = (item.pairs || [])[0]; if (p0) out.text.push(fill(T.hMatch, { w: p0.a + ' ↔ ' + p0.b })); }
+      if (item.explain) out.text.push(item.explain);
+      return out;
+    };
     const answerOf = function (item, v, pub) {
       if (item.kind === 'match') return (pub.left || []).map(function (l, k) { return l + ' → ' + (v[k] === -1 || v[k] == null ? '?' : pub.right[v[k]]); }).join(' · ');
       return VLClass.answerText({ type: item.kind, data: item.data }, v);
@@ -8126,7 +8154,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const bar = el('div', { class: 'as-dots' });
       items.forEach(function (it, k) {
         const c = S.assign.detail[it.id];
-        bar.appendChild(el('span', { class: 'as-dot' + (k === i ? ' cur' : '') + (c && c.ok === true ? ' ok' : c && c.ok === false ? ' bad' : '') }));
+        bar.appendChild(el('span', { class: 'as-dot' + (k === i ? ' cur' : '') + (c && c.ok === true ? (c.hints ? ' okh' : ' ok') : c && c.ok === false ? (c.hints ? ' badh' : ' bad') : '') }));
       });
       return el('div', {}, el('div', { class: 'row', style: 'justify-content:space-between;align-items:baseline;gap:8px' },
         el('h2', { style: 'margin:0;font-size:18px', text: a.title || 'Esercitazione' }),
@@ -8144,8 +8172,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
       box.appendChild(el('div', { class: 'as-kind', text: T.both ? ((T.k[item.kind] || '').split('\n')[0] + ' · ' + (INSTR[item.kind] || '').split('\n')[0] + '\n' + (T.k[item.kind] || '').split('\n')[1] + ' · ' + (INSTR[item.kind] || '').split('\n')[1]) + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? '\n' + T.accents.trim() : '') : (T.k[item.kind] || VLChal.itemLabel(item.kind)) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? T.accents : '') }));
       const msg = el('div', { class: 'as-msg' });
+      const hintBox = el('div', { class: 'as-hint', style: 'display:none' });
+      let mcOff = null;
       const ask = function () {
-        const inputBox = chpItemInput(pub, { inline: true, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
+        const inputBox = chpItemInput(pub, { inline: true, mcOff: mcOff, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
           const res = VLChal.checkItem(item, v, pub);
           if (cell.tries.length < 30) cell.tries.push({ a: answerOf(item, v, pub).slice(0, 300), ok: !!res.correct });
           if (res.correct) {
@@ -8155,7 +8185,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           }
           if (cell.tries.length < MAX_TRIES) {
             msg.className = 'as-msg no';
-            msg.textContent = res.frac > 0 ? T.almost.split('{p}').join(Math.round(res.frac * 100)) : T.retry;
+            msg.textContent = res.frac > 0 ? T.almost.split('{p}').join(Math.round(res.frac * 100)) : T.notYet;
+            const h = hintFor(item, pub);
+            cell.hints = 1; mcOff = h.mcOff;
+            hintBox.textContent = T.hint + (h.text.length ? ': ' + h.text.join('\n') : '');
+            hintBox.style.display = '';
             inputBox.replaceWith(ask());
             return;
           }
@@ -8170,7 +8204,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         box.innerHTML = '';
         box.appendChild(head());
         const fb = el('div', { class: 'chp-reveal ' + (ok ? 'ok' : 'no') },
-          el('div', { class: 'big', text: ok ? (cell.tries.length > 1 ? T.okLate : T.ok) : T.wrong }),
+          el('div', { class: 'big', text: ok ? (cell.hints ? T.okHelp : cell.tries.length > 1 ? T.okLate : T.ok) : (cell.hints ? T.koHelp : T.wrong) }),
           ok ? null : el('div', { class: 'sol', text: T.solution + VLChal.solutionText(item) }),
           item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null);
         box.appendChild(fb);
@@ -8179,6 +8213,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         setTimeout(function () { next.focus(); }, 30);
       };
       box.appendChild(msg);
+      box.appendChild(hintBox);
       box.appendChild(ask());
     };
     const finish = function () {

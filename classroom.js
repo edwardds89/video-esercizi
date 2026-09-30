@@ -117,7 +117,8 @@
       exs.forEach(function (e) {
         const c = det[e.id];
         cells[e.id] = !c || c.ok == null ? { state: 'none' } : {
-          state: c.ok ? (c.tries && c.tries.length > 1 ? 'ok-late' : 'ok') : 'ko',
+          // v130: con l'aiuto → arancione (ok-help) se poi risponde giusto, marrone (ko-help) se sbaglia anche con l'aiuto
+          state: c.ok ? (c.hints ? 'ok-help' : (c.tries && c.tries.length > 1 ? 'ok-late' : 'ok')) : (c.hints ? 'ko-help' : 'ko'),
           how: c.how || (c.ok ? 'solved' : 'revealed'), tries: c.tries || [], hints: c.hints || 0
         };
       });
@@ -128,7 +129,7 @@
     const perExercise = exs.map(function (e) {
       const done = students.filter(function (s) { return s.cells[e.id].state !== 'none'; });
       const firstTry = done.filter(function (s) { return s.cells[e.id].state === 'ok'; }).length;
-      const ok = done.filter(function (s) { return s.cells[e.id].state !== 'ko'; }).length;
+      const ok = done.filter(function (s) { return s.cells[e.id].state.indexOf('ok') === 0; }).length;
       return { id: e.id, done: done.length, ok: ok, firstTry: firstTry, pct: done.length ? Math.round(ok * 100 / done.length) : null };
     });
     return { exercises: exs, students: students, perExercise: perExercise };
@@ -147,7 +148,7 @@
         if (c.state === 'none') row.push('');
         else {
           const wrong = c.tries.filter(function (t) { return !t.ok; }).map(function (t) { return t.a; });
-          row.push((c.state === 'ko' ? (c.how === 'skipped' ? 'saltato' : 'sbagliato') : 'giusto') + (wrong.length ? ' (' + wrong.join(' / ') + ')' : ''));
+          row.push(({ 'ok-help': 'giusto con l\'aiuto', 'ko-help': 'sbagliato anche con l\'aiuto' }[c.state] || (c.state === 'ko' ? (c.how === 'skipped' ? 'saltato' : 'sbagliato') : 'giusto')) + (wrong.length ? ' (' + wrong.join(' / ') + ')' : ''));
         }
       });
       lines.push(row.map(csvCell).join(';'));

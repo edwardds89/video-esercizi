@@ -1,5 +1,15 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- AIUTO AUTOMATICO, ARANCIONE E MARRONE (v130, 30/9). Edoardo: "se lo studente non riesce a rispondere si attivi un
+  aiuto e poi io devo vedere un puntino arancione… se continua a sbagliare anche con l'aiuto un puntino marrone".
+  Esercitazioni (playAssignSet): al primo errore arriva UN aiuto (hintFor, per tipo: gap = prime lettere e quante
+  lettere; mc = 1-2 risposte sbagliate spente (.chp-mc.off, opts.mcOff), resta sempre almeno una sbagliata; wrong = qual
+  è la parola sbagliata; missing = dopo quale parola; extra = in quale metà; scramble = prima parola; match = una coppia;
+  + la spiegazione dell'autore se c'è) e cell.hints = 1. reportMatrix: ok + hints → 'ok-help' (ARANCIONE #f08c00),
+  ko + hints → 'ko-help' (MARRONE #8b5a2b); ok-late (giallo) resta per le video-lezioni senza aiuto; la % giusti conta
+  ok*. Stati in tabella, LIVE, correzione di gruppo ("con aiuto" / "anche con aiuto"), CSV, pallini dello studente.
+  Test classroom (8, con asserzioni v130).
+
 - LINGUA DELLO STUDENTE, ORDINE CASUALE, LIVE E CORREZIONE DI GRUPPO (v129, 30/9). Edoardo dal telefono: "questa parte
   dovrebbe essere in inglese per gli studenti, o almeno farmi scegliere" + "la consegna la voglio in inglese o in
   entrambe le lingue" + "voglio poter scegliere di mostrare le domande in maniera random e voglio una schermata LIVE dove
