@@ -117,6 +117,12 @@ test('set: asgItems, punteggio, report con abbina e soluzioni', function () {
   assert.ok(C.toCSV(m).indexOf('sbagliato (prenda / prende)') !== -1);
   assert.strictEqual(C.answerText({ type: 'mc', data: SET.chal.items[1].data }, 1), 'sei');
   assert.strictEqual(C.answerText({ type: 'match', data: {} }, 'la chiave → i gelati'), 'la chiave → i gelati');
+  // v130: aiuto → arancione (giusto con aiuto) / marrone (sbagliato anche con aiuto)
+  const det2 = { i1: { ok: true, hints: 1, tries: [{ a: 'x', ok: false }, { a: 'prendo', ok: true }] }, i2: { ok: false, hints: 1, tries: [{ a: 'sei', ok: false }, { a: 'sei', ok: false }] } };
+  const m2 = C.reportMatrix(SET, [{ id: 'r2', student_name: 'Luca Neri', detail: det2, finished: true, updated_at: '2026-10-05T18:00:00Z' }]);
+  assert.strictEqual(m2.students[0].cells.i1.state, 'ok-help'); assert.strictEqual(m2.students[0].cells.i2.state, 'ko-help');
+  assert.strictEqual(m2.perExercise[0].pct, 100); assert.strictEqual(m2.perExercise[1].pct, 0);
+  assert.ok(C.toCSV(m2).indexOf('giusto con l\'aiuto') !== -1);
 });
 
 Promise.all(pending).then(function () { console.log('\n' + passed + ' test passati' + (process.exitCode ? ', con errori' : '')); });
