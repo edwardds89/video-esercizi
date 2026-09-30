@@ -7447,7 +7447,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(chips);
       let corr = null;
       if (kind === 'wrong') {
-        corr = el('input', { type: 'text', class: 'chp-gap', placeholder: 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', style: 'display:none' });
+        corr = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.wrongPh || 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', style: 'display:none' });
         box.appendChild(corr);
       }
       getVal = function () {
@@ -7468,7 +7468,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       line.appendChild(mkSlot((pub.tokens || []).length));
       box.appendChild(line);
-      const word = el('input', { type: 'text', class: 'chp-gap', placeholder: 'La parola che manca', autocomplete: 'off', autocapitalize: 'off' });
+      const word = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.missPh || 'La parola che manca', autocomplete: 'off', autocapitalize: 'off' });
       box.appendChild(word);
       getVal = function () { return sel === -1 || !word.value.trim() ? null : { index: sel, word: word.value }; };
     } else if (kind === 'scramble') {
@@ -7478,7 +7478,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const bank = el('div', { class: 'chp-scrbank' });
       const paint = function () {
         ans.innerHTML = '';
-        if (!picked.length) ans.appendChild(el('span', { class: 'chp-scrhint', text: 'Tocca le parole qui sotto nell’ordine giusto' }));
+        if (!picked.length) ans.appendChild(el('span', { class: 'chp-scrhint', text: opts.scrHint || 'Tocca le parole qui sotto nell’ordine giusto' }));
         picked.forEach(function (ix, k) {
           ans.appendChild(el('button', { class: 'chp-tile inans', text: words[ix], title: 'Togli', onclick: function () { picked.splice(k, 1); paint(); } }));
         });
@@ -7523,7 +7523,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const send = el('button', { class: 'primary big chp-send', text: opts.sendLabel || 'Invia ▶' });
     send.addEventListener('click', function () {
       const v = getVal();
-      if (v == null) return toast('Prima rispondi');
+      if (v == null) return toast(opts.answerFirst || 'Prima rispondi');
       send.disabled = true;
       $$('button, input', box).forEach(function (x) { if (x !== send) x.disabled = true; });
       opts.onSubmit(v);
@@ -7760,10 +7760,42 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       qrBox);
   }
 
+  /** v129 (Edoardo: "questa parte dovrebbe essere in inglese per gli studenti, o almeno farmi scegliere in che lingua"):
+   *  lingua dell'interfaccia DELLO STUDENTE nei compiti (nome, istruzioni, correzione, riepilogo, invio). La sceglie il
+   *  docente nel dialogo Assegna; si salva sulla lezione (ls.studentLang) e viaggia nel compito (lesson.uiLang). */
+  const ASG_T = {
+    it: { name: 'Il tuo nome e cognome', namePh: 'Nome e cognome', privacy: 'Il tuo nome e le tue risposte li vede solo il docente. Nessun account, nessuna email.', start: 'Inizia ▶', exercises: 'esercizi', needName: 'Scrivi nome e cognome',
+      check: 'Controlla', retry: '✗ Non è giusto: riprova.', almost: '✗ Quasi ({p}% giusto): riprova.', ok: '✓ Giusto!', okLate: '✓ Giusto al secondo tentativo', wrong: '✗ Sbagliato', solution: 'Soluzione: ', next: 'Avanti ▶', result: 'Vedi il risultato ▶',
+      review: 'Da ripassare', youWrote: 'Hai scritto: ', correct: 'Giusto: ', again: '↻ Rifai da capo', accents: ' Attenzione agli accenti (è ≠ e).', answerFirst: 'Prima rispondi', wrongPh: 'Scrivi la parola giusta', missPh: 'La parola che manca', scrHint: 'Tocca le parole qui sotto nell’ordine giusto',
+      done: '✓ Consegnato: il docente vede i tuoi risultati ({n}).', closed: 'Il docente ha chiuso questo compito: i risultati non sono stati inviati.', notSent: 'Non inviato ({e}). ', resend: 'Riprova', sending: 'Invio dei risultati al docente…',
+      k: { gap: 'Completa gli spazi', gapbank: 'Completa con le parole', mc: 'Scelta multipla', scramble: 'Riordina la frase', extra: 'Trova la parola in più', missing: 'Trova la parola mancante', wrong: 'Trova la parola sbagliata', match: 'Abbina le coppie' },
+      i: { gap: 'Scrivi la parola che manca.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' } },
+    en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. No account, no email.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
+      check: 'Check', retry: '✗ Not quite: try again.', almost: '✗ Almost ({p}% right): try again.', ok: '✓ Correct!', okLate: '✓ Correct on the second try', wrong: '✗ Wrong', solution: 'Answer: ', next: 'Next ▶', result: 'See your result ▶',
+      review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
+      done: '✓ Submitted: your teacher can see your results ({n}).', closed: 'Your teacher has closed this assignment: your results were not sent.', notSent: 'Not sent ({e}). ', resend: 'Try again', sending: 'Sending your results to your teacher…',
+      k: { gap: 'Fill in the gaps', gapbank: 'Fill in with the words', mc: 'Multiple choice', scramble: 'Put the sentence in order', extra: 'Find the extra word', missing: 'Find the missing word', wrong: 'Find the wrong word', match: 'Match the pairs' },
+      i: { gap: 'Write the missing word.', gapbank: 'Complete with the words in the list.', mc: 'Choose the right answer.', scramble: 'Put the words in the right order.', extra: 'Tap the extra word.', missing: 'Tap where a word is missing and write it.', wrong: 'Tap the wrong word and write the right one.', match: 'Match each word on the left with one on the right.' } }
+  };
+  // 'both' = italiano e inglese insieme (Edoardo: "la consegna la voglio poter mettere in inglese o in entrambe le lingue"):
+  // pulsanti e messaggi "Controlla / Check", consegne su due righe (italiano sopra, inglese sotto).
+  ASG_T.both = (function () {
+    const out = {}, it = ASG_T.it, en = ASG_T.en;
+    Object.keys(it).forEach(function (k) {
+      if (typeof it[k] === 'object') { out[k] = {}; Object.keys(it[k]).forEach(function (j) { out[k][j] = it[k][j] + '\n' + en[k][j]; }); }
+      else out[k] = it[k] === en[k] ? it[k] : it[k] + ' / ' + en[k].replace(/^[✓✗↻] ?/, '');
+    });
+    out.accents = ' Attenzione agli accenti (è ≠ e) / Mind the accents.';
+    out.solution = 'Soluzione / Answer: '; out.correct = 'Giusto / Correct: '; out.youWrote = 'Hai scritto / You wrote: ';
+    out.privacy = it.privacy + '\n' + en.privacy;
+    out.both = true;
+    return out;
+  })();
+  function asgT(lesson) { return ASG_T[(lesson && lesson.uiLang) || 'it'] || ASG_T.it; }
   /** v126: cosa viaggia nel compito. Video-lezione: studentPayload. Set di esercizi (esercitazione): solo gli item. */
   function asgPayload(ls) {
-    if (ls.chal && !Array.isArray(ls.exercises)) return { v: 1, id: ls.id, title: ls.title || '', lang: ls.lang || 'it', chal: { items: JSON.parse(JSON.stringify(ls.chal.items || [], function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; })) } };
-    return studentPayload(ls);
+    if (ls.chal && !Array.isArray(ls.exercises)) return { v: 1, id: ls.id, title: ls.title || '', lang: ls.lang || 'it', uiLang: ls.studentLang || 'it', shuffle: !!ls.studentShuffle, chal: { items: JSON.parse(JSON.stringify(ls.chal.items || [], function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; })) } };
+    return Object.assign(studentPayload(ls), { uiLang: ls.studentLang || 'it' });
   }
   // --- dialogo "Assegna" dalla card della lezione ---
   function openAssignDialog(ls) {
@@ -7787,6 +7819,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const go = el('button', { class: 'primary', text: 'Assegna' });
       go.addEventListener('click', function () {
         const creating = sel.value === '__new';
+        if (S.lessons[ls.id] && ((ls.studentLang || 'it') !== langSel.value || !!ls.studentShuffle !== shufBox.checked)) {
+          S.lessons[ls.id].studentLang = langSel.value; ls.studentLang = langSel.value;
+          S.lessons[ls.id].studentShuffle = shufBox.checked; ls.studentShuffle = shufBox.checked;
+          S.lessons[ls.id].updatedAt = new Date().toISOString(); saveLessons();
+        }
         if (creating && !newIn.value.trim()) { newIn.focus(); return toast('Scrivi il nome della classe'); }
         go.disabled = true;
         (creating ? be.createClass(newIn.value.trim()) : Promise.resolve({ id: sel.value, name: sel.options[sel.selectedIndex].textContent }))
@@ -7799,6 +7836,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       body.appendChild(el('label', { text: 'Classe' }));
       body.appendChild(el('div', { class: 'row' }, sel));
       body.appendChild(newRow);
+      const langSel = el('select', { id: 'asg-lang' }, el('option', { value: 'it', text: '🇮🇹 Italiano' }), el('option', { value: 'en', text: '🇬🇧 English' }), el('option', { value: 'both', text: '🇮🇹+🇬🇧 Italiano e inglese' }));
+      langSel.value = ls.studentLang || 'it';
+      body.appendChild(el('label', { text: 'Lingua delle istruzioni per lo studente' }));
+      body.appendChild(el('div', { class: 'row' }, langSel, el('span', { class: 'hint', text: 'pulsanti, consegne e correzione; gli esercizi restano in italiano' })));
+      const shufBox = el('input', { type: 'checkbox', id: 'asg-shuffle' });
+      shufBox.checked = !!ls.studentShuffle;
+      if (VLClass.isSet(ls)) body.appendChild(el('label', { class: 'chip', style: 'margin-top:10px;display:inline-flex' }, shufBox, ' 🔀 Domande in ordine casuale (diverso per ogni studente)'));
       body.appendChild(el('p', { class: 'hint', text: 'Gli studenti ricevono un link: scrivono nome e cognome, fanno la lezione e i risultati arrivano a te (chi l\'ha fatta, punteggio, ogni risposta sbagliata). La lezione viene "fotografata" adesso: se poi la modifichi, questo compito resta com\'è.' }));
       body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, go));
     }, function (e) { body.innerHTML = ''; body.appendChild(el('div', { class: 'notice bad', text: 'Non riesco a caricare le classi: ' + e.message })); });
@@ -7825,27 +7869,38 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const be = classBackend();
     if (!be) { needLogin(root, function () { renderReport(id); }); return; }
     root.appendChild(el('p', { class: 'hint', text: 'Carico i risultati…' }));
+    const same = CLS.report && CLS.report.a && CLS.report.a.id === id;
+    if (!same) CLS.repMode = 'table';
     const load = function (quiet) {
-      return Promise.all([be.getAssignmentFull(id), be.listResults([id])]).then(function (r) {
+      const have = CLS.report && CLS.report.a && CLS.report.a.id === id ? CLS.report.a : null;   // v129: la lezione non cambia, si riscaricano solo i risultati
+      return Promise.all([have ? Promise.resolve(have) : be.getAssignmentFull(id), be.listResults([id])]).then(function (r) {
         const a = r[0]; if (!a) throw new Error('compito non trovato');
-        CLS.report = { a: a, rows: r[1] || [], sel: CLS.report && CLS.report.a && CLS.report.a.id === id ? CLS.report.sel : null };
+        const prev = CLS.report && CLS.report.a && CLS.report.a.id === id ? CLS.report : null;
+        CLS.report = { a: a, rows: r[1] || [], sel: prev ? prev.sel : null, fix: prev ? prev.fix : null };
         paintReport(be);
       }).catch(function (e) { if (!quiet) { root.innerHTML = ''; root.appendChild(el('div', { class: 'notice bad', text: 'Non riesco a caricare il report: ' + e.message })); } });
     };
     load(false);
     // aggiornamento da solo ogni 30 s finché il report è aperto (durante una lezione si vedono arrivare gli studenti)
-    CLS.repTimer = setInterval(function () { if (S.view !== 'report') { clearInterval(CLS.repTimer); CLS.repTimer = null; return; } load(true); }, 30000);
+    // v129: in modalità LIVE ogni 5 secondi (si vede chi sta rispondendo), altrimenti ogni 30
+    let tick = 0;
+    CLS.repTimer = setInterval(function () { if (S.view !== 'report') { clearInterval(CLS.repTimer); CLS.repTimer = null; return; } tick++; if (CLS.repMode === 'live' || tick % 6 === 0) load(true); }, 5000);
     CLS.reload = load;
   }
   function paintReport(be) {
     const R = CLS.report, a = R.a, root = $('#rep-root');
     const m = VLClass.reportMatrix(a.lesson, R.rows);
+    $('#view-report').classList.toggle('rep-big', CLS.repMode === 'live' || CLS.repMode === 'fix');
+    if (CLS.repMode === 'live') return paintLive(be, m);
+    if (CLS.repMode === 'fix') return paintFix(be, m);
     const cls = (CLS.classes || []).find(function (c) { return c.id === a.class_id; });
     root.innerHTML = '';
     const url = assignUrl(a.code);
     root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
       el('button', { class: 'small', text: '← Classi e compiti', onclick: renderClasses }),
       el('h2', { style: 'margin:0;flex:1;min-width:200px', text: a.title || '(senza titolo)' }),
+      el('button', { class: 'small primary', text: '🔴 LIVE', title: 'Schermata da proiettare: chi sta facendo gli esercizi, aggiornata ogni 5 secondi', onclick: function () { CLS.repMode = 'live'; paintReport(be); } }),
+      el('button', { class: 'small', text: '👥 Correzione di gruppo', title: 'Una domanda alla volta: chi ha sbagliato e cosa ha scritto, poi la soluzione', onclick: function () { CLS.repMode = 'fix'; R.fix = null; paintReport(be); } }),
       el('button', { class: 'small', text: '↻ Aggiorna', onclick: function () { CLS.reload(false); } }),
       el('button', { class: 'small', text: '⬇ CSV (Excel)', onclick: function () {
         const b = el('a', { href: URL.createObjectURL(new Blob([VLClass.toCSV(m)], { type: 'text/csv;charset=utf-8' })), download: slugify(a.title || 'compito') + '-risultati.csv' });
@@ -7896,6 +7951,93 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     root.appendChild(detail);
     if (R.sel) paintDetail(m, detail);
   }
+  /** v129 LIVE (Edoardo: "voglio una schermata LIVE dove vedo chi sta facendo gli esercizi"): una riga per studente con
+   *  un pallino per esercizio (verde/giallo/rosso/grigio), punteggio, "sta rispondendo" se ha inviato nell'ultimo minuto.
+   *  Si aggiorna ogni 5 s (renderReport). Pensata per il proiettore: niente risposte degli studenti a schermo. */
+  function paintLive(be, m) {
+    const R = CLS.report, a = R.a, root = $('#rep-root');
+    root.innerHTML = '';
+    const now = Date.now();
+    const fin = m.students.filter(function (s) { return s.finished; }).length;
+    const active = m.students.filter(function (s) { return !s.finished && now - new Date(s.updated_at).getTime() < 90000; }).length;
+    root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
+      el('button', { class: 'small', text: '← Tabella', onclick: function () { CLS.repMode = 'table'; paintReport(be); } }),
+      el('h2', { style: 'margin:0;flex:1;min-width:200px', text: '🔴 ' + (a.title || '') }),
+      el('button', { class: 'small', text: '👥 Correzione di gruppo', onclick: function () { CLS.repMode = 'fix'; R.fix = null; paintReport(be); } })));
+    const url = assignUrl(a.code);
+    const top = el('div', { class: 'live-top' });
+    const qr = el('div', { class: 'live-qr' }); qr.innerHTML = qrSvg(url);
+    top.appendChild(qr);
+    top.appendChild(el('div', {}, el('div', { class: 'live-code', text: url.replace(/^https?:\/\//, '') }),
+      el('div', { class: 'live-stats' },
+        el('span', { text: m.students.length + ' collegati' }), el('span', { class: 'on', text: active + ' stanno rispondendo' }), el('span', { class: 'ok', text: fin + ' hanno finito' }))));
+    root.appendChild(top);
+    if (!m.students.length) { root.appendChild(el('p', { class: 'muted', text: 'Aspetto gli studenti: fate scansionare il QR o aprire il link.' })); return; }
+    const list = el('div', { class: 'live-list' });
+    m.students.slice().sort(function (x, y) { return (y.done - x.done) || x.name.localeCompare(y.name, 'it'); }).forEach(function (s) {
+      const recent = now - new Date(s.updated_at).getTime() < 90000;
+      const dots = el('div', { class: 'live-dots' });
+      m.exercises.forEach(function (e) { dots.appendChild(el('span', { class: 'ld ' + s.cells[e.id].state, title: e.n + '. ' + e.label })); });
+      list.appendChild(el('div', { class: 'live-row' + (s.finished ? ' fin' : recent ? ' on' : '') },
+        el('div', { class: 'live-name', text: s.name }),
+        dots,
+        el('div', { class: 'live-score', text: s.finished ? '✓ ' + s.score + '/' + s.total : s.done + '/' + s.total })));
+    });
+    root.appendChild(list);
+    root.appendChild(el('p', { class: 'hint', text: 'Verde = giusto · giallo = giusto al 2° tentativo · rosso = sbagliato · grigio = non ancora fatto. Si aggiorna ogni 5 secondi.' }));
+  }
+  /** v129 CORREZIONE DI GRUPPO ("alla fine voglio poter fare una correzione di gruppo in modo che posso chiamare gli
+   *  studenti che hanno sbagliato e farli riprovare"): una domanda alla volta, proiettata SENZA soluzione; sotto, chi
+   *  l'ha sbagliata (nomi da chiamare) e, cliccando un nome, cosa ha scritto. "Mostra la soluzione" quando si vuole.
+   *  Di default solo le domande con almeno un errore, dalla più sbagliata. */
+  function paintFix(be, m) {
+    const R = CLS.report, a = R.a, root = $('#rep-root');
+    R.fix = R.fix || { onlyErr: true, i: 0, show: false, who: null };
+    const F = R.fix;
+    root.innerHTML = '';
+    const stat = m.exercises.map(function (e, k) {
+      const wrong = m.students.filter(function (s) { const c = s.cells[e.id]; return c.state === 'ko' || c.state === 'ok-late'; });
+      return { e: e, p: m.perExercise[k], wrong: wrong };
+    });
+    let list = F.onlyErr ? stat.filter(function (x) { return x.wrong.length; }).sort(function (x, y) { return (x.p.pct == null ? 101 : x.p.pct) - (y.p.pct == null ? 101 : y.p.pct); }) : stat;
+    const only = el('input', { type: 'checkbox' }); only.checked = F.onlyErr;
+    only.addEventListener('change', function () { F.onlyErr = only.checked; F.i = 0; F.show = false; F.who = null; paintReport(be); });
+    root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
+      el('button', { class: 'small', text: '← Tabella', onclick: function () { CLS.repMode = 'table'; paintReport(be); } }),
+      el('h2', { style: 'margin:0;flex:1;min-width:200px', text: '👥 Correzione · ' + (a.title || '') }),
+      el('label', { class: 'chip', style: 'margin:0' }, only, ' solo le domande con errori (dalla più sbagliata)'),
+      el('button', { class: 'small', text: '🔴 LIVE', onclick: function () { CLS.repMode = 'live'; paintReport(be); } })));
+    if (!list.length) { root.appendChild(el('p', { class: 'notice ok', text: m.students.length ? 'Nessun errore da correggere: tutti giusti al primo colpo! 🎉' : 'Nessuno ha ancora fatto il compito.' })); return; }
+    F.i = Math.max(0, Math.min(F.i, list.length - 1));
+    const x = list[F.i], e = x.e;
+    const card = el('div', { class: 'fix-card' });
+    card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;gap:8px' },
+      el('div', { class: 'fix-n', text: 'Esercizio ' + e.n + ' · ' + e.label }),
+      el('div', { class: 'fix-pct' + (x.p.pct != null && x.p.pct < 60 ? ' low' : ''), text: x.p.pct == null ? '' : x.p.pct + '% giusto · ' + x.p.done + ' risposte' })));
+    card.appendChild(el('div', { class: 'fix-q', text: e.prompt || e.sentence }));
+    const solBox = el('div', { class: 'fix-sol' });
+    if (F.show) { solBox.appendChild(el('div', { text: '✓ ' + e.solution })); if (e.explain) solBox.appendChild(el('div', { class: 'fix-exp', text: e.explain })); }
+    card.appendChild(solBox);
+    const who = el('div', { class: 'fix-who' });
+    who.appendChild(el('div', { class: 'meta', text: x.wrong.length ? 'Da chiamare (' + x.wrong.length + '): clicca un nome per vedere cosa ha scritto' : 'Tutti giusti al primo colpo' }));
+    const chips = el('div', { class: 'chips' });
+    x.wrong.forEach(function (s) {
+      const c = s.cells[e.id];
+      chips.appendChild(el('button', { class: 'fix-name ' + c.state + (F.who === s.key ? ' sel' : ''), text: s.name + (c.state === 'ok-late' ? ' (2°)' : ''), onclick: function () { F.who = F.who === s.key ? null : s.key; paintReport(be); } }));
+    });
+    who.appendChild(chips);
+    if (F.who) {
+      const s = x.wrong.find(function (y) { return y.key === F.who; });
+      if (s) who.appendChild(el('div', { class: 'fix-ans' }, el('b', { text: s.name + ' ha scritto: ' }), document.createTextNode(s.cells[e.id].tries.filter(function (t) { return !t.ok; }).map(function (t) { return t.a; }).join('  ·  ') || '(niente)')));
+    }
+    card.appendChild(who);
+    root.appendChild(card);
+    root.appendChild(el('div', { class: 'row fix-nav', style: 'gap:8px;justify-content:center;margin-top:12px' },
+      el('button', { text: '◀', disabled: F.i === 0 ? 'disabled' : null, onclick: function () { F.i--; F.show = false; F.who = null; paintReport(be); } }),
+      el('button', { class: 'primary', text: F.show ? 'Nascondi la soluzione' : '👁 Mostra la soluzione', onclick: function () { F.show = !F.show; paintReport(be); } }),
+      el('span', { class: 'meta', text: (F.i + 1) + ' di ' + list.length }),
+      el('button', { text: '▶', disabled: F.i >= list.length - 1 ? 'disabled' : null, onclick: function () { F.i++; F.show = false; F.who = null; paintReport(be); } })));
+  }
   function paintDetail(m, box) {
     const R = CLS.report, sel = R.sel; box.innerHTML = '';
     const e = m.exercises.find(function (x) { return x.id === sel.ex; }); if (!e) return;
@@ -7940,12 +8082,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   function renderAssignStart(be, a) {
     const box = $('#as-box'); box.innerHTML = '';
+    const T = asgT(a.lesson);
+    document.documentElement.lang = a.lesson.uiLang || 'it';
     let saved = ''; try { saved = localStorage.getItem('vle.studentName') || ''; } catch (e) { /* ignora */ }
-    const inp = el('input', { type: 'text', value: saved, placeholder: 'Nome e cognome', autocomplete: 'name', maxlength: '80', style: 'width:100%;font-size:18px' });
-    const go = el('button', { class: 'primary', text: 'Inizia ▶', style: 'font-size:17px' });
+    const inp = el('input', { type: 'text', value: saved, placeholder: T.namePh, autocomplete: 'name', maxlength: '80', style: 'width:100%;font-size:18px' });
+    const go = el('button', { class: 'primary', text: T.start, style: 'font-size:17px' });
     const start = function () {
       const name = VLClass.cleanName(inp.value);
-      if (!VLClass.validName(name)) { inp.focus(); return toast('Scrivi nome e cognome'); }
+      if (!VLClass.validName(name)) { inp.focus(); return toast(T.needName); }
       try { localStorage.setItem('vle.studentName', name); } catch (e) { /* ignora */ }
       S.assign = { be: be, code: a.code, id: VLClass.uuid(), name: name, detail: {}, lesson: a.lesson, status: null, timer: null, err: '' };
       assignSend(false);
@@ -7955,10 +8099,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     go.addEventListener('click', start);
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') start(); });
     box.appendChild(el('h2', { style: 'margin-top:0', text: a.title || 'Compito' }));
-    box.appendChild(el('p', { class: 'meta', text: (a.className ? a.className + ' · ' : '') + VLClass.asgItems(a.lesson).length + ' esercizi' }));
-    box.appendChild(el('label', { text: 'Il tuo nome e cognome' }));
+    box.appendChild(el('p', { class: 'meta', text: (a.className ? a.className + ' · ' : '') + VLClass.asgItems(a.lesson).length + ' ' + T.exercises }));
+    box.appendChild(el('label', { text: T.name }));
     box.appendChild(inp);
-    box.appendChild(el('p', { class: 'hint', text: 'Il tuo nome e le tue risposte li vede solo il docente. Nessun account, nessuna email.' }));
+    box.appendChild(el('p', { class: 'hint', text: T.privacy }));
     box.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, go));
     setTimeout(function () { inp.focus(); }, 50);
   }
@@ -7966,8 +8110,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
    *  è sbagliata si riprova UNA volta, poi si vede la soluzione (con la spiegazione dell'autore, se c'è). Ogni risposta
    *  data finisce nel report (stesso registro delle video-lezioni: S.assign.detail[item.id].tries). */
   function playAssignSet(a) {
-    const items = (a.lesson.chal && a.lesson.chal.items) || [];
+    // v129: ordine casuale per studente (e per tentativo); il report resta nell'ordine del docente (si lavora per id)
+    let items = ((a.lesson.chal && a.lesson.chal.items) || []).slice();
+    if (a.lesson.shuffle) items = VLChal.shuffleArr(items, Math.random);
     const box = $('#as-box');
+    const T = asgT(a.lesson);
     $('#view-assign').classList.add('as-set');
     let i = 0;
     const MAX_TRIES = 2;
@@ -7983,9 +8130,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       return el('div', {}, el('div', { class: 'row', style: 'justify-content:space-between;align-items:baseline;gap:8px' },
         el('h2', { style: 'margin:0;font-size:18px', text: a.title || 'Esercitazione' }),
-        el('span', { class: 'badge', text: Math.min(i + 1, items.length) + ' di ' + items.length })), bar);
+        el('span', { class: 'badge', text: Math.min(i + 1, items.length) + (a.lesson.uiLang === 'en' ? ' of ' : ' di ') + items.length })), bar);
     };
-    const INSTR = { gap: 'Scrivi la parola che manca.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' };
+    const INSTR = T.i;
     const step = function () {
       box.innerHTML = '';
       if (i >= items.length) return finish();
@@ -7995,10 +8142,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const pub = VLChal.pubItem(item, { showQ: true });
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
       if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
-      box.appendChild(el('div', { class: 'as-kind', text: VLChal.itemLabel(item.kind) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? ' Attenzione agli accenti (è ≠ e).' : '') }));
+      box.appendChild(el('div', { class: 'as-kind', text: T.both ? ((T.k[item.kind] || '').split('\n')[0] + ' · ' + (INSTR[item.kind] || '').split('\n')[0] + '\n' + (T.k[item.kind] || '').split('\n')[1] + ' · ' + (INSTR[item.kind] || '').split('\n')[1]) + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? '\n' + T.accents.trim() : '') : (T.k[item.kind] || VLChal.itemLabel(item.kind)) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? T.accents : '') }));
       const msg = el('div', { class: 'as-msg' });
       const ask = function () {
-        const inputBox = chpItemInput(pub, { inline: true, sendLabel: 'Controlla', onSubmit: function (v) {
+        const inputBox = chpItemInput(pub, { inline: true, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
           const res = VLChal.checkItem(item, v, pub);
           if (cell.tries.length < 30) cell.tries.push({ a: answerOf(item, v, pub).slice(0, 300), ok: !!res.correct });
           if (res.correct) {
@@ -8008,7 +8155,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           }
           if (cell.tries.length < MAX_TRIES) {
             msg.className = 'as-msg no';
-            msg.textContent = res.frac > 0 ? '✗ Quasi (' + Math.round(res.frac * 100) + '% giusto): riprova.' : '✗ Non è giusto: riprova.';
+            msg.textContent = res.frac > 0 ? T.almost.split('{p}').join(Math.round(res.frac * 100)) : T.retry;
             inputBox.replaceWith(ask());
             return;
           }
@@ -8023,11 +8170,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         box.innerHTML = '';
         box.appendChild(head());
         const fb = el('div', { class: 'chp-reveal ' + (ok ? 'ok' : 'no') },
-          el('div', { class: 'big', text: ok ? (cell.tries.length > 1 ? '✓ Giusto al secondo tentativo' : '✓ Giusto!') : '✗ Sbagliato' }),
-          ok ? null : el('div', { class: 'sol', text: 'Soluzione: ' + VLChal.solutionText(item) }),
+          el('div', { class: 'big', text: ok ? (cell.tries.length > 1 ? T.okLate : T.ok) : T.wrong }),
+          ok ? null : el('div', { class: 'sol', text: T.solution + VLChal.solutionText(item) }),
           item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null);
         box.appendChild(fb);
-        const next = el('button', { class: 'primary big chp-send', text: i + 1 < items.length ? 'Avanti ▶' : 'Vedi il risultato ▶', onclick: function () { i++; step(); } });
+        const next = el('button', { class: 'primary big chp-send', text: i + 1 < items.length ? T.next : T.result, onclick: function () { i++; step(); } });
         box.appendChild(next);
         setTimeout(function () { next.focus(); }, 30);
       };
@@ -8037,21 +8184,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const finish = function () {
       const sc = VLClass.scoreOf(a.lesson, S.assign.detail);
       box.appendChild(el('h2', { style: 'margin-top:0', text: a.title || 'Esercitazione' }));
-      box.appendChild(el('div', { class: 'chp-reveal ' + (sc.score === sc.total ? 'ok' : '') }, el('div', { class: 'big', text: '🏁 ' + sc.score + ' su ' + sc.total })));
+      box.appendChild(el('div', { class: 'chp-reveal ' + (sc.score === sc.total ? 'ok' : '') }, el('div', { class: 'big', text: '🏁 ' + sc.score + (a.lesson.uiLang === 'en' ? ' / ' : ' su ') + sc.total })));
       box.appendChild(assignSummaryBox());
       const wrong = items.filter(function (it) { const c = S.assign.detail[it.id]; return !c || c.ok !== true; });
       if (wrong.length) {
-        box.appendChild(el('h3', { text: 'Da ripassare' }));
+        box.appendChild(el('h3', { text: T.review }));
         box.appendChild(el('ol', { class: 'as-review' }, wrong.map(function (it) {
           const c = S.assign.detail[it.id] || { tries: [] };
           const last = c.tries.length ? c.tries[c.tries.length - 1].a : '';
           return el('li', { value: String(items.indexOf(it) + 1) },
-            el('div', { text: it.kind === 'mc' ? it.data.question : (it.kind === 'gap' || it.kind === 'gapbank' ? VLChal.gapText(it) : VLChal.itemLabel(it.kind)) }),
-            last ? el('div', { class: 'meta', text: 'Hai scritto: ' + last }) : null,
-            el('div', { class: 'as-sol', text: 'Giusto: ' + VLChal.solutionText(it) }));
+            el('div', { text: it.kind === 'mc' ? it.data.question : (it.kind === 'gap' || it.kind === 'gapbank' ? VLChal.gapText(it) : (T.k[it.kind] || VLChal.itemLabel(it.kind)).split('\n')[0]) }),
+            last ? el('div', { class: 'meta', text: T.youWrote + last }) : null,
+            el('div', { class: 'as-sol', text: T.correct + VLChal.solutionText(it) }));
         })));
       }
-      box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: '↻ Rifai da capo', onclick: function () { assignNewAttempt(); i = 0; step(); } })));
+      box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: T.again, onclick: function () { assignNewAttempt(); if (a.lesson.shuffle) items = VLChal.shuffleArr(items, Math.random); i = 0; step(); } })));
     };
     step();
   }
@@ -8091,14 +8238,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   function paintAssignStatus() {
     const box = $('#as-status'); const A = S.assign; if (!box || !A) return;
+    const T = asgT(A.lesson);
     box.innerHTML = ''; box.className = 'notice';
-    if (A.status === 'done') { box.classList.add('ok'); box.textContent = '✓ Consegnato: il docente vede i tuoi risultati (' + A.name + ').'; }
-    else if (A.status === 'closed') { box.classList.add('bad'); box.textContent = 'Il docente ha chiuso questo compito: i risultati non sono stati inviati.'; }
+    if (A.status === 'done') { box.classList.add('ok'); box.textContent = T.done.split('{n}').join(A.name); }
+    else if (A.status === 'closed') { box.classList.add('bad'); box.textContent = T.closed; }
     else if (A.status === 'error') {
       box.classList.add('bad');
-      box.appendChild(document.createTextNode('Non inviato (' + A.err + '). '));
-      box.appendChild(el('button', { class: 'small', text: 'Riprova', onclick: function () { assignSend(true); } }));
-    } else box.textContent = 'Invio dei risultati al docente…';
+      box.appendChild(document.createTextNode(T.notSent.split('{e}').join(A.err)));
+      box.appendChild(el('button', { class: 'small', text: T.resend, onclick: function () { assignSend(true); } }));
+    } else box.textContent = T.sending;
   }
   function assignNewAttempt() {
     if (!S.assign) return;

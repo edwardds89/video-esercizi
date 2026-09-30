@@ -63,6 +63,24 @@
     const items = (lesson.chal && lesson.chal.items) || [];
     return items.map(function (it) { return { id: it.id, type: it.kind, sentence: it.sentence || (it.kind === 'mc' && it.data ? it.data.question : ''), data: it.data || {}, pairs: it.pairs, explain: it.explain }; });
   }
+  /** v129: la domanda SENZA la risposta, per la correzione di gruppo proiettata (e.sentence del gap contiene la soluzione). */
+  function promptOf(e) {
+    const d = e.data || {};
+    if (e.type === 'gap' || e.type === 'gapbank') {
+      const gi = d.gapIndices || [], out = [];
+      (d.tokens || []).forEach(function (t, i) {
+        if (gi.indexOf(i) === -1) out.push(t);
+        else if (gi.indexOf(i - 1) === -1) out.push('_____');
+      });
+      return out.join(' ').replace(/ ([.,;:!?…)»])/g, '$1');
+    }
+    if (e.type === 'mc') return (d.question || '') + '\n' + (d.options || []).filter(Boolean).map(function (o, i) { return 'ABCDEFG'[i] + ') ' + o; }).join('   ');
+    if (e.type === 'extra' || e.type === 'wrong') return (d.shown || []).join(' ');
+    if (e.type === 'missing') return (d.tokens || []).join(' ');
+    if (e.type === 'scramble') return (d.words || []).slice().sort().join(' / ');
+    if (e.type === 'match') return (e.pairs || []).map(function (p) { return p.a; }).join(' · ');
+    return e.sentence || '';
+  }
   function isSet(lesson) { return !!(lesson && !Array.isArray(lesson.exercises) && lesson.chal); }
   function solutionOf(e) {
     if (e.type === 'match') return (e.pairs || []).map(function (p) { return p.a + ' ↔ ' + p.b; }).join(' · ');
@@ -89,7 +107,7 @@
   /** Tabella del report: righe = studenti (per nome), colonne = esercizi della lezione del compito. */
   function reportMatrix(lesson, rows) {
     const exs = asgItems(lesson).map(function (e, i) {
-      return { id: e.id, n: i + 1, type: e.type, label: SET_LABELS[e.type] || (EX && EX.LABELS && EX.LABELS[e.type]) || e.type, sentence: e.sentence || '', solution: solutionOf(e) };
+      return { id: e.id, n: i + 1, type: e.type, label: SET_LABELS[e.type] || (EX && EX.LABELS && EX.LABELS[e.type]) || e.type, sentence: e.sentence || '', prompt: promptOf(e), solution: solutionOf(e), explain: e.explain || '' };
     });
     const groups = {};
     (rows || []).forEach(function (r) { const k = normName(r.student_name); (groups[k] = groups[k] || []).push(r); });
@@ -226,7 +244,7 @@
     };
   }
 
-  return { asgItems: asgItems, isSet: isSet, solutionOf: solutionOf, newCode: newCode, validCode: validCode, uuid: uuid, normName: normName, cleanName: cleanName, validName: validName,
+  return { asgItems: asgItems, isSet: isSet, promptOf: promptOf, solutionOf: solutionOf, newCode: newCode, validCode: validCode, uuid: uuid, normName: normName, cleanName: cleanName, validName: validName,
     answerText: answerText, scoreOf: scoreOf, doneCount: doneCount, pickAttempt: pickAttempt, reportMatrix: reportMatrix, toCSV: toCSV,
     supabaseBackend: supabaseBackend, memoryBackend: memoryBackend };
 });

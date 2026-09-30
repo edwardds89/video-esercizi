@@ -1,5 +1,24 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- LINGUA DELLO STUDENTE, ORDINE CASUALE, LIVE E CORREZIONE DI GRUPPO (v129, 30/9). Edoardo dal telefono: "questa parte
+  dovrebbe essere in inglese per gli studenti, o almeno farmi scegliere" + "la consegna la voglio in inglese o in
+  entrambe le lingue" + "voglio poter scegliere di mostrare le domande in maniera random e voglio una schermata LIVE dove
+  vedo chi sta facendo gli esercizi e alla fine una correzione di gruppo per chiamare gli studenti che hanno sbagliato".
+  (1) Dialogo Assegna: "Lingua delle istruzioni per lo studente" it | en | both (ls.studentLang → lesson.uiLang nel
+  compito). ASG_T (it/en; 'both' costruito unendo le due: pulsanti "Controlla / Check", consegne su due righe) copre
+  schermata del nome, player dell'esercitazione, correzione, riepilogo, stato di invio, segnaposto di chpItemInput
+  (opts.wrongPh/missPh/scrHint/answerFirst). NON copre ancora il player delle VIDEO-lezioni (resta in italiano).
+  Gli esercizi restano nella loro lingua. (2) "🔀 Domande in ordine casuale" (solo esercitazioni; ls.studentShuffle →
+  lesson.shuffle): playAssignSet mescola per studente e a ogni "Rifai da capo"; report e registro lavorano per id, quindi
+  l'ordine del docente resta. (3) Report → 🔴 LIVE (paintLive): QR + link grandi, collegati / stanno rispondendo
+  (invio negli ultimi 90 s) / hanno finito, una riga per studente con un pallino per esercizio (verde, giallo = 2°
+  tentativo, rosso, grigio), NESSUNA risposta a schermo; aggiornamento ogni 5 s (timer unico a 5 s: in tabella ricarica
+  ogni 6 giri = 30 s; la lezione del compito si scarica una volta sola, poi solo i risultati). (4) 👥 Correzione di
+  gruppo (paintFix): una domanda alla volta, proiettata SENZA soluzione (VLClass.promptOf: gap con _____, mc con A) B)…),
+  % giusto, "Da chiamare" = nomi di chi ha sbagliato o l'ha presa al 2° tentativo (2°), clic sul nome = cosa ha
+  scritto, "👁 Mostra la soluzione" (+ spiegazione), di default solo le domande con errori dalla più sbagliata.
+  CSS .rep-big allarga la card per il proiettore. e2e locale ok (e2e129b.js: ordine mescolato, LIVE, correzione).
+
 - SOLUZIONI E IMMAGINI NELLE ESERCITAZIONI (v128, 30/9). Edoardo, dopo l'import del suo quiz Wayground: "non vedo la
   soluzione né la possibilità di mettere immagini". (1) La lista del set mostra la soluzione in verde accanto a ogni
   esercizio (VLChal.solutionText), 💬 se c'è una spiegazione, miniatura se c'è un'immagine. (2) BUG trovato nel farlo:
