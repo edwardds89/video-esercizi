@@ -217,7 +217,8 @@
       var frac = item.pairs.length ? okN / item.pairs.length : 0;
       return { correct: frac === 1, frac: frac, detail: { ok: okN, total: item.pairs.length } };
     }
-    var res = EX.check({ type: item.kind, data: item.data }, value, {});
+    // v126: item.strict = gli accenti contano (è ≠ e): lo mettono gli esercizi di grammatica (Wayground, foto del libro)
+    var res = EX.check({ type: item.kind, data: item.data }, value, { strict: !!item.strict });
     return { correct: !!res.correct, frac: res.correct ? 1 : 0, detail: res.detail };
   }
   /** Testo della soluzione per la rivelazione sullo schermo. */

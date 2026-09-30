@@ -1105,6 +1105,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function finishPlatformImport(payload, lang) {
     let out;
     try { out = VLPlat.convert(payload, { lang: lang, uid: uid }); } catch (e) { return toast('Importazione non riuscita: ' + e.message, 6000); }
+    if (out.set) return finishSetImport(out);   // v126: Wayground → set di esercizi (niente video)
     const src = out.lesson.importedFrom || {};
     const already = Object.keys(S.lessons).find(function (id) { const l = S.lessons[id]; return l && l.importedFrom && l.importedFrom.site === src.site && src.id && String(l.importedFrom.id) === String(src.id); });   // v121: id numero o stringa
     if (already) {
@@ -1119,6 +1120,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       + (out.skipped.length ? ' · ' + out.skipped.length + ' non convertibili (' + out.skipped.map(function (s) { return 'n.' + s.n; }).join(', ') + ')' : '')
       + '. Controlla tempi e frasi: la trascrizione del video non c\'è, ma per lo studente la lezione è completa.';
     toast(msg, 9000);
+  }
+  /** v126: un quiz importato (Wayground) diventa un SET di esercizi: lo stesso oggetto della Sfida in classe (ls.chal),
+   *  che si assegna come compito (📋 Assegna) o si gioca in classe. Stesso quiz due volte: si apre quello già presente. */
+  function finishSetImport(out) {
+    const src = out.set.importedFrom || {};
+    const already = Object.keys(S.lessons).find(function (id) { const l = S.lessons[id]; return l && l.chal && l.importedFrom && l.importedFrom.site === src.site && src.id && String(l.importedFrom.id) === String(src.id); });
+    if (already) { toast('Questo quiz era già stato importato da ' + platformName(src.site) + ': apro quello. Per reimportarlo, prima eliminalo.', 7000); return openChalSet(already); }
+    if (!out.set.items.length) return toast('Nessuna domanda convertibile in questo quiz' + (out.skipped.length ? ' (' + out.skipped.length + ' di tipi che PauseLearn non ha)' : ''), 7000);
+    const id = 'chal-' + Date.now().toString(36);
+    S.lessons[id] = { id: id, title: out.set.title || 'Quiz importato', lang: out.set.lang || 'it', chal: { items: out.set.items }, importedFrom: src, updatedAt: new Date().toISOString() };
+    saveLessons();
+    openChalSet(id);
+    toast('Importato da ' + platformName(src.site) + ': ' + out.set.items.length + ' esercizi' + (out.skipped.length ? ' · ' + out.skipped.length + ' non convertibili (' + out.skipped.map(function (x) { return 'n.' + x.n; }).join(', ') + ')' : '') + '. Ora puoi assegnarlo a una classe (📋 Assegna) o giocarlo in classe.', 9000);
   }
   function platformName(site) { return (window.VLPlat && VLPlat.PLATFORMS[site] && VLPlat.PLATFORMS[site].name) || site || 'altra piattaforma'; }
   $('#btn-platform').addEventListener('click', function () { $('#dlg-platform').showModal(); });
@@ -1188,7 +1202,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const fbox = $('#home-filter');
     if (fbox) {
       fbox.innerHTML = '';
-      [['all', 'Tutte'], ['video', '\ud83c\udfac Lezioni'], ['act', '\ud83c\udfb2 Attivit\u00e0'], ['conv', '\ud83d\udcac Conversazioni'], ['chal', '\ud83d\udcf1 Sfide']].forEach(function (f) {
+      [['all', 'Tutte'], ['video', '\ud83c\udfac Lezioni'], ['act', '\ud83c\udfb2 Attivit\u00e0'], ['conv', '\ud83d\udcac Conversazioni'], ['chal', '\ud83d\udcdd Esercitazioni']].forEach(function (f) {
         const b = el('button', { class: 'fchip' + ((S.homeFilter || 'all') === f[0] ? ' on' : ''), text: f[1] + ' (' + counts[f[0]] + ')', onclick: function () { S.homeFilter = f[0]; renderHome(); } });
         fbox.appendChild(b);
       });
@@ -1229,13 +1243,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const nIt = (ls.chal.items || []).length;
         const openS = function () { openChalSet(ls.id); };
         const cardS = el('div', { class: 'lesson-card' },
-          el('div', { class: 'thumb act-thumb chal-thumb', onclick: openS, title: 'Apri il set' }, '📱'),
+          el('div', { class: 'thumb act-thumb chal-thumb', onclick: openS, title: 'Apri l\'esercitazione' }, '📝'),
           el('div', { class: 'body' },
             el('div', { class: 'title', text: ls.title || '(set senza titolo)', onclick: openS }),
-            el('div', { class: 'meta', text: 'Sfida in classe · ' + nIt + (nIt === 1 ? ' esercizio' : ' esercizi') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            el('div', { class: 'meta', text: 'Esercitazione · ' + nIt + (nIt === 1 ? ' esercizio' : ' esercizi') + (ls.importedFrom ? ' · da ' + platformName(ls.importedFrom.site) : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
             publishNudge(ls),
             el('div', { class: 'actions' },
-              el('button', { class: 'small primary', text: '▶ Gioca', onclick: function () { openChalNew(ls.id); } }),
+              el('button', { class: 'small primary', text: '📋 Assegna', title: 'Compito o esercitazione per una classe: vedi chi l\'ha fatto e cosa ha sbagliato', onclick: function () { openAssignDialog(ls); } }),   // v126
+              el('button', { class: 'small', text: '📱 Sfida in classe', title: 'Gioco dal vivo con classifica, come Kahoot', onclick: function () { openChalNew(ls.id); } }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: openS }),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'sfida') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, chal: ls.chal }, null, 1)); } }),
               publishBtn(ls),
@@ -1339,7 +1354,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       list.appendChild(el('p', { class: 'muted', text: msg }));
       return;
     }
-    const KIND_LABEL = { video: '🎬 Lezione', act: '🎲 Attività', conv: '💬 Conversazione', chal: '📱 Sfida' };
+    const KIND_LABEL = { video: '🎬 Lezione', act: '🎲 Attività', conv: '💬 Conversazione', chal: '📝 Esercitazione' };
     items.forEach(function (r) {
       const ls = r.data || {};
       const label = KIND_LABEL[homeKind(ls)] || '🎬 Lezione';
@@ -6509,10 +6524,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (it.type === 'mc') return ['Scelta multipla', it.q + '  (giusta: ' + (it.options[it.correct] || '?') + ')'];
     if (it.type === 'match') return ['Abbina', it.pairs.map(function (p) { return p.a + '↔' + p.b; }).join(' · ')];
     if (it.type === 'wheel') return ['Ruota', it.items.join(' · ')];
-    return [VLChal.itemLabel(it.type), it.sentence];
+    return [VLChal.itemLabel(it.type), it.sentence + (it.gaps ? '  → spazio: ' + it.gaps.join(', ') : '')];
   }
   function openImgGen(opts) {
     IMGGEN.imgs = []; IMGGEN.items = []; IMGGEN.accept = opts.onAccept; IMGGEN.kinds = opts.kinds;
+    $('#ig-topic').value = opts.topic || '';
     $('#ig-previews').innerHTML = ''; $('#ig-out').innerHTML = ''; $('#ig-msg').textContent = '';
     $('#ig-go').disabled = true; $('#ig-accept-row').style.display = 'none';
     $('#ig-file').value = '';
@@ -6547,7 +6563,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     busyMsg($('#ig-msg'), 'Leggo l\'immagine e scrivo gli esercizi… (10-30 secondi)');
     AI.itemsFromImage({
       images: IMGGEN.imgs.map(function (i) { return { media_type: i.media_type, data: i.data }; }),
-      n: +$('#ig-n').value || 5, kinds: IMGGEN.kinds,
+      n: +$('#ig-n').value || 5, kinds: IMGGEN.kinds, focus: ($('#ig-topic').value || '').trim(),
       lang: $('#ig-lang').value, level: $('#ig-level').value,
       apiKey: S.settings.apiKey, model: S.settings.model
     }).then(function (r) {
@@ -6912,21 +6928,34 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#cs-add').addEventListener('click', function () { openChalAdd(null); });
   $('#ca-close').addEventListener('click', function () { CA_EDIT = null; $('#dlg-chal-add').close(); });
   // v70: esercizi del set generati da una foto o screenshot
-  $('#ca-img').addEventListener('click', function () {
-    openImgGen({ kinds: ['mc', 'gap', 'gapbank', 'extra', 'missing', 'wrong', 'match'], onAccept: function (items) {
+  function chalFromPhoto() {
+    openImgGen({ kinds: ['gap', 'gapbank', 'mc', 'match'], onAccept: function (items) {
       const ls = current(); if (!ls || !ls.chal) return;
+      const withTopic = !!($('#ig-topic').value || '').trim();
       let n = 0;
       items.forEach(function (it) {
         let built = null;
         if (it.type === 'mc') built = VLChal.buildItem('mc', it);
         else if (it.type === 'match') built = VLChal.buildItem('match', it.pairs);
-        else built = VLChal.buildItem(it.type, it.sentence, { lang: 'it', seed: Date.now() % 100000, distractors: 2 });
+        else built = VLChal.buildItem(it.type, it.sentence, { lang: ls.lang || 'it', seed: Date.now() % 100000, distractors: 2, choices: it.gaps ? { gapWords: it.gaps, distractors: it.distractors } : null });
+        // v126: esercizi di grammatica = gli accenti contano (è/e, perché/perche)
+        if (built && withTopic && built.kind !== 'match' && built.kind !== 'mc') built.strict = true;
         if (built) { ls.chal.items.push(built); n++; }
       });
-      $('#dlg-chal-add').close();
+      if ($('#dlg-chal-add').open) $('#dlg-chal-add').close();
       chalSetTouched(ls);
       toast(n ? n + (n === 1 ? ' esercizio aggiunto dall\'immagine' : ' esercizi aggiunti dall\'immagine') : 'Nessun esercizio costruibile dalle proposte');
     } });
+  }
+  $('#ca-img').addEventListener('click', chalFromPhoto);
+  $('#cs-photo').addEventListener('click', function () {
+    if (!S.settings.apiKey) return toast('Per creare esercizi da una foto serve la chiave AI: Impostazioni AI in alto', 6000);
+    chalFromPhoto();
+  });
+  $('#cs-assign').addEventListener('click', function () {
+    const ls = current(); if (!ls || !ls.chal) return;
+    if (!(ls.chal.items || []).length) return toast('Prima aggiungi almeno un esercizio');
+    openAssignDialog(ls);
   });
   $('#ca-ok').addEventListener('click', function () {
     const ls = current(); if (!ls || !ls.chal) return;
@@ -6999,7 +7028,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
   });
   $('#ch-close').addEventListener('click', function () { $('#dlg-chal-new').close(); });
-  $('#svc-qr').addEventListener('click', function () { openChalNew(); });
+  $('#svc-qr').addEventListener('click', function () { newChalSet(); });   // v126: la card è "Esercitazione" (compiti + sfida)
 
   function startChal(setLs, cfg) {
     const pin = VLChal.makePin();
@@ -7289,7 +7318,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const box = el('div', { class: 'chp-item' });
     let getVal = function () { return null; };
     const kind = pub.kind;
-    if (pub.sentence) box.appendChild(el('div', { class: 'chp-q', text: pub.sentence }));
+    // v126 (compiti senza video): con opts.inline gli spazi si scrivono DENTRO la frase, come sul libro,
+    // invece che in caselle "spazio 1, spazio 2" sotto la frase (quelle restano per la sfida dal vivo).
+    const inlineGaps = !!(opts.inline && pub.sentence && (kind === 'gap' || kind === 'gapbank') && pub.sentence.indexOf('_____') !== -1);
+    if (pub.sentence && !inlineGaps) box.appendChild(el('div', { class: 'chp-q', text: pub.sentence }));
     if (kind === 'mc') {
       if (pub.q) box.appendChild(el('div', { class: 'chp-q', text: pub.q }));
       let sel = -1;
@@ -7303,7 +7335,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       getVal = function () { return sel === -1 ? null : sel; };
     } else if (kind === 'gap' || kind === 'gapbank') {
       const inputs = [];
-      (pub.runs || []).forEach(function (r, i) {
+      if (inlineGaps) {
+        const q = el('div', { class: 'chp-q chp-inline' });
+        pub.sentence.split('_____').forEach(function (part, i, arr) {
+          // la punteggiatura staccata (" ?") si riattacca: "arrivi ?" → "arrivi?"
+          q.appendChild(document.createTextNode(i > 0 ? part.replace(/^\s+(?=[.,;:!?…)»])/, '') : part));
+          if (i < arr.length - 1) {
+            const r = (pub.runs || [])[i] || { words: 1 };
+            const inp = el('input', { type: 'text', class: 'chp-gap inline', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'spazio ' + (i + 1), style: 'width:' + Math.min(9 * r.words + 2, 30) + 'ch' });
+            inputs.push(inp);
+            q.appendChild(inp);
+          }
+        });
+        box.appendChild(q);
+      } else (pub.runs || []).forEach(function (r, i) {
         const inp = el('input', { type: 'text', class: 'chp-gap', autocomplete: 'off', autocapitalize: 'off', placeholder: 'spazio ' + (i + 1) + (r.words > 1 ? ' (' + r.words + ' parole)' : '') });
         inputs.push(inp);
         box.appendChild(inp);
@@ -7401,7 +7446,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       cur = 0; paint();
       getVal = function () { return chosen.some(function (v) { return v !== -1; }) ? chosen.slice() : null; };
     }
-    const send = el('button', { class: 'primary big chp-send', text: 'Invia ▶' });
+    const send = el('button', { class: 'primary big chp-send', text: opts.sendLabel || 'Invia ▶' });
     send.addEventListener('click', function () {
       const v = getVal();
       if (v == null) return toast('Prima rispondi');
@@ -7410,6 +7455,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       opts.onSubmit(v);
     });
     box.appendChild(send);
+    if (opts.inline) {
+      // v126: Invio nella casella = Controlla; il cursore parte nel primo spazio
+      $$('input[type=text]', box).forEach(function (x) { x.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); send.click(); } }); });
+      setTimeout(function () { const f = box.querySelector('input[type=text]:not([style*="display:none"])'); if (f && window.innerWidth > 720) f.focus(); }, 30);
+    }
     return box;
   }
   /** Insieme sullo schermo: arriva una domanda alla volta, si risponde e si aspetta la rivelazione. */
@@ -7617,7 +7667,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const cid = reuse.value; if (!cid) return;
       reuse.disabled = true;
       const local = S.lessons[a.lesson_id];
-      (local ? Promise.resolve(studentPayload(local)) : be.getAssignmentFull(a.id).then(function (full) { return full.lesson; }))
+      (local ? Promise.resolve(asgPayload(local)) : be.getAssignmentFull(a.id).then(function (full) { return full.lesson; }))
         .then(function (lesson) { return be.createAssignment({ class_id: cid, lesson_id: a.lesson_id, title: a.title, kind: a.kind, lesson: lesson }); })
         .then(function (na) { toast('Assegnato anche a ' + ((others.find(function (c) { return c.id === cid; }) || {}).name || 'un\'altra classe') + ' · codice ' + na.code, 5000); renderClasses(); },
           function (e) { reuse.disabled = false; toast('Non assegnato: ' + e.message, 6000); });
@@ -7636,6 +7686,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       qrBox);
   }
 
+  /** v126: cosa viaggia nel compito. Video-lezione: studentPayload. Set di esercizi (esercitazione): solo gli item. */
+  function asgPayload(ls) {
+    if (ls.chal && !Array.isArray(ls.exercises)) return { v: 1, id: ls.id, title: ls.title || '', lang: ls.lang || 'it', chal: { items: JSON.parse(JSON.stringify(ls.chal.items || [], function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; })) } };
+    return studentPayload(ls);
+  }
   // --- dialogo "Assegna" dalla card della lezione ---
   function openAssignDialog(ls) {
     const dlg = $('#dlg-assign'), body = $('#asg-body');
@@ -7644,7 +7699,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     dlg.showModal();
     const be = classBackend();
     if (!be) { needLogin(body, function () { dlg.close(); openAssignDialog(ls); }); return; }
-    if (!(ls.exercises || []).length) { body.appendChild(el('div', { class: 'notice bad', text: 'Questa lezione non ha esercizi: non c\'è niente da correggere.' })); return; }
+    if (!VLClass.asgItems(ls).length) { body.appendChild(el('div', { class: 'notice bad', text: 'Qui non ci sono esercizi: non c\'è niente da correggere.' })); return; }
     body.appendChild(el('p', { class: 'hint', text: 'Carico le classi…' }));
     be.listClasses().then(function (classes) {
       body.innerHTML = '';
@@ -7662,7 +7717,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         go.disabled = true;
         (creating ? be.createClass(newIn.value.trim()) : Promise.resolve({ id: sel.value, name: sel.options[sel.selectedIndex].textContent }))
           .then(function (cls) {
-            return be.createAssignment({ class_id: cls.id, lesson_id: ls.id, title: ls.title || '', kind: 'homework', lesson: studentPayload(ls) })
+            return be.createAssignment({ class_id: cls.id, lesson_id: ls.id, title: ls.title || '', kind: 'homework', lesson: asgPayload(ls) })
               .then(function (a) { showAssigned(body, a, cls); });
           }, function (e) { throw e; })
           .catch(function (e) { go.disabled = false; toast('Non assegnato: ' + e.message, 6000); });
@@ -7820,17 +7875,110 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       try { localStorage.setItem('vle.studentName', name); } catch (e) { /* ignora */ }
       S.assign = { be: be, code: a.code, id: VLClass.uuid(), name: name, detail: {}, lesson: a.lesson, status: null, timer: null, err: '' };
       assignSend(false);
+      if (VLClass.isSet(a.lesson)) return playAssignSet(a);   // v126: esercitazione senza video
       openStudent(null, false, a.lesson);
     };
     go.addEventListener('click', start);
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') start(); });
     box.appendChild(el('h2', { style: 'margin-top:0', text: a.title || 'Compito' }));
-    box.appendChild(el('p', { class: 'meta', text: (a.className ? a.className + ' · ' : '') + (a.lesson.exercises || []).length + ' esercizi' }));
+    box.appendChild(el('p', { class: 'meta', text: (a.className ? a.className + ' · ' : '') + VLClass.asgItems(a.lesson).length + ' esercizi' }));
     box.appendChild(el('label', { text: 'Il tuo nome e cognome' }));
     box.appendChild(inp);
     box.appendChild(el('p', { class: 'hint', text: 'Il tuo nome e le tue risposte li vede solo il docente. Nessun account, nessuna email.' }));
     box.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, go));
     setTimeout(function () { inp.focus(); }, 50);
+  }
+  /** v126: esercitazione senza video (set di esercizi) fatta come compito. Un esercizio alla volta; se la risposta
+   *  è sbagliata si riprova UNA volta, poi si vede la soluzione (con la spiegazione dell'autore, se c'è). Ogni risposta
+   *  data finisce nel report (stesso registro delle video-lezioni: S.assign.detail[item.id].tries). */
+  function playAssignSet(a) {
+    const items = (a.lesson.chal && a.lesson.chal.items) || [];
+    const box = $('#as-box');
+    $('#view-assign').classList.add('as-set');
+    let i = 0;
+    const MAX_TRIES = 2;
+    const answerOf = function (item, v, pub) {
+      if (item.kind === 'match') return (pub.left || []).map(function (l, k) { return l + ' → ' + (v[k] === -1 || v[k] == null ? '?' : pub.right[v[k]]); }).join(' · ');
+      return VLClass.answerText({ type: item.kind, data: item.data }, v);
+    };
+    const head = function () {
+      const bar = el('div', { class: 'as-dots' });
+      items.forEach(function (it, k) {
+        const c = S.assign.detail[it.id];
+        bar.appendChild(el('span', { class: 'as-dot' + (k === i ? ' cur' : '') + (c && c.ok === true ? ' ok' : c && c.ok === false ? ' bad' : '') }));
+      });
+      return el('div', {}, el('div', { class: 'row', style: 'justify-content:space-between;align-items:baseline;gap:8px' },
+        el('h2', { style: 'margin:0;font-size:18px', text: a.title || 'Esercitazione' }),
+        el('span', { class: 'badge', text: Math.min(i + 1, items.length) + ' di ' + items.length })), bar);
+    };
+    const INSTR = { gap: 'Scrivi la parola che manca.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' };
+    const step = function () {
+      box.innerHTML = '';
+      if (i >= items.length) return finish();
+      const item = items[i];
+      const cell = assignCell({ id: item.id, type: item.kind });
+      box.appendChild(head());
+      const pub = VLChal.pubItem(item, { showQ: true });
+      if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
+      box.appendChild(el('div', { class: 'as-kind', text: VLChal.itemLabel(item.kind) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? ' Attenzione agli accenti (è ≠ e).' : '') }));
+      const msg = el('div', { class: 'as-msg' });
+      const ask = function () {
+        const inputBox = chpItemInput(pub, { inline: true, sendLabel: 'Controlla', onSubmit: function (v) {
+          const res = VLChal.checkItem(item, v, pub);
+          if (cell.tries.length < 30) cell.tries.push({ a: answerOf(item, v, pub).slice(0, 300), ok: !!res.correct });
+          if (res.correct) {
+            cell.ok = true; cell.how = 'solved';
+            if (typeof playWinSound === 'function') playWinSound();
+            return done(true);
+          }
+          if (cell.tries.length < MAX_TRIES) {
+            msg.className = 'as-msg no';
+            msg.textContent = res.frac > 0 ? '✗ Quasi (' + Math.round(res.frac * 100) + '% giusto): riprova.' : '✗ Non è giusto: riprova.';
+            inputBox.replaceWith(ask());
+            return;
+          }
+          cell.ok = false; cell.how = 'revealed';
+          done(false);
+        } });
+        return inputBox;
+      };
+      const done = function (ok) {
+        clearTimeout(S.assign.timer);
+        S.assign.timer = setTimeout(function () { assignSend(false); }, 400);
+        box.innerHTML = '';
+        box.appendChild(head());
+        const fb = el('div', { class: 'chp-reveal ' + (ok ? 'ok' : 'no') },
+          el('div', { class: 'big', text: ok ? (cell.tries.length > 1 ? '✓ Giusto al secondo tentativo' : '✓ Giusto!') : '✗ Sbagliato' }),
+          ok ? null : el('div', { class: 'sol', text: 'Soluzione: ' + VLChal.solutionText(item) }),
+          item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null);
+        box.appendChild(fb);
+        const next = el('button', { class: 'primary big chp-send', text: i + 1 < items.length ? 'Avanti ▶' : 'Vedi il risultato ▶', onclick: function () { i++; step(); } });
+        box.appendChild(next);
+        setTimeout(function () { next.focus(); }, 30);
+      };
+      box.appendChild(msg);
+      box.appendChild(ask());
+    };
+    const finish = function () {
+      const sc = VLClass.scoreOf(a.lesson, S.assign.detail);
+      box.appendChild(el('h2', { style: 'margin-top:0', text: a.title || 'Esercitazione' }));
+      box.appendChild(el('div', { class: 'chp-reveal ' + (sc.score === sc.total ? 'ok' : '') }, el('div', { class: 'big', text: '🏁 ' + sc.score + ' su ' + sc.total })));
+      box.appendChild(assignSummaryBox());
+      const wrong = items.filter(function (it) { const c = S.assign.detail[it.id]; return !c || c.ok !== true; });
+      if (wrong.length) {
+        box.appendChild(el('h3', { text: 'Da ripassare' }));
+        box.appendChild(el('ol', { class: 'as-review' }, wrong.map(function (it) {
+          const c = S.assign.detail[it.id] || { tries: [] };
+          const last = c.tries.length ? c.tries[c.tries.length - 1].a : '';
+          return el('li', { value: String(items.indexOf(it) + 1) },
+            el('div', { text: it.kind === 'mc' ? it.data.question : (it.kind === 'gap' || it.kind === 'gapbank' ? VLChal.gapText(it) : VLChal.itemLabel(it.kind)) }),
+            last ? el('div', { class: 'meta', text: 'Hai scritto: ' + last }) : null,
+            el('div', { class: 'as-sol', text: 'Giusto: ' + VLChal.solutionText(it) }));
+        })));
+      }
+      box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: '↻ Rifai da capo', onclick: function () { assignNewAttempt(); i = 0; step(); } })));
+    };
+    step();
   }
   function assignCell(ex) {
     const d = S.assign.detail;

@@ -1500,3 +1500,20 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .rep-ans ul { margin: 4px 0 0 18px; padding: 0; color: var(--bad); }
 .as-card { max-width: 520px; margin: 40px auto; }
 .as-card label { font-weight: 600; display: block; margin: 12px 0 6px; }
+
+/* v126: esercitazione (set senza video) fatta come compito */
+#view-assign.as-set .as-card { max-width: 680px; margin: 20px auto; }
+.as-dots { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
+.as-dot { width: 12px; height: 12px; border-radius: 50%; background: #e3e8ef; }
+.as-dot.cur { outline: 2px solid var(--accent, #1f6feb); outline-offset: 1px; }
+.as-dot.ok { background: var(--ok, #1c7c3e); }
+.as-dot.bad { background: #e5484d; }
+.as-kind { margin-top: 10px; color: var(--muted, #667); font-size: 14px; }
+.as-msg { min-height: 0; margin-top: 6px; font-weight: 700; }
+.as-msg.no { color: #e5484d; }
+.chp-inline { font-size: 20px; line-height: 2.2; font-weight: 500; }
+.chp-gap.inline { width: auto; display: inline-block; margin: 0 4px; padding: 4px 8px; font-size: 19px; border: 2px solid var(--accent, #1f6feb); border-radius: 8px; vertical-align: baseline; }
+.as-explain { font-style: italic; }
+.as-review { padding-left: 22px; }
+.as-review li { margin-bottom: 10px; }
+.as-sol { color: var(--ok, #1c7c3e); font-weight: 600; }

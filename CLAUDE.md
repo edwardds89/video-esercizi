@@ -1,5 +1,34 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- ESERCITAZIONI SENZA VIDEO: COMPITI, WAYGROUND, FOTO DEL LIBRO (v126, 30/9). Edoardo: "voglio importare degli
+  esercizi da wayground" + "voglio che posso mettere degli screenshot e creare degli esercizi su quel tema, oppure che
+  metto il link di wayground e me lo ricopi". SCOPERTA CHIAVE: il contenitore esisteva già, era il SET della Sfida in
+  classe (ls.chal.items, v69: item {id, kind, sentence, data} con la STESSA forma degli esercizi delle lezioni, più
+  'match'). Ora si chiama "Esercitazione" nell'interfaccia (card home 📝, filtro "Esercitazioni", card "+ Nuovo" →
+  newChalSet) ed è ASSEGNABILE come compito: 📋 Assegna sulla card e nell'editor del set (#cs-assign). Il compito porta
+  asgPayload(ls) = {v, id, title, lang, chal:{items}}; classroom.js normalizza con asgItems(lesson) (exercises OPPURE
+  chal.items → {id, type, sentence, data, pairs}) e isSet(); scoreOf/reportMatrix lavorano su entrambi; soluzione
+  dell'abbina = coppie. STUDENTE (#a=CODICE su un set): playAssignSet — un esercizio alla volta dentro #as-box (vista
+  assign, classe .as-set), input = chpItemInput con opts.inline (gli spazi DENTRO la frase, Invio = Controlla),
+  correzione VLChal.checkItem, DUE tentativi poi soluzione + spiegazione dell'autore (item.explain), ogni risposta nel
+  registro (detail[item.id].tries, testo via VLClass.answerText; l'abbina "parola → scelta"), invio 400 ms dopo ogni
+  esercizio, fine = punteggio + "Da ripassare" (frase, cosa ha scritto, giusto) + assignSummaryBox (finished) +
+  "Rifai da capo". ACCENTI: item.strict → checkItem passa {strict} a EX.check (è ≠ e; maiuscole sempre libere).
+  WAYGROUND (platforms.js wgSlim/fromWayground, stessa riduzione duplicata nel bookmarklet): sul quiz
+  (wayground.com o quizizz.com, id = 24 hex nel path) il bookmarklet chiede /api/main/quiz/<id> con la sessione del
+  docente (verificato dal vero: 200, data.quiz.info.questions) e apre #platform=; convert → {set, skipped} →
+  finishSetImport (dedup su importedFrom). BLANK con <blank id> → gap con lo spazio ESATTO dell'autore (risposta =
+  options[answer.optionId]), punteggiatura dopo lo spazio resta token a sé ("arrivi", "?"); BLANK senza <blank> →
+  domanda + risposta in coda; MCQ → mc; MSQ con una sola giusta → mc; risposte solo-immagine, MATCH, REORDER ecc. →
+  skipped; ignoreAccentMarksForEvaluation false → strict; le FOTO di Wayground non si portano (licenza loro).
+  FOTO DEL LIBRO: 📷 Da foto o screenshot (#cs-photo, serve la chiave AI) → dialog #dlg-imggen con il nuovo campo
+  ARGOMENTO (#ig-topic). Con l'argomento AI.itemsFromImage chiede frasi CORTE che allenano quel punto, con "gaps"
+  (le forme da scrivere) e l'indizio tra parentesi prima dello spazio ("Sul tavolo ci sono due (chiave) chiavi."),
+  e vieta di copiare frasi/esercizi stampati (copyright Edilingua e gli studenti hanno già il libro); gli item gap
+  diventano strict. Tipi dalla foto nel set: gap, gapbank, mc, match. Test: platforms (20) + classroom (8); e2e
+  locale ?mock=1 (e2e126.js nello scratchpad): import Wayground → set → assegna → studente al telefono (sbaglia, riprova,
+  soluzione) → report con ✓2 / ✗ e le risposte sbagliate. DA FARE: sessioni live della Sfida nel registro (fase 2).
+
 - CLASSI, COMPITI E REPORT (v125, 30/9). Edoardo, per i corsi PoliMi (dal 5/10): "compiti a casa con report, che io
   posso vedere chi ha fatto i compiti ... voglio vedere l'errore di ogni studente per ogni sessione live o per ogni
   sessione di compiti ... il nome e cognome lo scrive lo studente, sono io che creo le classi e assegno un'esercitazione

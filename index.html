@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-125">
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-126">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260919-125">
+<link rel="stylesheet" href="styles.css?v=20260919-126">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-125" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-125" alt="PauseLearn" width="178" height="22"></div>
+  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-126" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-126" alt="PauseLearn" width="178" height="22"></div>
   <button id="nav-toggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav" title="Menu">☰<span id="nav-toggle-dot" class="dot off" style="display:none"></span></button>
   <nav id="nav">
     <button data-view="home">Le tue lezioni</button>
@@ -54,9 +54,9 @@
         </div>
         <div class="svc svc-qr" id="svc-qr" role="button" tabindex="0">
           <span class="soon new">NUOVO</span>
-          <div class="ico">📱</div><h3>Sfida in classe</h3>
-          <p>Gli studenti scannerizzano un QR col telefono, nickname e via: classifica in diretta, senza account.</p>
-          <div class="go">▶ Gioca in classe</div>
+          <div class="ico">📝</div><h3>Esercitazione</h3>
+          <p>Esercizi senza video, da una foto del libro, da Wayground o scritti da te: li assegni come compito (con il report degli errori) o li giochi in classe col QR.</p>
+          <div class="go">+ Nuova esercitazione</div>
         </div>
       </div>
     </div>
@@ -436,17 +436,19 @@
   <section id="view-chalset" class="view">
     <div class="row" style="margin-bottom:10px">
       <button data-view="home">◀ Le tue lezioni</button>
-      <input id="cs-title" type="text" class="grow" placeholder="Titolo del set (es. Ripasso unità 3)" style="font-size:18px;font-weight:700">
-      <button id="cs-play" class="primary">▶ Lancia la sfida</button>
+      <input id="cs-title" type="text" class="grow" placeholder="Titolo (es. Unità 1: articoli e plurali)" style="font-size:18px;font-weight:700">
+      <button id="cs-assign" class="primary" title="Compito o esercitazione per una classe: vedi chi l'ha fatto e cosa ha sbagliato">📋 Assegna</button>
+      <button id="cs-play" title="Gioco dal vivo con classifica, come Kahoot">📱 Sfida in classe</button>
       <button id="cs-delete" class="danger">Elimina</button>
     </div>
     <div class="card">
       <div class="row">
-        <h2 style="margin:0" class="grow">Esercizi del set</h2>
+        <h2 style="margin:0" class="grow">Esercizi</h2>
+        <button id="cs-photo" class="small" title="Una pagina del libro o uno screenshot: l'AI scrive esercizi nuovi sullo stesso argomento">📷 Da foto o screenshot</button>
         <button id="cs-import" class="small">⬇ Importa da una lezione…</button>
         <button id="cs-add" class="small primary">+ Esercizio</button>
       </div>
-      <p class="hint">Importa gli esercizi già fatti (lezioni, quiz, parole utili) o scrivine di nuovi. In modalità "Insieme sullo schermo" si giocano tutti i tipi; le risposte restano sul tuo schermo.</p>
+      <p class="hint">Un'esercitazione senza video: la assegni a una classe come compito (📋 Assegna, con il report di chi l'ha fatta e cosa ha sbagliato) o la giochi in classe (📱 Sfida in classe). Gli esercizi li importi da una lezione o da Wayground, li crei da una foto del libro o li scrivi tu.</p>
       <div id="cs-items" class="cs-items"></div>
     </div>
   </section>
@@ -477,13 +479,13 @@
 
 <dialog id="dlg-platform">
   <h2>Importa da altre piattaforme</h2>
-  <p class="hint">Le lezioni che hai già fatto altrove arrivano qui con esercizi, tempi e tagli: niente da rifare. Piattaforme riconosciute per ora: <b>ISLCollective</b> (video-lezioni). Altre in arrivo.</p>
+  <p class="hint">Le lezioni che hai già fatto altrove arrivano qui con esercizi, tempi e tagli: niente da rifare. Piattaforme riconosciute per ora: <b>ISLCollective</b> (video-lezioni) e <b>Wayground</b> (quiz: diventano un'esercitazione da assegnare o giocare in classe).</p>
   <ol class="plat-steps">
     <li>Trascina questo pulsante nella barra dei preferiti (Cmd/Ctrl+Shift+B per mostrarla), se non l'hai già fatto per YouTube: <a id="plat-bookmarklet" class="chip" href="#" style="font-weight:600">▶ PauseLearn</a><br><span class="hint">Se lo avevi già, trascinalo di nuovo: la versione vecchia conosce solo YouTube.</span></li>
-    <li>Apri sull'altra piattaforma la pagina di una <b>tua</b> lezione (quella dove si vede il video con le domande).</li>
+    <li>Apri sull'altra piattaforma la pagina di una <b>tua</b> lezione (su ISLCollective quella col video e le domande, su Wayground quella del quiz con l'elenco delle domande, entrando col tuo account).</li>
     <li>Clicca il pulsante nei preferiti: torni qui con la lezione già nell'editor. Controlla tempi e frasi e salva.</li>
   </ol>
-  <p class="hint">Cosa arriva: completa gli spazi, parola sbagliata, parola in più, riordina la frase, scelta multipla, parti saltate del video. Cosa non arriva: la trascrizione del video (gli esercizi portano le loro frasi, per lo studente non cambia nulla) e i tipi di esercizio che PauseLearn non ha. Importa solo lezioni tue.</p>
+  <p class="hint">Cosa arriva: completa gli spazi, parola sbagliata, parola in più, riordina la frase, scelta multipla, parti saltate del video (da Wayground: completa gli spazi e scelta multipla, con le spiegazioni; le foto no). Cosa non arriva: la trascrizione del video (gli esercizi portano le loro frasi, per lo studente non cambia nulla) e i tipi di esercizio che PauseLearn non ha. Importa solo lezioni tue.</p>
   <div class="row" style="margin-top:12px"><button id="plat-close">Chiudi</button></div>
 </dialog>
 
@@ -678,6 +680,8 @@
     <label style="margin:0">Lingua<select id="ig-lang"><option value="Italian" selected>Italiano</option><option value="English">Inglese</option></select></label>
     <label style="margin:0">Livello<select id="ig-level"><option>A1</option><option>A2</option><option selected>B1</option><option>B2</option><option>C1</option></select></label>
   </div>
+  <label for="ig-topic" style="margin-top:8px;display:block">Argomento <span class="hint">(facoltativo: con un argomento gli esercizi allenano proprio quello)</span></label>
+  <input id="ig-topic" type="text" style="width:100%" placeholder="Es. plurale dei nomi, articoli determinativi, presente dei verbi regolari">
   <div id="ig-previews" class="ig-previews"></div>
   <div class="row" style="margin-top:10px">
     <button id="ig-go" class="primary" disabled>✨ Genera dall'immagine</button>
@@ -876,19 +880,19 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260919-125"></script>
-<script src="exercises.js?v=20260919-125"></script>
-<script src="generator.js?v=20260919-125"></script>
-<script src="activities.js?v=20260919-125"></script>
-<script src="ai.js?v=20260919-125"></script>
-<script src="demo-data.js?v=20260919-125"></script>
-<script src="platforms.js?v=20260919-125"></script>
-<script src="bookmarklet.js?v=20260919-125"></script>
-<script src="sync.js?v=20260919-125"></script>
-<script src="qr.js?v=20260919-125"></script>
-<script src="challenge.js?v=20260919-125"></script>
-<script src="classroom.js?v=20260919-125"></script>
-<script src="app.js?v=20260919-125"></script>
+<script src="lang.js?v=20260919-126"></script>
+<script src="exercises.js?v=20260919-126"></script>
+<script src="generator.js?v=20260919-126"></script>
+<script src="activities.js?v=20260919-126"></script>
+<script src="ai.js?v=20260919-126"></script>
+<script src="demo-data.js?v=20260919-126"></script>
+<script src="platforms.js?v=20260919-126"></script>
+<script src="bookmarklet.js?v=20260919-126"></script>
+<script src="sync.js?v=20260919-126"></script>
+<script src="qr.js?v=20260919-126"></script>
+<script src="challenge.js?v=20260919-126"></script>
+<script src="classroom.js?v=20260919-126"></script>
+<script src="app.js?v=20260919-126"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 

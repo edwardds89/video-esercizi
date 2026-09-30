@@ -32,6 +32,7 @@
   /** La risposta dello studente in parole, per il report ("cosa ha scritto/scelto"). */
   function answerText(ex, a) {
     const d = ex.data || {};
+    if (typeof a === 'string' && (ex.type === 'match' || ex.type === 'mc' && isNaN(+a))) return a;   // già in parole (abbina)
     try {
       switch (ex.type) {
         case 'gap': case 'gapbank': return (Array.isArray(a) ? a : [a]).map(function (x) { return String(x || '').trim() || '(vuoto)'; }).join(' | ');
@@ -53,9 +54,25 @@
     try { return JSON.stringify(a); } catch (e) { return String(a); }
   }
 
+  /** v126: un compito può essere una video-lezione (lesson.exercises) o un SET di esercizi senza video
+   *  (lesson.chal.items: quiz importati da Wayground, esercizi da una foto del libro, la Sfida in classe).
+   *  Qui entrambi diventano la stessa lista {id, type, sentence, data, pairs}. */
+  function asgItems(lesson) {
+    if (!lesson) return [];
+    if (Array.isArray(lesson.exercises)) return lesson.exercises;
+    const items = (lesson.chal && lesson.chal.items) || [];
+    return items.map(function (it) { return { id: it.id, type: it.kind, sentence: it.sentence || (it.kind === 'mc' && it.data ? it.data.question : ''), data: it.data || {}, pairs: it.pairs, explain: it.explain }; });
+  }
+  function isSet(lesson) { return !!(lesson && !Array.isArray(lesson.exercises) && lesson.chal); }
+  function solutionOf(e) {
+    if (e.type === 'match') return (e.pairs || []).map(function (p) { return p.a + ' ↔ ' + p.b; }).join(' · ');
+    return EX && EX.solution ? EX.solution(e) : '';
+  }
+  const SET_LABELS = { match: 'Abbina le coppie' };
+
   /** Punteggio di un tentativo: esercizi chiusi giusti su esercizi della lezione. */
   function scoreOf(lesson, detail) {
-    const exs = (lesson && lesson.exercises) || [];
+    const exs = asgItems(lesson);
     let ok = 0;
     exs.forEach(function (e) { const r = detail && detail[e.id]; if (r && r.ok === true) ok++; });
     return { score: ok, total: exs.length };
@@ -71,8 +88,8 @@
 
   /** Tabella del report: righe = studenti (per nome), colonne = esercizi della lezione del compito. */
   function reportMatrix(lesson, rows) {
-    const exs = ((lesson && lesson.exercises) || []).map(function (e, i) {
-      return { id: e.id, n: i + 1, type: e.type, label: (EX && EX.LABELS && EX.LABELS[e.type]) || e.type, sentence: e.sentence || '', solution: EX && EX.solution ? EX.solution(e) : '' };
+    const exs = asgItems(lesson).map(function (e, i) {
+      return { id: e.id, n: i + 1, type: e.type, label: SET_LABELS[e.type] || (EX && EX.LABELS && EX.LABELS[e.type]) || e.type, sentence: e.sentence || '', solution: solutionOf(e) };
     });
     const groups = {};
     (rows || []).forEach(function (r) { const k = normName(r.student_name); (groups[k] = groups[k] || []).push(r); });
@@ -209,7 +226,7 @@
     };
   }
 
-  return { newCode: newCode, validCode: validCode, uuid: uuid, normName: normName, cleanName: cleanName, validName: validName,
+  return { asgItems: asgItems, isSet: isSet, solutionOf: solutionOf, newCode: newCode, validCode: validCode, uuid: uuid, normName: normName, cleanName: cleanName, validName: validName,
     answerText: answerText, scoreOf: scoreOf, doneCount: doneCount, pickAttempt: pickAttempt, reportMatrix: reportMatrix, toCSV: toCSV,
     supabaseBackend: supabaseBackend, memoryBackend: memoryBackend };
 });

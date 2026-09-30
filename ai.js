@@ -892,7 +892,13 @@
     const spec = [];
     if (kinds.indexOf('mc') !== -1) spec.push('{"type":"mc","q":"a comprehension or vocabulary question in ' + lang + '","options":["...","...","...","..."],"correct":0} — 4 plausible options, exactly one correct');
     const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong'].indexOf(k) !== -1; });
-    if (sentKinds.length) spec.push('{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
+    const focus = String(params.focus || '').trim();
+    if (sentKinds.length) spec.push(focus
+      // v126 (Edoardo: "metto degli screenshot e crei degli esercizi su quel tema"): con un argomento di grammatica le
+      // frasi sono CORTE e lo spazio cade proprio sulla forma da allenare, con l'indizio tra parentesi subito prima
+      // (come nei suoi quiz: "Francesca (lavorare) lavora al supermercato."). Lo spazio lo sceglie il modello ("gaps").
+      ? '{"type":"' + sentKinds.join('|') + '","sentence":"a short, natural, CORRECT sentence of 5-14 words in ' + lang + ' that practises the topic","gaps":["the exact word(s) of the sentence the student must write: the forms that practise the topic"],"distractors":["for gapbank only: 2 wrong forms of the same kind"]} — when the student needs a cue to know which form to write (a verb to conjugate, a singular to put in the plural, a noun whose article is asked), put the cue in round brackets IMMEDIATELY BEFORE the gap word, e.g. "Francesca (lavorare) lavora al supermercato." with gaps ["lavora"], "Sul tavolo ci sono due (chiave) chiavi." with gaps ["chiavi"]; for articles no cue is needed: "Ecco lo zaino di Marco." with gaps ["lo"]'
+      : '{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
     if (kinds.indexOf('match') !== -1) spec.push('{"type":"match","pairs":[{"a":"word or expression in ' + lang + '","b":"English translation or a short definition"}]} — 4 to 8 pairs');
     if (kinds.indexOf('wheel') !== -1) spec.push('{"type":"wheel","items":["...","..."]} — 6 to 10 short prompts in ' + lang + ' (words to explain, or mini-questions) for a spinning-wheel speaking game');
     const user = [
@@ -900,6 +906,7 @@
       'If it contains TEXT: base the exercises on that content (topic, vocabulary, facts), REWRITING everything at the target level — never copy sentences with mistakes and never quote page numbers or layout.',
       'If it is a SCENE or picture: use what is visible (objects, actions, places).',
       'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
+      focus ? 'TOPIC CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise this topic (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
       'Write exactly ' + n + ' items, mixing these shapes:',
       spec.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n'),
       'SCHEMA: {"items":[ ... ]}'
@@ -924,7 +931,13 @@
         return its.length >= 2 ? { type: 'wheel', items: its.slice(0, 12) } : null;
       }
       const s = String(it.sentence || '').trim();
-      return s.split(/\s+/).length >= 5 ? { type: it.type, sentence: s } : null;
+      const gaps = (Array.isArray(it.gaps) ? it.gaps : []).map(function (g) { return String(g || '').trim(); }).filter(Boolean).slice(0, 4);
+      const dis = (Array.isArray(it.distractors) ? it.distractors : []).map(function (g) { return String(g || '').trim(); }).filter(Boolean).slice(0, 4);
+      if (s.split(/\s+/).length < (focus ? 3 : 5)) return null;
+      const out = { type: it.type, sentence: s };
+      if (gaps.length) out.gaps = gaps;
+      if (dis.length) out.distractors = dis;
+      return out;
     }).filter(Boolean);
     return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }

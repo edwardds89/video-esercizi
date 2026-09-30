@@ -2,6 +2,7 @@
    pannello trascrizione (nel browser dell'utente, senza server) e apre l'app con tutto già compilato.
    v120: sulla pagina di una video-lezione ISLCollective legge invece la lezione (esercizi, tempi, tagli) dal
    <script id="__NEXT_DATA__"> e apre l'app con #platform=… ("Importa da altre piattaforme", vedi platforms.js).
+   v126: sulla pagina di un quiz Wayground/Quizizz legge il quiz dall'API del sito e apre l'app con #platform=….
    L'app costruisce il link "javascript:" da questa funzione (vedi app.js → bookmarkletUrl). */
 window.VL_BOOKMARKLET = function (APP) {
   function b64url(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
@@ -25,9 +26,28 @@ window.VL_BOOKMARKLET = function (APP) {
     location.href = APP + '#platform=' + b64url(JSON.stringify(slim));
     return;
   }
+  if (/(^|\.)(wayground|quizizz)\.com$/i.test(location.hostname)) {
+    // v126: quiz di Wayground (ex Quizizz) → set di esercizi. I dati si chiedono all'API del sito con la sessione
+    // dell'insegnante (stessa origine: niente CORS). Stessa riduzione di VLPlat.wgSlim (platforms.js).
+    var qid = (location.pathname.match(/[0-9a-f]{24}/i) || [])[0];
+    if (!qid) { alert('Apri su Wayground la pagina di un TUO quiz (quella con l\'elenco delle domande), poi clicca il pulsante.'); return; }
+    fetch('/api/main/quiz/' + qid, { credentials: 'include' }).then(function (r) { return r.json(); }).then(function (j) {
+      var q = j && j.data && j.data.quiz, info = q && q.info;
+      if (!info || !info.questions || !info.questions.length) { alert('Non riesco a leggere le domande di questo quiz: sei entrato su Wayground con il tuo account?'); return; }
+      var slim = { site: 'wayground', id: String(q._id || qid), title: String(info.name || '').replace(/\s+/g, ' ').trim(), language: info.lang || '',
+        questions: info.questions.map(function (x) {
+          var st = x.structure || {};
+          return { id: String(x._id || ''), type: x.type, html: (st.query && st.query.text) || '',
+            options: (st.options || []).map(function (o) { return { id: String(o.id || o._id || ''), text: o.text || '' }; }),
+            answer: st.answer, explain: (st.explain && st.explain.text) || '', accents: !!(st.settings && st.settings.ignoreAccentMarksForEvaluation) };
+        }) };
+      location.href = APP + '#platform=' + b64url(JSON.stringify(slim));
+    }).catch(function (e) { alert('Wayground non ha risposto (' + e.message + '): ricarica la pagina del quiz e riprova.'); });
+    return;
+  }
   var id = null;
   try { id = new URL(location.href).searchParams.get('v'); } catch (e) { /* ignore */ }
-  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video) o una tua video-lezione su ISLCollective, poi clicca il pulsante.'); return; }
+  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video), una tua video-lezione su ISLCollective o un tuo quiz su Wayground, poi clicca il pulsante.'); return; }
   var title = document.title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube\s*$/, '');
   var video = document.querySelector('video');
   var duration = (video && video.duration) || 0;
