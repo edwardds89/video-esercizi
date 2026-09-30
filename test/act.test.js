@@ -86,12 +86,20 @@ t('validate: memory richiede 3 coppie complete, quiz una domanda vera', function
   assert.ok(A.validate({ type: 'boh' }).length > 0);
 });
 
-t('18 template dichiarati (dal sobrio al festoso), con movimento e anteprima', function () {
-  assert.deepStrictEqual(A.THEMES.map(function (t2) { return t2.id; }), ['classic', 'notebook', 'blackboard', 'coffee', 'night', 'tvshow', 'space', 'synth', 'ocean', 'jungle', 'spring', 'summer', 'autumn', 'winter', 'rainbow', 'candy', 'halloween', 'christmas']);
-  A.THEMES.forEach(function (t2) { assert.ok(t2.name && t2.emoji && t2.sw && ['float', 'fall', 'rise', 'twinkle'].indexOf(t2.motion) >= 0, t2.id); });
+t('19 template dichiarati (Bianco per primo, poi dal sobrio al festoso), con movimento e anteprima', function () {
+  assert.deepStrictEqual(A.THEMES.map(function (t2) { return t2.id; }), ['white', 'classic', 'notebook', 'blackboard', 'coffee', 'night', 'tvshow', 'space', 'synth', 'ocean', 'jungle', 'spring', 'summer', 'autumn', 'winter', 'rainbow', 'candy', 'halloween', 'christmas']);
+  A.THEMES.forEach(function (t2) { assert.ok(t2.name && t2.emoji !== undefined && t2.sw && ['float', 'fall', 'rise', 'twinkle'].indexOf(t2.motion) >= 0, t2.id); });
   const ids = new Set(A.THEMES.map(function (t2) { return t2.id; }));
-  assert.strictEqual(ids.size, 18, 'id unici');
+  assert.strictEqual(ids.size, 19, 'id unici');
   assert.deepStrictEqual(Object.keys(A.TYPES), ['memory', 'quiz', 'anagram', 'wheel']);
+});
+
+t('v124: decorate con props:false non disegna nulla (schede Parole utili senza oggetti né decorazioni)', function () {
+  const root = { children: [], appendChild: function (n) { this.children.push(n); } };
+  const r = A.decorate(root, { id: 'x', theme: 'coffee' }, { fx: true, props: false });
+  assert.strictEqual(r, null);
+  assert.strictEqual(root.children.length, 0);
+  assert.strictEqual(A.THEMES[0].props.length, 0, 'Bianco senza oggetti');
 });
 
 t('trasforma: coppie ⇄ Memory/Anagramma, coppie → Quiz con distrattori veri, tutto → Ruota', function () {
