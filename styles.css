@@ -1517,3 +1517,8 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .as-review { padding-left: 22px; }
 .as-review li { margin-bottom: 10px; }
 .as-sol { color: var(--ok, #1c7c3e); font-weight: 600; }
+
+/* v127: incolla/trascina screenshot nel dialog "Da foto" */
+.ig-paste { margin-top: 10px; padding: 10px 12px; border: 2px dashed var(--line); border-radius: 10px; font-size: 14px; color: var(--muted, #667); background: #fafbfc; }
+.ig-paste kbd { font: 12px/1 inherit; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; background: #fff; margin: 0 1px; }
+#dlg-imggen.ig-drop { outline: 3px dashed var(--accent, #1f6feb); outline-offset: -6px; }

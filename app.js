@@ -6535,11 +6535,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#dlg-imggen').showModal();
   }
   $('#ig-file').addEventListener('change', function () {
-    const files = Array.prototype.slice.call(this.files || []).slice(0, 3);
     IMGGEN.imgs = [];
     $('#ig-previews').innerHTML = '';
+    igAddFiles(Array.prototype.slice.call(this.files || []));
+  });
+  /** v127 (Edoardo: "uno screenshot stile copia incolla, senza salvarlo sul MacBook o sul PC"): le immagini arrivano
+   *  anche INCOLLATE (⌘V / Ctrl+V dopo ⌘⇧⌃4 su Mac o Win+Shift+S su Windows) o TRASCINATE nel dialog. Si aggiungono
+   *  a quelle già scelte, massimo 3 in tutto. */
+  function igAddFiles(list) {
+    const files = list.filter(function (f) { return f && /^image\//.test(f.type); }).slice(0, Math.max(0, 3 - IMGGEN.imgs.length));
     let left = files.length;
-    if (!left) { $('#ig-go').disabled = true; return; }
+    if (!left) { if (list.length && IMGGEN.imgs.length >= 3) toast('Massimo 3 immagini'); $('#ig-go').disabled = !IMGGEN.imgs.length; return; }
     busyMsg($('#ig-msg'), 'Preparo ' + (files.length === 1 ? 'l\'immagine' : 'le immagini') + '…');
     files.forEach(function (f) {
       imgToJpeg(f, function (img) {
@@ -6554,7 +6560,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         }
       });
     });
+  }
+  document.addEventListener('paste', function (e) {
+    const dlg = $('#dlg-imggen'); if (!dlg || !dlg.open) return;
+    const items = Array.prototype.slice.call((e.clipboardData && e.clipboardData.items) || []);
+    const files = items.filter(function (it) { return it.kind === 'file' && /^image\//.test(it.type); }).map(function (it) { return it.getAsFile(); }).filter(Boolean);
+    if (!files.length) return;   // testo incollato nel campo Argomento: lascia fare al browser
+    e.preventDefault();
+    igAddFiles(files);
   });
+  (function () {
+    const dlg = $('#dlg-imggen'); if (!dlg) return;
+    dlg.addEventListener('dragover', function (e) { e.preventDefault(); dlg.classList.add('ig-drop'); });
+    dlg.addEventListener('dragleave', function (e) { if (e.target === dlg) dlg.classList.remove('ig-drop'); });
+    dlg.addEventListener('drop', function (e) { e.preventDefault(); dlg.classList.remove('ig-drop'); igAddFiles(Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || [])); });
+  })();
   $('#ig-close').addEventListener('click', function () { $('#dlg-imggen').close(); });
   $('#ig-go').addEventListener('click', function () {
     if (!S.settings.apiKey) { $('#ig-msg').textContent = 'Serve la chiave API (Impostazioni AI).'; return; }

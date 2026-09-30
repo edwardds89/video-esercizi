@@ -1,5 +1,12 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- SCREENSHOT INCOLLATI (v127, 30/9). Edoardo: "se voglio darti uno screenshot stile copia incolla, senza salvarlo sul
+  MacBook o sul PC". Nel dialog "Esercizi da una foto o screenshot" (#dlg-imggen, usato da esercitazioni e attività) le
+  immagini arrivano anche INCOLLATE (listener 'paste' sul documento, attivo solo col dialog aperto; testo incollato
+  nel campo Argomento passa normale) o TRASCINATE sul dialog (.ig-drop). igAddFiles(list) aggiunge a quelle già scelte,
+  massimo 3. Riquadro #ig-paste con le scorciatoie (Mac ⌘⇧⌃4 = screenshot negli appunti; Windows Win+Shift+S).
+  Provato in locale con un ClipboardEvent sintetico (anteprima compare, "Genera" si abilita).
+
 - ESERCITAZIONI SENZA VIDEO: COMPITI, WAYGROUND, FOTO DEL LIBRO (v126, 30/9). Edoardo: "voglio importare degli
   esercizi da wayground" + "voglio che posso mettere degli screenshot e creare degli esercizi su quel tema, oppure che
   metto il link di wayground e me lo ricopi". SCOPERTA CHIAVE: il contenitore esisteva già, era il SET della Sfida in
