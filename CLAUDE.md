@@ -1,5 +1,15 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- KEEP-ALIVE SUPABASE v2 (30/9, nessun cambio di versione dell'app). Il 30/9 Supabase ha mandato il preavviso di pausa
+  per inattività nonostante il workflow keepalive.yml girasse ogni 3 giorni con esito verde: la sua lettura anonima di
+  lessons rispondeva 200 ma vuota (RLS) e Supabase non la contava come attività. Ora: tabella public.keepalive (una riga,
+  id=1 con check, RLS attiva SENZA policy: nessuno la legge o scrive direttamente) + funzione
+  public.keepalive_ping() SECURITY DEFINER (search_path=public) che fa upsert di pinged_at=now() e lo restituisce;
+  execute concesso a anon/authenticated, revocato a public. Il workflow chiama POST /rest/v1/rpc/keepalive_ping con la
+  chiave pubblicabile ogni 2 giorni (cron '17 6 */2 * *') e fallisce se la risposta non è 200. SQL eseguito dal SQL
+  editor del progetto video-lezioni (query salvata tra le private). Verificato: run manuale #13 → pinged_at aggiornato.
+  Controllo rapido: select pinged_at from public.keepalive; (deve avere al massimo 2-3 giorni).
+
 - PAROLE UTILI: TEMA BIANCO, NIENTE EMOTICON, NIENTE DECORAZIONI, FONT LEGGIBILI (v124, 29/9). Edoardo: "non mi piace che
   usi le emoticons, toglile e poi rendi i font più leggibili, e vorrei un tema white che prende lo stesso colore e font
   del sito, bianco con testo nero". Scelte confermate da lui: via le emoticon sia dai NOMI dei template (chip: t.name
