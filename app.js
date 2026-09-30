@@ -6501,17 +6501,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // (AI.itemsFromImage), l'insegnante spunta cosa tenere. Ogni chiamante passa i tipi che gli servono e
   // riceve gli item accettati. La costruzione vera resta al motore: il modello scrive frasi/domande/coppie.
   const IMGGEN = { imgs: [], items: [], accept: null, kinds: null };
-  function imgToJpeg(file, cb) {
+  function imgToJpeg(file, cb, max) {
     const fr = new FileReader();
     fr.onload = function () {
       const im = new Image();
       im.onload = function () {
-        const MAX = 1400;
+        const MAX = max || 1400;
         const sc = Math.min(1, MAX / Math.max(im.width, im.height));
         const c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(im.width * sc)); c.height = Math.max(1, Math.round(im.height * sc));
         c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-        const url = c.toDataURL('image/jpeg', 0.85);
+        const url = c.toDataURL('image/jpeg', max ? 0.78 : 0.85);
         cb({ media_type: 'image/jpeg', data: url.split(',')[1], preview: url });
       };
       im.onerror = function () { cb(null); };
@@ -6562,6 +6562,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
   }
   document.addEventListener('paste', function (e) {
+    const ca = $('#dlg-chal-add');
+    if (ca && ca.open && CA_PAINT_IMG) {
+      const it = Array.prototype.slice.call((e.clipboardData && e.clipboardData.items) || []).find(function (x) { return x.kind === 'file' && /^image\//.test(x.type); });
+      if (!it) return;
+      e.preventDefault();
+      imgToJpeg(it.getAsFile(), function (im) { if (im) { CA_IMG = im.preview; CA_PAINT_IMG(); } }, 560);
+      return;
+    }
     const dlg = $('#dlg-imggen'); if (!dlg || !dlg.open) return;
     const items = Array.prototype.slice.call((e.clipboardData && e.clipboardData.items) || []);
     const files = items.filter(function (it) { return it.kind === 'file' && /^image\//.test(it.type); }).map(function (it) { return it.getAsFile(); }).filter(Boolean);
@@ -6829,7 +6837,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const row = el('div', { class: 'cs-item' },
         el('span', { class: 'badge', text: String(i + 1) }),
         el('span', { class: 'kind', text: VLChal.itemLabel(it.kind) }),
-        el('span', { class: 'txt grow', text: chalItemSummary(it) }),
+        it.image ? el('img', { class: 'cs-thumb', src: it.image, alt: '' }) : null,
+        el('span', { class: 'txt grow' }, el('span', { text: chalItemSummary(it) }), el('span', { class: 'cs-sol', text: '  → ' + VLChal.solutionText(it) }),
+          it.explain ? el('span', { class: 'cs-exp', title: it.explain, text: ' 💬' }) : null),
         el('button', { class: 'small', text: '✎', title: 'Modifica', onclick: function () { openChalAdd(i); } }),
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { const t = items[i - 1]; items[i - 1] = it; items[i] = t; chalSetTouched(ls); } }),
         el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === items.length - 1 ? 'disabled' : null, onclick: function () { const t = items[i + 1]; items[i + 1] = it; items[i] = t; chalSetTouched(ls); } }),
@@ -6892,11 +6902,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // "+ Esercizio" e "✎ Modifica": lo stesso dialog, con i campi che cambiano secondo il tipo.
   // editIx = indice dell'item nel set da modificare (null = nuovo); in modifica il tipo resta bloccato
   // e id/src vengono conservati, cosi' il dedup dell'import continua a funzionare.
-  let CA_EDIT = null;
+  let CA_EDIT = null, CA_IMG = null, CA_PAINT_IMG = null;
   function openChalAdd(editIx) {
     const ls = current(); if (!ls || !ls.chal) return;
     CA_EDIT = (editIx == null ? null : editIx);
     const editing = CA_EDIT != null ? ls.chal.items[CA_EDIT] : null;
+    CA_IMG = editing && editing.image || null;
     $('#ca-title').textContent = editing ? 'Modifica esercizio' : 'Nuovo esercizio del set';
     $('#ca-ok').textContent = editing ? 'Salva' : 'Aggiungi';
     $('#ca-img').style.display = editing ? 'none' : '';
@@ -6932,11 +6943,42 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           (editing.pairs || []).forEach(function (p, i) { if (as[i]) { as[i].value = p.a; bs[i].value = p.b; } });
         }
       } else {
-        fields.appendChild(el('label', { text: 'La frase (l\'esercizio viene costruito da qui)' }));
-        fields.appendChild(el('textarea', { id: 'ca-sent', rows: '3', style: 'width:100%', placeholder: 'Es. Il mare si sta riscaldando molto in fretta e questo preoccupa gli scienziati.' }));
-        fields.appendChild(el('p', { class: 'hint', text: 'Come nelle lezioni: spazi, parola in più/mancante/sbagliata li sceglie l\'app dalla frase.' }));
-        if (editing) $('#ca-sent').value = editing.sentence || '';
+        fields.appendChild(el('label', { text: 'La frase completa (con la risposta giusta dentro)' }));
+        fields.appendChild(el('textarea', { id: 'ca-sent', rows: '3', style: 'width:100%', placeholder: 'Es. Francesca (lavorare) lavora al supermercato.' }));
+        if (k === 'gap' || k === 'gapbank') {
+          // v127: gli spazi li decide l'insegnante (prima li sceglieva sempre l'app: modificando un esercizio di Wayground lo spazio si spostava)
+          fields.appendChild(el('label', { text: 'Parole da far scrivere (separate da virgola)' }));
+          fields.appendChild(el('input', { id: 'ca-gaps', type: 'text', style: 'width:100%', placeholder: 'Es. lavora — vuoto = le sceglie l\'app' }));
+          fields.appendChild(el('p', { class: 'hint', text: 'Scrivi la parola esattamente com\'è nella frase. Un indizio tra parentesi prima dello spazio aiuta: "(lavorare) lavora".' }));
+        } else fields.appendChild(el('p', { class: 'hint', text: 'La parola in più/mancante/sbagliata la sceglie l\'app dalla frase.' }));
+        if (editing) {
+          $('#ca-sent').value = editing.sentence || '';
+          if ($('#ca-gaps')) $('#ca-gaps').value = ((editing.data && editing.data.answers) || []).join(', ');
+        }
       }
+      // v127: per tutti i tipi, spiegazione, accenti e immagine
+      fields.appendChild(el('label', { text: 'Spiegazione (facoltativa, lo studente la vede dopo aver risposto)' }));
+      fields.appendChild(el('textarea', { id: 'ca-explain', rows: '2', style: 'width:100%', placeholder: 'Es. Finire prende -isc-: io finisco, lui finisce…' }));
+      if (k !== 'match' && k !== 'mc') fields.appendChild(el('label', { class: 'chip', style: 'margin-top:8px;display:inline-flex' }, el('input', { id: 'ca-strict', type: 'checkbox' }), ' Gli accenti contano (è ≠ e)'));
+      const imgWrap = el('div', { class: 'ca-imgbox' });
+      fields.appendChild(el('label', { text: 'Immagine (facoltativa)' }));
+      fields.appendChild(imgWrap);
+      const paintImg = function () {
+        imgWrap.innerHTML = '';
+        if (CA_IMG) imgWrap.appendChild(el('img', { src: CA_IMG, alt: '' }));
+        const f = el('input', { type: 'file', accept: 'image/*', class: 'sr', id: 'ca-imgfile' });
+        f.addEventListener('change', function () { if (f.files[0]) imgToJpeg(f.files[0], function (im) { if (im) { CA_IMG = im.preview; paintImg(); } }, 560); });
+        imgWrap.appendChild(el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' },
+          el('label', { for: 'ca-imgfile', class: 'chip', style: 'margin:0', text: CA_IMG ? '🖼 Cambia' : '🖼 Scegli un\'immagine' }), f,
+          el('span', { class: 'hint', text: 'oppure incolla uno screenshot (⌘V / Ctrl V) con questa finestra aperta' }),
+          CA_IMG ? el('button', { class: 'small', text: '✕ Togli', onclick: function () { CA_IMG = null; paintImg(); } }) : null));
+      };
+      CA_PAINT_IMG = paintImg;
+      paintImg();
+      if (editing) {
+        $('#ca-explain').value = editing.explain || '';
+        if ($('#ca-strict')) $('#ca-strict').checked = !!editing.strict;
+      } else if ($('#ca-strict')) $('#ca-strict').checked = true;
     };
     kindSel.addEventListener('change', paint);
     body.appendChild(el('label', { text: 'Tipo di esercizio' }));
@@ -6996,10 +7038,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     } else {
       const sent = ($('#ca-sent').value || '').trim();
       if (!sent) return toast('Scrivi prima la frase');
-      it = VLChal.buildItem(k, sent, { lang: 'it', seed: Date.now() % 100000, distractors: 2 });
+      const gw = $('#ca-gaps') ? $('#ca-gaps').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+      it = VLChal.buildItem(k, sent, { lang: ls.lang || 'it', seed: Date.now() % 100000, distractors: 2, choices: gw.length ? { gapWords: gw } : null });
       if (!it) return toast('Frase non adatta a questo tipo (troppo corta?): prova con una frase più lunga');
+      if (gw.length && (k === 'gap' || k === 'gapbank')) {
+        const found = (it.data.answers || []).map(function (a) { return L.normalize(a); });
+        const miss = gw.filter(function (w) { return found.indexOf(L.normalize(w)) === -1; });
+        if (miss.length) return toast('Non trovo nella frase: ' + miss.join(', ') + '. Scrivila esattamente come nella frase.', 6000);
+      }
     }
     if (!it) return toast('Non sono riuscito a costruire l\'esercizio');
+    // v127: spiegazione, accenti, immagine
+    const exp = ($('#ca-explain') && $('#ca-explain').value || '').trim();
+    if (exp) it.explain = exp.slice(0, 600);
+    if ($('#ca-strict') && $('#ca-strict').checked) it.strict = true;
+    if (CA_IMG) it.image = CA_IMG;
     if (CA_EDIT != null && ls.chal.items[CA_EDIT]) {
       const old = ls.chal.items[CA_EDIT];
       it.id = old.id; if (old.src) it.src = old.src;   // stessa identita': niente doppioni all'import
@@ -7181,6 +7234,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /** Il rendering GRANDE della domanda per lo schermo proiettato. */
   function chalScreenItem(item, pub) {
     const box = el('div', { class: 'chal-screen' });
+    if (item.image) box.appendChild(el('img', { class: 'chal-img', src: item.image, alt: '' }));   // v127
     box.appendChild(el('div', { class: 'instr', text: item.kind === 'gapbank' ? 'Completa gli spazi con le parole della lista (dal telefono).' : EX.INSTRUCTIONS[item.kind] || 'Rispondi dal telefono.' }));
     if (item.kind === 'mc') {
       box.appendChild(el('div', { class: 'chal-q', text: item.data.question }));
@@ -7940,6 +7994,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(head());
       const pub = VLChal.pubItem(item, { showQ: true });
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
+      if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
       box.appendChild(el('div', { class: 'as-kind', text: VLChal.itemLabel(item.kind) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? ' Attenzione agli accenti (è ≠ e).' : '') }));
       const msg = el('div', { class: 'as-msg' });
       const ask = function () {

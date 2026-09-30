@@ -1,5 +1,15 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- SOLUZIONI E IMMAGINI NELLE ESERCITAZIONI (v128, 30/9). Edoardo, dopo l'import del suo quiz Wayground: "non vedo la
+  soluzione né la possibilità di mettere immagini". (1) La lista del set mostra la soluzione in verde accanto a ogni
+  esercizio (VLChal.solutionText), 💬 se c'è una spiegazione, miniatura se c'è un'immagine. (2) BUG trovato nel farlo:
+  "✎ Modifica" di un gap ricostruiva l'esercizio con buildItem SENZA gapWords, quindi lo spazio scelto dall'autore
+  (Wayground) si spostava a caso. Ora il dialog ha "Parole da far scrivere" (precompilato con data.answers, passato come
+  choices.gapWords; se una parola non è nella frase si blocca con un messaggio), "Spiegazione" (item.explain), "Gli
+  accenti contano" (item.strict, acceso di default sui nuovi) e IMMAGINE (item.image = JPEG data URL ridotto a 560px,
+  ~30-60 KB: da file o INCOLLATA col dialog aperto). L'immagine si vede nel compito (.as-img) e sullo schermo della
+  sfida (.chal-img). Le immagini di Wayground restano fuori (licenza loro): si rimettono a mano con ✎.
+
 - SCREENSHOT INCOLLATI (v127, 30/9). Edoardo: "se voglio darti uno screenshot stile copia incolla, senza salvarlo sul
   MacBook o sul PC". Nel dialog "Esercizi da una foto o screenshot" (#dlg-imggen, usato da esercitazioni e attività) le
   immagini arrivano anche INCOLLATE (listener 'paste' sul documento, attivo solo col dialog aperto; testo incollato
