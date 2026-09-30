@@ -1,5 +1,20 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- STUDENTI CHE NON PARLANO ITALIANO + RUOLO INSEGNANTE/STUDENTE (v133, 30/9). Edoardo: "ricordati che gli studenti non
+  parlano italiano" + "dobbiamo creare la scelta tra teacher o student alla registrazione". (1) Lingua dello studente
+  di DEFAULT = INGLESE (asgT: uiLang assente → 'en'; dialogo Assegna parte su English); prima di conoscere il compito
+  (caricamento, errori del link, #me) si usa stuBrowserLang() = ultima lingua usata (vle.stuLang) oppure la lingua del
+  browser (it solo se navigator.language è it). Messaggi di caricamento/errore di openAssignmentStudent tradotti.
+  (2) Email del codice (Supabase → Emails → "Magic link or OTP" E "Confirm sign up", quest'ultima è quella che
+  ricevono gli account NUOVI, cioè gli studenti) ora BILINGUE: oggetto "Il tuo codice PauseLearn · Your PauseLearn
+  code", testo italiano + inglese, stesso stile, {{ .Token }}. (3) RUOLO: user_metadata.role = 'student' per gli
+  account creati da stuLoginBox, 'teacher' per quelli creati dal dialogo docente (vale solo alla creazione; gli account
+  senza ruolo = docenti). Se un account studente entra dall'area docente (onAuthStateChange o sessione ripristinata),
+  isStudentUser → studentInTeacherArea: esce dalla sessione docente (scope local) e apre "I miei compiti". Nel dialogo
+  "Accedi" c'è la scelta "👩‍🏫 Insegnante · Teacher" / "🎓 Sono uno studente · I'm a student →" (#acc-student) e nella
+  barra "🎓 Student" (#nav-student): entrambi aprono #me. ANCORA IN ITALIANO: il player delle VIDEO-lezioni e le date
+  (fmtDate it-IT) nella pagina studente.
+
 - PROFILO STUDENTE "I MIEI COMPITI" + LIMITI EMAIL (v132, 30/9). Edoardo: "lo studente può creare un profilo così si
   ritrova le cose che ha fatto?" + "colleghiamo resend, così anche 30 studenti a sera possono creare profilo, se vogliono
   entrare da cell o da pc è una scelta loro". SCOPERTA: Resend era GIÀ collegato dal 19/9: account Resend = login Google

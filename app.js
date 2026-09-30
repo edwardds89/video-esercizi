@@ -531,6 +531,7 @@
         CLOUD.client = window.supabase.createClient(window.VLSync.CONFIG.url, window.VLSync.CONFIG.anonKey);
         adapter = window.VLSync.supabaseAdapter(CLOUD.client);
         CLOUD.client.auth.onAuthStateChange(function (ev, session) {
+          if (session && isStudentUser(session.user)) { studentInTeacherArea(); return; }   // v133
           const before = CLOUD.user && CLOUD.user.id;
           CLOUD.user = session ? session.user : null;
           localOwnerGuard(CLOUD.user);
@@ -545,6 +546,7 @@
       CLOUD.adapter = adapter;   // v105: la community legge le righe pubblicate di TUTTI, il motore di sync (sopra) solo le proprie
       CLOUD.sync = window.VLSync.createSync({ adapter: adapter, getLocal: function () { return S.lessons; }, apply: applyCloud, save: saveLessons, loadState: loadSyncState, saveState: saveSyncState, onStatus: function () { renderAccount(); } });
       CLOUD.user = await adapter.user();
+      if (isStudentUser(CLOUD.user)) { studentInTeacherArea(); return CLOUD.sync; }   // v133
       localOwnerGuard(CLOUD.user);
       renderAccount();
       // v105: la sessione si puo' ripristinare DOPO il primo renderHome() (fatto all'avvio, prima che initCloud finisca):
@@ -555,6 +557,18 @@
       return CLOUD.sync;
     })().catch(function (e) { toast(e.message); CLOUD.ready = null; return null; });
     return CLOUD.ready;
+  }
+  /** v133 (Edoardo: "dobbiamo creare la scelta tra teacher o student alla registrazione"): gli account studente hanno
+   *  user_metadata.role = 'student' (li crea stuLoginBox). Se uno studente entra dall'area docente ("Accedi"), non vede
+   *  l'area docente vuota: si esce dalla sessione docente e si apre "I miei compiti", dove entra come studente. Gli
+   *  account senza ruolo (tutti quelli creati prima) restano docenti. */
+  function isStudentUser(u) { return !!(u && u.user_metadata && u.user_metadata.role === 'student'); }
+  function studentInTeacherArea() {
+    CLOUD.user = null;
+    try { CLOUD.client.auth.signOut({ scope: 'local' }); } catch (e) { /* ignora */ }
+    const d = $('#dlg-account'); if (d && d.open) d.close();
+    toast(stuBrowserLang() === 'it' ? 'Questo è un account studente: ti porto ai tuoi compiti.' : 'This is a student account: taking you to your assignments.', 6000);
+    openMine();
   }
   function runSync() {
     if (!CLOUD.sync) return Promise.resolve(null);
@@ -709,7 +723,7 @@
   function sendCode(email, msg, btn) {
     if (!CLOUD.client) { msg.textContent = 'Cloud non disponibile in questo momento.'; return Promise.resolve(false); }
     btn.disabled = true; msg.textContent = 'Invio in corso…';
-    return CLOUD.client.auth.signInWithOtp({ email: email })
+    return CLOUD.client.auth.signInWithOtp({ email: email, options: { data: { role: 'teacher' } } })   // v133: il ruolo vale solo per gli account nuovi
       .then(function (res) { if (res.error) throw res.error; return true; })
       .catch(function (e) { msg.textContent = authError(e); return false; })
       .then(function (ok) { btn.disabled = false; return ok; });
@@ -7694,7 +7708,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (S.mock) return after();
         stuClient(function (c) {
           if (!c) { go.disabled = false; msg.textContent = 'Offline'; return; }
-          c.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true, data: { name: VLClass.cleanName(nameIn.value) } } })
+          c.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true, data: { name: VLClass.cleanName(nameIn.value), role: 'student' } } })
             .then(function (r) { if (r.error) { go.disabled = false; msg.textContent = r.error.message; return; } after(); });
         });
         return;
@@ -7704,7 +7718,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       go.disabled = true;
       if (S.mock) {
         if (token !== '123456') { go.disabled = false; msg.textContent = T.badCode; return; }
-        const u = { id: 'mock-' + email, email: email, user_metadata: { name: VLClass.cleanName(nameIn.value) } };
+        const u = { id: 'mock-' + email, email: email, user_metadata: { name: VLClass.cleanName(nameIn.value), role: 'student' } };
         localStorage.setItem('vle.mockStudent', JSON.stringify(u));
         return done(u);
       }
@@ -7727,13 +7741,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     stuClient(function (c) { if (!c) return then(); c.auth.signOut().then(function () { STU.user = null; then(); }, function () { STU.user = null; then(); }); });
   }
   /** "I miei compiti" (#me): elenco dei compiti collegati al profilo, con "Rivedi" (errori e soluzioni) e "Rifai". */
+  document.addEventListener('click', function (e) {
+    const t = e.target.closest && e.target.closest('#acc-student, #nav-student');
+    if (!t) return;
+    e.preventDefault();
+    const d = $('#dlg-account'); if (d && d.open) d.close();
+    history.replaceState(null, '', location.pathname + location.search + '#me');
+    openMine();
+  });
   function openMine() {
     document.body.classList.add('standalone');
     S.standalone = true;
     show('assign');
     $('#view-assign').classList.add('as-set');
-    let lang = 'it'; try { lang = localStorage.getItem('vle.stuLang') || 'it'; } catch (e) { /* ignora */ }
-    const T = ASG_T[lang] || ASG_T.it;
+    const T = ASG_T[stuBrowserLang()] || ASG_T.en;
     const box = $('#as-box'); box.innerHTML = '';
     box.appendChild(el('p', { class: 'hint', text: '…' }));
     studentBackend(function (be) {
@@ -7946,11 +7967,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     out.both = true;
     return out;
   })();
-  function asgT(lesson) { return ASG_T[(lesson && lesson.uiLang) || 'it'] || ASG_T.it; }
+  // v133 (Edoardo: "ricordati che gli studenti non parlano italiano"): se il docente non ha scelto, l'interfaccia
+  // dello studente è in INGLESE; prima di sapere il compito (errori, #me) si segue la lingua del browser dello studente.
+  function asgT(lesson) { return ASG_T[(lesson && lesson.uiLang) || 'en'] || ASG_T.en; }
+  function stuBrowserLang() { let l = ''; try { l = localStorage.getItem('vle.stuLang') || ''; } catch (e) { /* ignora */ } return l || (/^it\b/i.test(navigator.language || '') ? 'it' : 'en'); }
   /** v126: cosa viaggia nel compito. Video-lezione: studentPayload. Set di esercizi (esercitazione): solo gli item. */
   function asgPayload(ls) {
-    if (ls.chal && !Array.isArray(ls.exercises)) return { v: 1, id: ls.id, title: ls.title || '', lang: ls.lang || 'it', uiLang: ls.studentLang || 'it', shuffle: !!ls.studentShuffle, chal: { items: JSON.parse(JSON.stringify(ls.chal.items || [], function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; })) } };
-    return Object.assign(studentPayload(ls), { uiLang: ls.studentLang || 'it' });
+    if (ls.chal && !Array.isArray(ls.exercises)) return { v: 1, id: ls.id, title: ls.title || '', lang: ls.lang || 'it', uiLang: ls.studentLang || 'en', shuffle: !!ls.studentShuffle, chal: { items: JSON.parse(JSON.stringify(ls.chal.items || [], function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; })) } };
+    return Object.assign(studentPayload(ls), { uiLang: ls.studentLang || 'en' });
   }
   // --- dialogo "Assegna" dalla card della lezione ---
   function openAssignDialog(ls) {
@@ -7974,7 +7998,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const go = el('button', { class: 'primary', text: 'Assegna' });
       go.addEventListener('click', function () {
         const creating = sel.value === '__new';
-        if (S.lessons[ls.id] && ((ls.studentLang || 'it') !== langSel.value || !!ls.studentShuffle !== shufBox.checked)) {
+        if (S.lessons[ls.id] && ((ls.studentLang || 'en') !== langSel.value || !!ls.studentShuffle !== shufBox.checked)) {
           S.lessons[ls.id].studentLang = langSel.value; ls.studentLang = langSel.value;
           S.lessons[ls.id].studentShuffle = shufBox.checked; ls.studentShuffle = shufBox.checked;
           S.lessons[ls.id].updatedAt = new Date().toISOString(); saveLessons();
@@ -7996,7 +8020,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       body.appendChild(el('div', { class: 'row' }, sel));
       body.appendChild(newRow);
       const langSel = el('select', { id: 'asg-lang' }, el('option', { value: 'it', text: '🇮🇹 Italiano' }), el('option', { value: 'en', text: '🇬🇧 English' }), el('option', { value: 'both', text: '🇮🇹+🇬🇧 Italiano e inglese' }));
-      langSel.value = ls.studentLang || 'it';
+      langSel.value = ls.studentLang || 'en';
       body.appendChild(el('label', { text: 'Lingua delle istruzioni per lo studente' }));
       body.appendChild(el('div', { class: 'row' }, langSel, el('span', { class: 'hint', text: 'pulsanti, consegne e correzione; gli esercizi restano in italiano' })));
       // v131: compito a casa oppure sessione DAL VIVO in classe (sala d'attesa, parte il docente, timer)
@@ -8359,22 +8383,25 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function openAssignmentStudent(code) {
     document.body.classList.add('standalone');   // lo studente non vede la barra del docente
     show('assign');
-    assignMsg('Carico il compito…');
+    const E = stuBrowserLang() === 'it'
+      ? { load: 'Carico il compito…', bad: 'Codice del compito non valido: controlla il link che ti ha dato il docente.', net: 'Non riesco a collegarmi: controlla la connessione e ricarica la pagina.', gone: 'Questo compito non esiste o è stato eliminato: controlla il link.', closed: 'Il compito "{t}" è chiuso: chiedi al docente di riaprirlo.', fail: 'Non riesco a caricare il compito: ' }
+      : { load: 'Loading the assignment…', bad: 'Invalid assignment code: check the link your teacher gave you.', net: 'Can\'t connect: check your connection and reload the page.', gone: 'This assignment doesn\'t exist or was deleted: check the link.', closed: 'The assignment "{t}" is closed: ask your teacher to reopen it.', fail: 'Can\'t load the assignment: ' };
+    assignMsg(E.load);
     code = String(code || '').trim().toUpperCase();
-    if (!VLClass.validCode(code)) return assignMsg('Codice del compito non valido: controlla il link che ti ha dato il docente.', true);
+    if (!VLClass.validCode(code)) return assignMsg(E.bad, true);
     studentBackend(function (be) {
-      if (!be) return assignMsg('Non riesco a collegarmi: controlla la connessione e ricarica la pagina.', true);
+      if (!be) return assignMsg(E.net, true);
       be.getAssignment(code).then(function (a) {
-        if (!a) return assignMsg('Questo compito non esiste o è stato eliminato: controlla il link.', true);
-        if (!a.open || !a.lesson) return assignMsg('Il compito "' + (a.title || '') + '" è chiuso: chiedi al docente di riaprirlo.', true);
+        if (!a) return assignMsg(E.gone, true);
+        if (!a.open || !a.lesson) return assignMsg(E.closed.split('{t}').join(a.title || ''), true);
         renderAssignStart(be, a);
-      }, function (e) { assignMsg('Non riesco a caricare il compito: ' + e.message, true); });
+      }, function (e) { assignMsg(E.fail + e.message, true); });
     });
   }
   function renderAssignStart(be, a) {
     const box = $('#as-box'); box.innerHTML = '';
     const T = asgT(a.lesson);
-    document.documentElement.lang = a.lesson.uiLang || 'it';
+    document.documentElement.lang = a.lesson.uiLang === 'en' || !a.lesson.uiLang ? 'en' : 'it';
     let saved = ''; try { saved = localStorage.getItem('vle.studentName') || ''; } catch (e) { /* ignora */ }
     const inp = el('input', { type: 'text', value: saved, placeholder: T.namePh, autocomplete: 'name', maxlength: '80', style: 'width:100%;font-size:18px' });
     const go = el('button', { class: 'primary', text: T.start, style: 'font-size:17px' });
@@ -8606,7 +8633,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function assignSend(finished) {
     const A = S.assign; if (!A) return Promise.resolve(false);
     rememberAttempt(A.id, A.code);   // v132: per collegarlo al profilo se lo studente entra dopo
-    try { localStorage.setItem('vle.stuLang', (A.lesson && A.lesson.uiLang) || 'it'); } catch (e) { /* ignora */ }
+    try { localStorage.setItem('vle.stuLang', (A.lesson && A.lesson.uiLang) || 'en'); } catch (e) { /* ignora */ }
     const sc = VLClass.scoreOf(A.lesson, A.detail);
     if (finished) A.status = 'sending';
     paintAssignStatus();

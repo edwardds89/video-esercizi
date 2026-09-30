@@ -1621,3 +1621,8 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .me-item { border-left: 4px solid #e5484d; padding-left: 8px; }
 .me-item.ok-help { border-color: #f08c00; } .me-item.ko-help { border-color: #8b5a2b; } .me-item.ok-late { border-color: #e0a100; } .me-item.none { border-color: #c8ced6; }
 .btn-link { display: inline-block; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; }
+
+/* v133: scelta insegnante / studente nel dialogo di accesso */
+.acc-role { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.acc-role-on { padding: 6px 12px; border-radius: 999px; background: var(--accent, #1f6feb); color: #fff; font-weight: 700; }
+.acc-role-off { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; font-weight: 600; }
