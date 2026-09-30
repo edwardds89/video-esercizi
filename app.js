@@ -6982,10 +6982,25 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (CA_IMG) imgWrap.appendChild(el('img', { src: CA_IMG, alt: '' }));
         const f = el('input', { type: 'file', accept: 'image/*', class: 'sr', id: 'ca-imgfile' });
         f.addEventListener('change', function () { if (f.files[0]) imgToJpeg(f.files[0], function (im) { if (im) { CA_IMG = im.preview; paintImg(); } }, 560); });
-        imgWrap.appendChild(el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' },
-          el('label', { for: 'ca-imgfile', class: 'chip', style: 'margin:0', text: CA_IMG ? '🖼 Cambia' : '🖼 Scegli un\'immagine' }), f,
-          el('span', { class: 'hint', text: 'oppure incolla uno screenshot (⌘V / Ctrl V) con questa finestra aperta' }),
-          CA_IMG ? el('button', { class: 'small', text: '✕ Togli', onclick: function () { CA_IMG = null; paintImg(); } }) : null));
+        // v134 (Edoardo: "ma l'immagine non posso metterla con link? o incollare uno screenshot non salvato sul mac?"):
+        // tre strade ben visibili: file, LINK a un'immagine, riquadro dove INCOLLARE (⌘V) lo screenshot fatto negli appunti.
+        const urlIn = el('input', { type: 'url', placeholder: 'https://… link di un\'immagine', style: 'flex:1;min-width:200px' });
+        const useUrl = function () {
+          const u = urlIn.value.trim();
+          if (!/^https?:\/\/\S+$/i.test(u)) { toast('Incolla un link che comincia con https://'); return; }
+          const test = new Image();
+          test.onload = function () { CA_IMG = u; paintImg(); };
+          test.onerror = function () { toast('Da quel link non arriva un\'immagine: apri l\'immagine, tasto destro → "Copia indirizzo immagine"', 7000); };
+          test.src = u;
+        };
+        urlIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); useUrl(); } });
+        const pasteZone = el('div', { class: 'ca-paste', tabindex: '0', text: '📋 Clicca qui e premi ⌘V per incollare uno screenshot (Mac: ⌘⇧⌃4 lo fa direttamente negli appunti, senza salvarlo)' });
+        imgWrap.appendChild(pasteZone);
+        imgWrap.appendChild(el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap;margin-top:6px' },
+          urlIn, el('button', { class: 'small', text: '🔗 Usa il link', onclick: useUrl })));
+        imgWrap.appendChild(el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap;margin-top:6px' },
+          el('label', { for: 'ca-imgfile', class: 'chip', style: 'margin:0', text: CA_IMG ? '🖼 Cambia con un file' : '🖼 Scegli un file' }), f,
+          CA_IMG ? el('button', { class: 'small', text: '✕ Togli l\'immagine', onclick: function () { CA_IMG = null; paintImg(); } }) : null));
       };
       CA_PAINT_IMG = paintImg;
       paintImg();

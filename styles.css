@@ -1626,3 +1626,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .acc-role { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .acc-role-on { padding: 6px 12px; border-radius: 999px; background: var(--accent, #1f6feb); color: #fff; font-weight: 700; }
 .acc-role-off { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; font-weight: 600; }
+
+/* v134: incolla / link immagine nell'esercizio */
+.ca-paste { border: 2px dashed var(--line); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted, #667); background: #fafbfc; cursor: text; font-size: 14px; }
+.ca-paste:focus { outline: none; border-color: var(--accent, #1f6feb); background: #eef4ff; color: #1c2330; }

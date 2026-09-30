@@ -1,5 +1,12 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IMMAGINE DELL'ESERCIZIO DA LINK O INCOLLATA (v134, 30/9). Edoardo: "ma l'immagine non posso metterla con link? o
+  incollare uno screenshot non salvato sul mac?". L'incolla c'era già (listener paste col dialog aperto) ma era solo una
+  riga di testo: ora nel dialogo ✎ c'è un riquadro .ca-paste ("Clicca qui e premi ⌘V", con la scorciatoia Mac ⌘⇧⌃4 per
+  lo screenshot negli appunti), un campo LINK (item.image = l'URL, verificato caricandolo come Image prima di
+  accettarlo; se non è un'immagine: "tasto destro → Copia indirizzo immagine") e il file. Nota: un'immagine da link
+  resta sul sito di origine (se lo tolgono sparisce); quelle incollate o da file stanno dentro l'esercizio (JPEG 560px).
+
 - STUDENTI CHE NON PARLANO ITALIANO + RUOLO INSEGNANTE/STUDENTE (v133, 30/9). Edoardo: "ricordati che gli studenti non
   parlano italiano" + "dobbiamo creare la scelta tra teacher o student alla registrazione". (1) Lingua dello studente
   di DEFAULT = INGLESE (asgT: uiLang assente → 'en'; dialogo Assegna parte su English); prima di conoscere il compito
