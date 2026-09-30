@@ -171,6 +171,7 @@
       createAssignment: function (a) {
         const tryOnce = function (n) {
           const row = { code: newCode(), class_id: a.class_id, lesson_id: a.lesson_id, title: a.title || '', kind: a.kind || 'homework', lesson: a.lesson };
+          if (a.live) row.live = a.live;   // v131: sessione dal vivo
           return client.from('assignments').insert(row).select('id,code,class_id,lesson_id,title,kind,open,created_at').single().then(function (r) {
             if (r.error && r.error.code === '23505' && n < 4) return tryOnce(n + 1);   // codice già usato: se ne prova un altro
             if (r.error) throw err(r.error);
@@ -186,6 +187,7 @@
       deleteResults: function (ids) { return q(client.from('results').delete().in('id', ids)); },
       // studente (anonimo)
       getAssignment: function (code) { return q(client.rpc('get_assignment', { p_code: code })); },
+      getLive: function (code) { return q(client.rpc('get_live', { p_code: code })); },   // v131: stato della sessione dal vivo
       submitResult: function (r) {
         return q(client.rpc('submit_result', { p_code: r.code, p_id: r.id, p_name: r.name, p_detail: r.detail, p_score: r.score, p_total: r.total, p_finished: !!r.finished }));
       }
@@ -217,7 +219,7 @@
       getAssignmentFull: function (id) { return P(db().assignments.find(function (a) { return a.id === id; })); },
       createAssignment: function (a) {
         const d = db(); let code; do { code = newCode(); } while (d.assignments.some(function (x) { return x.code === code; }));
-        const row = { id: uuid(), code: code, class_id: a.class_id, lesson_id: a.lesson_id, title: a.title || '', kind: a.kind || 'homework', lesson: a.lesson, open: true, created_at: now() };
+        const row = { id: uuid(), code: code, class_id: a.class_id, lesson_id: a.lesson_id, title: a.title || '', kind: a.kind || 'homework', lesson: a.lesson, live: a.live || null, open: true, created_at: now() };
         d.assignments.push(row); save(d); return P(pick(row));
       },
       updateAssignment: function (id, patch) { const d = db(); d.assignments.forEach(function (a) { if (a.id === id) Object.assign(a, patch); }); save(d); return P(null); },
@@ -229,7 +231,11 @@
         const d = db(); const a = d.assignments.find(function (x) { return x.code === String(code || '').trim().toUpperCase(); });
         if (!a) return P(null);
         const c = d.classes.find(function (x) { return x.id === a.class_id; }) || {};
-        return P({ code: a.code, title: a.title, kind: a.kind, open: a.open, className: c.name || '', lesson: a.open ? a.lesson : null });
+        return P({ code: a.code, title: a.title, kind: a.kind, open: a.open, className: c.name || '', lesson: a.open ? a.lesson : null, live: a.live || null, now: now() });
+      },
+      getLive: function (code) {
+        const a = db().assignments.find(function (x) { return x.code === String(code || '').trim().toUpperCase(); });
+        return P(a ? { open: a.open, live: a.live || null, now: now() } : null);
       },
       submitResult: function (r) {
         const d = db(); const a = d.assignments.find(function (x) { return x.code === String(r.code || '').trim().toUpperCase() && x.open; });

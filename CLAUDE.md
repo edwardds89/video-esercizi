@@ -1,5 +1,29 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- SESSIONE DAL VIVO: SALA D'ATTESA, VIA, BARRE, TIMER, SCHERMO DOCENTE (v131, 30/9). Edoardo: "voglio una schermata che
+  mostro il QR, mentre gli studenti entrano si vedono i nomi LIVE, poi faccio partire il quiz (stesse domande in ordine o
+  random) e si vede la barra dei singoli studenti e una barra generale (media errori e giuste) con un timer (opzionale)
+  e alla fine si rivedono tutte le risposte (scelgo io se mostrare l'opzione corretta) mentre chiedo al singolo studente
+  che ha sbagliato (che devo poter vedere in un report a parte su un altro schermo)". DATABASE
+  (sql/2026-09-30-sessione-live.sql, eseguito sul progetto pauselearn): assignments.live jsonb = {state lobby|run|end,
+  shuffle, secs, started_at, ends_at, ended_at} (null = compito a casa); get_assignment restituisce anche live e now
+  (ora del server); nuova get_live(code) LEGGERA (open, live, now: niente lezione) per i telefoni che aspettano.
+  Assegna (solo esercitazioni): "Come" = 📝 compito | 🔴 in classe dal vivo → kind 'live', live {state:'lobby'} e si
+  entra dritti nella sala d'attesa (renderReport(id,'live')); in Classi il compito live ha "🔴 Sessione dal vivo".
+  DOCENTE (paintLive per stato): lobby = QR grande, URL, codice, nomi che entrano (animazione solo per i nuovi,
+  CLS.lobbySeen), scelta ordine (uguale/casuale) e timer (0/3/5/10/15/20/30 min), "▶ Via!" → liveSet(run, ends_at);
+  run = orologio (live-clock, rosso sotto 1 min), barra generale per esito + percentuali, una barra per studente (un
+  pezzo per esercizio), "⏹ Termina" a due clic → end; end = accesso alla correzione. Aggiornamento ogni 3 s.
+  STUDENTE: dopo il nome, se a.live → liveStudent: sala d'attesa (get_live ogni 2 s) → playAssignSet(a, {live, off,
+  be}) con shuffle del docente, orologio corretto con l'ora del server (off), get_live ogni 4 s: state 'end' → "il
+  docente ha fermato il quiz" e consegna; tempo scaduto → consegna. Niente "Rifai da capo" dal vivo. Chi entra a quiz
+  già partito parte subito; a sessione finita vede "La sessione è finita". CORREZIONE: i nomi NON vanno sul
+  proiettore (casella "mostra i nomi qui", spenta); "🖥 Schermo docente" apre #rep=ID&m=teacher in un'altra finestra
+  (route in init, aspetta il cloud) = paintTeacherScreen: segue la domanda proiettata via BroadcastChannel 'pl-fix'
+  (stesso browser: portatile + proiettore/secondo monitor; NON il telefono) con soluzione e tutti gli studenti
+  ordinati per esito e cosa hanno scritto. e2e locale ?mock=1 (e2e131.js): 2 studenti in sala, via con timer, barre,
+  termina, consegna automatica, correzione senza nomi, schermo docente sincronizzato.
+
 - AIUTO AUTOMATICO, ARANCIONE E MARRONE (v130, 30/9). Edoardo: "se lo studente non riesce a rispondere si attivi un
   aiuto e poi io devo vedere un puntino arancione… se continua a sbagliare anche con l'aiuto un puntino marrone".
   Esercitazioni (playAssignSet): al primo errore arriva UN aiuto (hintFor, per tipo: gap = prime lettere e quante

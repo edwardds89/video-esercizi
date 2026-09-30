@@ -7751,7 +7751,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('a', { class: 'cls-asg-title', href: '#', text: a.title || '(senza titolo)', onclick: function (e) { e.preventDefault(); renderReport(a.id); } }),
         el('div', { class: 'meta', text: fmtDate(a.created_at) + ' · codice ' + a.code + ' · ' + (nS ? nS + (nS === 1 ? ' studente' : ' studenti') + ', ' + nF + ' ' + (nF === 1 ? 'ha consegnato' : 'hanno consegnato') : 'nessuno ancora') })),
       el('div', { class: 'actions' },
-        el('button', { class: 'small primary', text: '📊 Report', onclick: function () { renderReport(a.id); } }),
+        a.kind === 'live' ? el('button', { class: 'small primary', text: '🔴 Sessione dal vivo', onclick: function () { renderReport(a.id, 'live'); } }) : null,   // v131
+        el('button', { class: 'small' + (a.kind === 'live' ? '' : ' primary'), text: '📊 Report', onclick: function () { renderReport(a.id); } }),
         el('button', { class: 'small', text: '🔗 Copia link', onclick: function () { copyText(url); } }),
         el('button', { class: 'small', text: 'QR', onclick: function () { CLS.qrOpen = CLS.qrOpen === a.id ? null : a.id; if (CLS.qrOpen) { qrBox.innerHTML = qrSvg(url); qrBox.hidden = false; } else qrBox.hidden = true; } }),
         toggle,
@@ -7769,6 +7770,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       review: 'Da ripassare', youWrote: 'Hai scritto: ', correct: 'Giusto: ', again: '↻ Rifai da capo', accents: ' Attenzione agli accenti (è ≠ e).', answerFirst: 'Prima rispondi', wrongPh: 'Scrivi la parola giusta', missPh: 'La parola che manca', scrHint: 'Tocca le parole qui sotto nell’ordine giusto',
       hint: '💡 Aiuto', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
       hExtraA: 'La parola in più è nella prima metà della frase', hExtraB: 'La parola in più è nella seconda metà della frase', hScr: 'La frase comincia con «{w}»', hMatch: 'Una coppia giusta: {w}', hMc: 'Ho tolto {n} risposte sbagliate', okHelp: '✓ Giusto, con l\'aiuto', koHelp: '✗ Sbagliato anche con l\'aiuto',
+      waitTitle: 'Sei dentro! ✓', waitMsg: 'Aspetta: il quiz parte quando lo dice il docente…', ended: 'La sessione è finita: il docente ha chiuso il quiz.', timeUp: '⏰ Tempo scaduto!', stopped: '⏹ Il docente ha fermato il quiz.',
       done: '✓ Consegnato: il docente vede i tuoi risultati ({n}).', closed: 'Il docente ha chiuso questo compito: i risultati non sono stati inviati.', notSent: 'Non inviato ({e}). ', resend: 'Riprova', sending: 'Invio dei risultati al docente…',
       k: { gap: 'Completa gli spazi', gapbank: 'Completa con le parole', mc: 'Scelta multipla', scramble: 'Riordina la frase', extra: 'Trova la parola in più', missing: 'Trova la parola mancante', wrong: 'Trova la parola sbagliata', match: 'Abbina le coppie' },
       i: { gap: 'Scrivi la parola che manca.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' } },
@@ -7777,6 +7779,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
       hint: '💡 Hint', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
       hExtraA: 'The extra word is in the first half of the sentence', hExtraB: 'The extra word is in the second half of the sentence', hScr: 'The sentence starts with «{w}»', hMatch: 'One right pair: {w}', hMc: 'I removed {n} wrong answers', okHelp: '✓ Correct, with the hint', koHelp: '✗ Wrong, even with the hint',
+      waitTitle: 'You\'re in! ✓', waitMsg: 'Wait: the quiz starts when your teacher says so…', ended: 'The session is over: your teacher closed the quiz.', timeUp: '⏰ Time\'s up!', stopped: '⏹ Your teacher stopped the quiz.',
       done: '✓ Submitted: your teacher can see your results ({n}).', closed: 'Your teacher has closed this assignment: your results were not sent.', notSent: 'Not sent ({e}). ', resend: 'Try again', sending: 'Sending your results to your teacher…',
       k: { gap: 'Fill in the gaps', gapbank: 'Fill in with the words', mc: 'Multiple choice', scramble: 'Put the sentence in order', extra: 'Find the extra word', missing: 'Find the missing word', wrong: 'Find the wrong word', match: 'Match the pairs' },
       i: { gap: 'Write the missing word.', gapbank: 'Complete with the words in the list.', mc: 'Choose the right answer.', scramble: 'Put the words in the right order.', extra: 'Tap the extra word.', missing: 'Tap where a word is missing and write it.', wrong: 'Tap the wrong word and write the right one.', match: 'Match each word on the left with one on the right.' } }
@@ -7832,8 +7835,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         go.disabled = true;
         (creating ? be.createClass(newIn.value.trim()) : Promise.resolve({ id: sel.value, name: sel.options[sel.selectedIndex].textContent }))
           .then(function (cls) {
-            return be.createAssignment({ class_id: cls.id, lesson_id: ls.id, title: ls.title || '', kind: 'homework', lesson: asgPayload(ls) })
-              .then(function (a) { showAssigned(body, a, cls); });
+            const live = VLClass.isSet(ls) && modeSel.value === 'live';
+            return be.createAssignment({ class_id: cls.id, lesson_id: ls.id, title: ls.title || '', kind: live ? 'live' : 'homework', lesson: asgPayload(ls), live: live ? { state: 'lobby' } : null })
+              .then(function (a) {
+                if (live) { $('#dlg-assign').close(); CLS.classes = null; return renderReport(a.id, 'live'); }   // dritti alla sala d'attesa
+                showAssigned(body, a, cls);
+              });
           }, function (e) { throw e; })
           .catch(function (e) { go.disabled = false; toast('Non assegnato: ' + e.message, 6000); });
       });
@@ -7844,6 +7851,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       langSel.value = ls.studentLang || 'it';
       body.appendChild(el('label', { text: 'Lingua delle istruzioni per lo studente' }));
       body.appendChild(el('div', { class: 'row' }, langSel, el('span', { class: 'hint', text: 'pulsanti, consegne e correzione; gli esercizi restano in italiano' })));
+      // v131: compito a casa oppure sessione DAL VIVO in classe (sala d'attesa, parte il docente, timer)
+      const modeSel = el('select', { id: 'asg-mode' }, el('option', { value: 'homework', text: '📝 Compito: ognuno quando vuole' }), el('option', { value: 'live', text: '🔴 In classe, dal vivo: sala d\'attesa, parti tu' }));
+      if (VLClass.isSet(ls)) { body.appendChild(el('label', { text: 'Come' })); body.appendChild(el('div', { class: 'row' }, modeSel)); }
       const shufBox = el('input', { type: 'checkbox', id: 'asg-shuffle' });
       shufBox.checked = !!ls.studentShuffle;
       if (VLClass.isSet(ls)) body.appendChild(el('label', { class: 'chip', style: 'margin-top:10px;display:inline-flex' }, shufBox, ' 🔀 Domande in ordine casuale (diverso per ogni studente)'));
@@ -7866,7 +7876,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#asg-close').addEventListener('click', function () { $('#dlg-assign').close(); });
 
   // --- report: studenti × esercizi ---
-  function renderReport(id) {
+  function renderReport(id, mode) {
     show('report');
     clearInterval(CLS.repTimer); CLS.repTimer = null;
     const root = $('#rep-root'); root.innerHTML = '';
@@ -7875,6 +7885,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     root.appendChild(el('p', { class: 'hint', text: 'Carico i risultati…' }));
     const same = CLS.report && CLS.report.a && CLS.report.a.id === id;
     if (!same) CLS.repMode = 'table';
+    if (mode) CLS.repMode = mode;
     const load = function (quiet) {
       const have = CLS.report && CLS.report.a && CLS.report.a.id === id ? CLS.report.a : null;   // v129: la lezione non cambia, si riscaricano solo i risultati
       return Promise.all([have ? Promise.resolve(have) : be.getAssignmentFull(id), be.listResults([id])]).then(function (r) {
@@ -7888,15 +7899,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // aggiornamento da solo ogni 30 s finché il report è aperto (durante una lezione si vedono arrivare gli studenti)
     // v129: in modalità LIVE ogni 5 secondi (si vede chi sta rispondendo), altrimenti ogni 30
     let tick = 0;
-    CLS.repTimer = setInterval(function () { if (S.view !== 'report') { clearInterval(CLS.repTimer); CLS.repTimer = null; return; } tick++; if (CLS.repMode === 'live' || tick % 6 === 0) load(true); }, 5000);
+    CLS.repTimer = setInterval(function () { if (S.view !== 'report') { clearInterval(CLS.repTimer); CLS.repTimer = null; return; } tick++; if (CLS.repMode === 'live' || CLS.repMode === 'teacher' || tick % 6 === 0) load(true); }, 3000);
     CLS.reload = load;
   }
   function paintReport(be) {
     const R = CLS.report, a = R.a, root = $('#rep-root');
     const m = VLClass.reportMatrix(a.lesson, R.rows);
-    $('#view-report').classList.toggle('rep-big', CLS.repMode === 'live' || CLS.repMode === 'fix');
+    $('#view-report').classList.toggle('rep-big', CLS.repMode === 'live' || CLS.repMode === 'fix' || CLS.repMode === 'teacher');
     if (CLS.repMode === 'live') return paintLive(be, m);
     if (CLS.repMode === 'fix') return paintFix(be, m);
+    if (CLS.repMode === 'teacher') return paintTeacherScreen(be, m);
     const cls = (CLS.classes || []).find(function (c) { return c.id === a.class_id; });
     root.innerHTML = '';
     const url = assignUrl(a.code);
@@ -7958,8 +7970,67 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /** v129 LIVE (Edoardo: "voglio una schermata LIVE dove vedo chi sta facendo gli esercizi"): una riga per studente con
    *  un pallino per esercizio (verde/giallo/rosso/grigio), punteggio, "sta rispondendo" se ha inviato nell'ultimo minuto.
    *  Si aggiorna ogni 5 s (renderReport). Pensata per il proiettore: niente risposte degli studenti a schermo. */
+  function liveSet(be, patch) {
+    const a = CLS.report.a;
+    const nl = Object.assign({}, a.live || {}, patch);
+    return be.updateAssignment(a.id, { live: nl }).then(function () { a.live = nl; paintReport(be); }, function (e) { toast('Non riuscito: ' + e.message, 6000); });
+  }
+  function fmtClock(ms) { ms = Math.max(0, ms); const t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
+  function liveClockTick() {
+    clearInterval(CLS.liveClock);
+    CLS.liveClock = setInterval(function () {
+      const n = $('#live-clock'); const a = CLS.report && CLS.report.a;
+      if (!n || !a || !a.live || !a.live.ends_at || S.view !== 'report') { clearInterval(CLS.liveClock); return; }
+      const left = Date.parse(a.live.ends_at) - Date.now();
+      n.textContent = '⏱ ' + fmtClock(left);
+      n.classList.toggle('low', left < 60000);
+    }, 500);
+  }
+  /** v131: la sessione dal vivo (Edoardo: "mostro il QR, mentre gli studenti entrano si vedono i nomi LIVE, poi faccio
+   *  partire il quiz (stesse domande in ordine o random) e si vede la barra dei singoli studenti e una barra generale
+   *  (media errori e giuste) con un timer opzionale e alla fine si rivedono tutte le risposte"). a.live.state:
+   *  lobby (QR + nomi) → run (barre + timer) → end (→ correzione). Senza a.live è il monitor di un compito a casa. */
   function paintLive(be, m) {
     const R = CLS.report, a = R.a, root = $('#rep-root');
+    if (a.live && a.live.state === 'lobby') return paintLobby(be, m);
+    root.innerHTML = '';
+    if (a.live && a.live.state) {
+      const run = a.live.state === 'run';
+      root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
+        el('h2', { style: 'margin:0;flex:1;min-width:200px', text: (run ? '🔴 ' : '🏁 ') + (a.title || '') }),
+        run && a.live.ends_at ? el('div', { id: 'live-clock', class: 'live-clock', text: '⏱ ' + fmtClock(Date.parse(a.live.ends_at) - Date.now()) }) : null,
+        run ? twoStep('⏹ Termina il quiz', function () { liveSet(be, { state: 'end', ended_at: new Date().toISOString() }); }, 'live-stop') : null,
+        !run ? el('button', { class: 'primary', text: '👥 Correzione di gruppo', onclick: function () { CLS.repMode = 'fix'; R.fix = null; paintReport(be); } }) : null,
+        el('button', { class: 'small', text: '📊 Tabella', onclick: function () { CLS.repMode = 'table'; paintReport(be); } })));
+      if (run && a.live.ends_at) liveClockTick();
+      // barra generale: tutte le risposte date finora, per esito
+      const tot = { ok: 0, 'ok-help': 0, 'ok-late': 0, 'ko-help': 0, ko: 0 };
+      let answered = 0;
+      m.students.forEach(function (st) { m.exercises.forEach(function (e) { const c = st.cells[e.id].state; if (c !== 'none') { tot[c] = (tot[c] || 0) + 1; answered++; } }); });
+      const all = m.students.length * m.exercises.length;
+      const gb = el('div', { class: 'live-gbar' });
+      [['ok', 'giuste'], ['ok-help', 'con aiuto'], ['ok-late', 'al 2° tentativo'], ['ko-help', 'sbagliate con aiuto'], ['ko', 'sbagliate']].forEach(function (k) {
+        if (tot[k[0]]) gb.appendChild(el('span', { class: 'seg ' + k[0], style: 'flex:' + tot[k[0]], title: tot[k[0]] + ' ' + k[1] }));
+      });
+      if (all > answered) gb.appendChild(el('span', { class: 'seg none', style: 'flex:' + (all - answered) }));
+      const pct = function (k) { return answered ? Math.round(tot[k] * 100 / answered) : 0; };
+      root.appendChild(el('div', { class: 'live-general' },
+        el('div', { class: 'row', style: 'justify-content:space-between;flex-wrap:wrap;gap:8px' },
+          el('b', { text: 'Tutta la classe · ' + answered + ' risposte su ' + all }),
+          el('span', { class: 'live-legend', text: '🟢 ' + pct('ok') + '%  🟠 ' + pct('ok-help') + '%  🟤 ' + pct('ko-help') + '%  🔴 ' + pct('ko') + '%' })),
+        gb));
+      const list = el('div', { class: 'live-list' });
+      m.students.slice().sort(function (x, y) { return x.name.localeCompare(y.name, 'it'); }).forEach(function (st) {
+        const bar = el('div', { class: 'live-bar' });
+        m.exercises.forEach(function (e) { bar.appendChild(el('span', { class: 'seg ' + st.cells[e.id].state })); });
+        list.appendChild(el('div', { class: 'live-row' + (st.finished ? ' fin' : '') },
+          el('div', { class: 'live-name', text: st.name }), bar,
+          el('div', { class: 'live-score', text: (st.finished ? '✓ ' : '') + st.done + '/' + st.total })));
+      });
+      root.appendChild(list);
+      root.appendChild(el('p', { class: 'hint', text: 'Ogni barra è uno studente: un pezzo per esercizio, nell\'ordine del set (se le domande sono in ordine casuale, i pezzi si riempiono a salti). Verde giusto · arancione con aiuto · marrone sbagliato con aiuto · rosso sbagliato · grigio da fare.' }));
+      return;
+    }
     root.innerHTML = '';
     const now = Date.now();
     const fin = m.students.filter(function (s) { return s.finished; }).length;
@@ -7990,13 +8061,74 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     root.appendChild(list);
     root.appendChild(el('p', { class: 'hint', text: 'Verde = giusto · arancione = giusto con l\'aiuto · marrone = sbagliato anche con l\'aiuto · rosso = sbagliato · giallo = giusto al 2° tentativo · grigio = non ancora fatto. Si aggiorna ogni 5 secondi.' }));
   }
+  function paintLobby(be, m) {
+    const R = CLS.report, a = R.a, root = $('#rep-root');
+    const url = assignUrl(a.code);
+    const keepShuf = $('#lb-shuf') ? $('#lb-shuf').value : (a.lesson && a.lesson.shuffle ? 'random' : 'same');
+    const keepSecs = $('#lb-secs') ? $('#lb-secs').value : '0';
+    root.innerHTML = '';
+    root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
+      el('button', { class: 'small', text: '← Classi', onclick: renderClasses }),
+      el('h2', { style: 'margin:0;flex:1;min-width:200px', text: '🔴 ' + (a.title || '') + ' · sala d\'attesa' })));
+    const qr = el('div', { class: 'lobby-qr' }); qr.innerHTML = qrSvg(url);
+    const names = el('div', { class: 'lobby-names' });
+    CLS.lobbySeen = CLS.lobbySeen || {};
+    m.students.forEach(function (st) { const isNew = !CLS.lobbySeen[st.key]; CLS.lobbySeen[st.key] = 1; names.appendChild(el('span', { class: 'lobby-name' + (isNew ? ' new' : ''), text: st.name })); });   // l'animazione solo per chi è appena entrato
+    if (!m.students.length) names.appendChild(el('span', { class: 'muted', text: 'Nessuno ancora…' }));
+    root.appendChild(el('div', { class: 'lobby' },
+      el('div', { class: 'lobby-left' }, qr, el('div', { class: 'lobby-url', text: url.replace(/^https?:\/\//, '') }), el('div', { class: 'lobby-code', text: 'codice ' + a.code })),
+      el('div', { class: 'lobby-right' }, el('div', { class: 'lobby-count', text: m.students.length + (m.students.length === 1 ? ' studente dentro' : ' studenti dentro') }), names)));
+    const shuf = el('select', { id: 'lb-shuf' }, el('option', { value: 'same', text: 'Stesse domande, stesso ordine per tutti' }), el('option', { value: 'random', text: '🔀 Ordine casuale per ognuno' }));
+    shuf.value = keepShuf;
+    const secs = el('select', { id: 'lb-secs' });
+    [['0', 'Senza timer'], ['180', '3 minuti'], ['300', '5 minuti'], ['600', '10 minuti'], ['900', '15 minuti'], ['1200', '20 minuti'], ['1800', '30 minuti']].forEach(function (o) { secs.appendChild(el('option', { value: o[0], text: '⏱ ' + o[1] })); });
+    secs.value = keepSecs;
+    const go = el('button', { class: 'primary big', text: '▶ Via!' });
+    go.addEventListener('click', function () {
+      const n = +secs.value || 0;
+      go.disabled = true;
+      liveSet(be, { state: 'run', shuffle: shuf.value === 'random', secs: n, started_at: new Date().toISOString(), ends_at: n ? new Date(Date.now() + n * 1000).toISOString() : null });
+    });
+    root.appendChild(el('div', { class: 'row lobby-ctrl', style: 'gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px' }, shuf, secs, go));
+    root.appendChild(el('p', { class: 'hint', text: 'I nomi compaiono da soli (ogni 3 secondi). Gli studenti aspettano sul telefono finché non premi "Via!".' }));
+  }
+  /** v131 SCHERMO DOCENTE (secondo schermo): segue la domanda proiettata nella correzione di gruppo (BroadcastChannel,
+   *  stesso browser: altra finestra o altro monitor) e mostra chi chiamare e cosa ha scritto. I nomi sul proiettore
+   *  restano nascosti. */
+  let FIXCH = null;
+  function fixChannel() { if (!FIXCH && window.BroadcastChannel) FIXCH = new BroadcastChannel('pl-fix'); return FIXCH; }
+  function paintTeacherScreen(be, m) {
+    const R = CLS.report, a = R.a, root = $('#rep-root');
+    const ch = fixChannel();
+    if (ch && !ch._hooked) { ch._hooked = true; ch.onmessage = function (ev) { const d = ev.data || {}; if (CLS.report && CLS.report.a && d.id === CLS.report.a.id) { CLS.teacherSel = d; if (CLS.repMode === 'teacher') paintReport(be); } }; }
+    root.innerHTML = '';
+    root.appendChild(el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;align-items:center' },
+      el('h2', { style: 'margin:0;flex:1', text: '🖥 Schermo docente · ' + (a.title || '') }),
+      el('button', { class: 'small', text: '📊 Tabella', onclick: function () { CLS.repMode = 'table'; paintReport(be); } })));
+    const sel = CLS.teacherSel;
+    const e = sel && m.exercises.find(function (x) { return x.id === sel.ex; });
+    if (!e) { root.appendChild(el('p', { class: 'muted', text: 'Apri la correzione di gruppo sullo schermo proiettato: qui compare da solo chi ha sbagliato la domanda che stai mostrando.' })); return; }
+    root.appendChild(el('div', { class: 'fix-n', style: 'margin-top:10px', text: 'Esercizio ' + e.n + ' · ' + e.label }));
+    root.appendChild(el('div', { class: 'tq-q', text: e.prompt || e.sentence }));
+    root.appendChild(el('div', { class: 'tq-sol', text: '✓ ' + e.solution }));
+    const rows = m.students.map(function (st) { return { st: st, c: st.cells[e.id] }; });
+    const order = { 'ko': 0, 'ko-help': 1, 'ok-late': 2, 'ok-help': 3, none: 4, ok: 5 };
+    rows.sort(function (x, y) { return order[x.c.state] - order[y.c.state] || x.st.name.localeCompare(y.st.name, 'it'); });
+    const label = { ko: '🔴 sbagliato', 'ko-help': '🟤 sbagliato con aiuto', 'ok-late': '🟡 giusto al 2°', 'ok-help': '🟠 giusto con aiuto', none: '⚪ non fatto', ok: '🟢 giusto' };
+    const tb = el('div', { class: 'tq-list' });
+    rows.forEach(function (r) {
+      const wrong = r.c.tries.filter(function (t) { return !t.ok; }).map(function (t) { return t.a; });
+      tb.appendChild(el('div', { class: 'tq-row ' + r.c.state }, el('b', { text: r.st.name }), el('span', { text: label[r.c.state] }), el('span', { class: 'tq-ans', text: wrong.join('  ·  ') })));
+    });
+    root.appendChild(tb);
+  }
   /** v129 CORREZIONE DI GRUPPO ("alla fine voglio poter fare una correzione di gruppo in modo che posso chiamare gli
    *  studenti che hanno sbagliato e farli riprovare"): una domanda alla volta, proiettata SENZA soluzione; sotto, chi
    *  l'ha sbagliata (nomi da chiamare) e, cliccando un nome, cosa ha scritto. "Mostra la soluzione" quando si vuole.
    *  Di default solo le domande con almeno un errore, dalla più sbagliata. */
   function paintFix(be, m) {
     const R = CLS.report, a = R.a, root = $('#rep-root');
-    R.fix = R.fix || { onlyErr: true, i: 0, show: false, who: null };
+    R.fix = R.fix || { onlyErr: true, i: 0, show: false, who: null, names: false };
     const F = R.fix;
     root.innerHTML = '';
     const stat = m.exercises.map(function (e, k) {
@@ -8010,10 +8142,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       el('button', { class: 'small', text: '← Tabella', onclick: function () { CLS.repMode = 'table'; paintReport(be); } }),
       el('h2', { style: 'margin:0;flex:1;min-width:200px', text: '👥 Correzione · ' + (a.title || '') }),
       el('label', { class: 'chip', style: 'margin:0' }, only, ' solo le domande con errori (dalla più sbagliata)'),
+      el('button', { class: 'small', text: '🖥 Schermo docente', title: 'Apri in un\'altra finestra (sul portatile o sul secondo monitor): segue la domanda proiettata e ti dice chi ha sbagliato e cosa ha scritto', onclick: function () { window.open(location.pathname + location.search + '#rep=' + a.id + '&m=teacher', 'pl-teacher'); } }),
       el('button', { class: 'small', text: '🔴 LIVE', onclick: function () { CLS.repMode = 'live'; paintReport(be); } })));
     if (!list.length) { root.appendChild(el('p', { class: 'notice ok', text: m.students.length ? 'Nessun errore da correggere: tutti giusti al primo colpo! 🎉' : 'Nessuno ha ancora fatto il compito.' })); return; }
     F.i = Math.max(0, Math.min(F.i, list.length - 1));
     const x = list[F.i], e = x.e;
+    const ch = fixChannel(); if (ch) ch.postMessage({ id: a.id, ex: e.id, show: F.show });   // v131: lo schermo docente segue
     const card = el('div', { class: 'fix-card' });
     card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;gap:8px' },
       el('div', { class: 'fix-n', text: 'Esercizio ' + e.n + ' · ' + e.label }),
@@ -8023,7 +8157,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (F.show) { solBox.appendChild(el('div', { text: '✓ ' + e.solution })); if (e.explain) solBox.appendChild(el('div', { class: 'fix-exp', text: e.explain })); }
     card.appendChild(solBox);
     const who = el('div', { class: 'fix-who' });
-    who.appendChild(el('div', { class: 'meta', text: x.wrong.length ? 'Da chiamare (' + x.wrong.length + '): clicca un nome per vedere cosa ha scritto' : 'Tutti giusti al primo colpo' }));
+    const namesBox = el('input', { type: 'checkbox' }); namesBox.checked = !!F.names;
+    namesBox.addEventListener('change', function () { F.names = namesBox.checked; paintReport(be); });
+    who.appendChild(el('div', { class: 'row', style: 'gap:10px;align-items:center;flex-wrap:wrap' },
+      el('span', { class: 'meta', text: x.wrong.length ? x.wrong.length + (x.wrong.length === 1 ? ' studente ha' : ' studenti hanno') + ' sbagliato o avuto bisogno dell\'aiuto' : 'Tutti giusti al primo colpo' }),
+      x.wrong.length ? el('label', { class: 'chip', style: 'margin:0' }, namesBox, ' mostra i nomi qui') : null));
+    if (!F.names) x.wrong = [];   // v131: di default i nomi NON vanno sul proiettore (li hai sullo schermo docente)
     const chips = el('div', { class: 'chips' });
     x.wrong.forEach(function (s) {
       const c = s.cells[e.id];
@@ -8097,6 +8236,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       try { localStorage.setItem('vle.studentName', name); } catch (e) { /* ignora */ }
       S.assign = { be: be, code: a.code, id: VLClass.uuid(), name: name, detail: {}, lesson: a.lesson, status: null, timer: null, err: '' };
       assignSend(false);
+      if (a.live && a.live.state) return liveStudent(be, a);   // v131: sessione dal vivo (sala d'attesa)
       if (VLClass.isSet(a.lesson)) return playAssignSet(a);   // v126: esercitazione senza video
       openStudent(null, false, a.lesson);
     };
@@ -8113,10 +8253,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /** v126: esercitazione senza video (set di esercizi) fatta come compito. Un esercizio alla volta; se la risposta
    *  è sbagliata si riprova UNA volta, poi si vede la soluzione (con la spiegazione dell'autore, se c'è). Ogni risposta
    *  data finisce nel report (stesso registro delle video-lezioni: S.assign.detail[item.id].tries). */
-  function playAssignSet(a) {
+  function playAssignSet(a, LV) {
     // v129: ordine casuale per studente (e per tentativo); il report resta nell'ordine del docente (si lavora per id)
     let items = ((a.lesson.chal && a.lesson.chal.items) || []).slice();
-    if (a.lesson.shuffle) items = VLChal.shuffleArr(items, Math.random);
+    const live = LV && LV.live;
+    const shuffleOn = !!(a.lesson.shuffle || (live && live.shuffle));
+    if (shuffleOn) items = VLChal.shuffleArr(items, Math.random);
+    let over = false;   // v131: tempo scaduto o fermato dal docente
     const box = $('#as-box');
     const T = asgT(a.lesson);
     $('#view-assign').classList.add('as-set');
@@ -8150,6 +8293,27 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (item.kind === 'match') return (pub.left || []).map(function (l, k) { return l + ' → ' + (v[k] === -1 || v[k] == null ? '?' : pub.right[v[k]]); }).join(' · ');
       return VLClass.answerText({ type: item.kind, data: item.data }, v);
     };
+    // v131: timer della sessione dal vivo e controllo "fermato dal docente" ogni 4 s
+    clearInterval(S.liveTick); clearInterval(S.livePoll);
+    const endNow = function (why) {
+      if (over) return; over = true;
+      clearInterval(S.liveTick); clearInterval(S.livePoll);
+      box.innerHTML = '';
+      box.appendChild(el('div', { class: 'notice', style: 'font-weight:700;font-size:18px', text: why }));
+      finish();
+    };
+    if (live && live.ends_at) {
+      S.liveTick = setInterval(function () {
+        const left = Date.parse(live.ends_at) - (Date.now() + (LV.off || 0));
+        const n = $('#as-clock'); if (n) { n.textContent = '⏱ ' + fmtClock(left); n.classList.toggle('low', left < 60000); }
+        if (left <= 0) endNow(T.timeUp);
+      }, 500);
+    }
+    if (live && LV.be && LV.be.getLive) {
+      S.livePoll = setInterval(function () {
+        LV.be.getLive(a.code).then(function (r) { if (r && r.live && r.live.state === 'end') endNow(T.stopped); }, function () { /* riprova */ });
+      }, 4000);
+    }
     const head = function () {
       const bar = el('div', { class: 'as-dots' });
       items.forEach(function (it, k) {
@@ -8158,12 +8322,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       return el('div', {}, el('div', { class: 'row', style: 'justify-content:space-between;align-items:baseline;gap:8px' },
         el('h2', { style: 'margin:0;font-size:18px', text: a.title || 'Esercitazione' }),
+        live && live.ends_at ? el('span', { id: 'as-clock', class: 'as-clock', text: '⏱ ' + fmtClock(Date.parse(live.ends_at) - (Date.now() + (LV.off || 0))) }) : null,
         el('span', { class: 'badge', text: Math.min(i + 1, items.length) + (a.lesson.uiLang === 'en' ? ' of ' : ' di ') + items.length })), bar);
     };
     const INSTR = T.i;
     const step = function () {
+      if (over) return;
       box.innerHTML = '';
-      if (i >= items.length) return finish();
+      if (i >= items.length) { clearInterval(S.liveTick); clearInterval(S.livePoll); over = true; return finish(); }
       const item = items[i];
       const cell = assignCell({ id: item.id, type: item.kind });
       box.appendChild(head());
@@ -8233,9 +8399,34 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('div', { class: 'as-sol', text: T.correct + VLChal.solutionText(it) }));
         })));
       }
-      box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: T.again, onclick: function () { assignNewAttempt(); if (a.lesson.shuffle) items = VLChal.shuffleArr(items, Math.random); i = 0; step(); } })));
+      if (!live) box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: T.again, onclick: function () { assignNewAttempt(); if (shuffleOn) items = VLChal.shuffleArr(items, Math.random); i = 0; over = false; step(); } })));
     };
     step();
+  }
+  /** v131: studente in una sessione dal vivo. Sala d'attesa finché il docente non preme "Via" (get_live ogni 2 s, leggero),
+   *  poi il quiz con l'ordine e il timer scelti dal docente. L'ora del server (now) corregge l'orologio del telefono. */
+  function liveStudent(be, a) {
+    const T = asgT(a.lesson);
+    const box = $('#as-box');
+    const off = a.now ? Date.parse(a.now) - Date.now() : 0;
+    const begin = function (live) {
+      clearInterval(S.liveWait);
+      if (live.state === 'end') { box.innerHTML = ''; box.appendChild(el('div', { class: 'notice', text: T.ended })); return; }
+      playAssignSet(a, { live: live, off: off, be: be });
+    };
+    if (a.live.state !== 'lobby') return begin(a.live);
+    box.innerHTML = '';
+    box.appendChild(el('div', { class: 'as-wait' },
+      el('div', { class: 'big', text: T.waitTitle }),
+      el('div', { class: 'as-wait-name', text: S.assign.name }),
+      el('div', { class: 'hint', text: T.waitMsg }),
+      el('div', { class: 'as-wait-dots' }, el('span'), el('span'), el('span'))));
+    clearInterval(S.liveWait);
+    S.liveWait = setInterval(function () {
+      (be.getLive ? be.getLive(a.code) : be.getAssignment(a.code)).then(function (r) {
+        if (r && r.live && r.live.state && r.live.state !== 'lobby') begin(r.live);
+      }, function () { /* rete ballerina: si riprova al giro dopo */ });
+    }, 2000);
   }
   function assignCell(ex) {
     const d = S.assign.detail;
@@ -8317,6 +8508,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const pin = h.slice(3).trim().toUpperCase();
       if (VLChal.validPin(pin)) { S.standalone = true; return openChalPlay(pin); }
       toast('PIN della sfida non valido');
+    }
+    if (h.indexOf('#rep=') === 0) {   // v131: schermo docente in un'altra finestra (serve l'accesso: si aspetta il cloud)
+      const pr = new URLSearchParams(h.slice(1));
+      const rid = pr.get('rep'), rm = pr.get('m') || 'table';
+      history.replaceState(null, '', location.pathname + location.search);
+      let tries = 0;
+      const wait = function () { if (classBackend() || tries++ > 20) return renderReport(rid, rm); setTimeout(wait, 400); };
+      renderHome();
+      return setTimeout(wait, 300);
     }
     if (h.indexOf('#a=') === 0) {   // v125: compito assegnato a una classe (lo studente scrive il nome, i risultati vanno al docente)
       S.standalone = true;
