@@ -7638,12 +7638,158 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!CLOUD.client || !CLOUD.user) return null;
     return VLClass.supabaseBackend(CLOUD.client);
   }
-  function studentBackend(cb) {
-    if (S.mock) return cb(VLClass.memoryBackend(localStorage));
+  /** v132 PROFILO STUDENTE. Un client Supabase SUO (storageKey 'pl-student', sessione salvata), separato da quello del
+   *  docente: sullo stesso browser non si pestano i piedi. Senza accesso è anonimo come prima; con l'accesso i risultati
+   *  prendono user_id (submit_result usa auth.uid()). In ?mock=1 l'accesso è finto (codice 123456). */
+  const STU = { client: null, user: null, ready: false };
+  function stuClient(cb) {
+    if (S.mock) {
+      let u = null; try { u = JSON.parse(localStorage.getItem('vle.mockStudent') || 'null'); } catch (e) { /* ignora */ }
+      STU.user = u; STU.ready = true; return cb(null);
+    }
+    if (STU.client) return cb(STU.client);
     loadSupaLib(function (ok) {
       if (!ok) return cb(null);
-      const client = window.supabase.createClient(VLSync.CONFIG.url, VLSync.CONFIG.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      STU.client = window.supabase.createClient(VLSync.CONFIG.url, VLSync.CONFIG.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'pl-student' } });
+      STU.client.auth.getSession().then(function (r) { STU.user = r && r.data && r.data.session ? r.data.session.user : null; STU.ready = true; cb(STU.client); }, function () { STU.ready = true; cb(STU.client); });
+    });
+  }
+  function studentBackend(cb) {
+    stuClient(function (client) {
+      if (S.mock) return cb(VLClass.memoryBackend(localStorage, null, STU.user && STU.user.id));
+      if (!client) return cb(null);
       cb(VLClass.supabaseBackend(client));
+    });
+  }
+  function stuName(u) { return (u && u.user_metadata && (u.user_metadata.name || u.user_metadata.full_name)) || ''; }
+  function myAttempts() { try { return JSON.parse(localStorage.getItem('vle.myAttempts') || '[]'); } catch (e) { return []; } }
+  function rememberAttempt(id, code) {
+    try { const l = myAttempts().filter(function (x) { return x.id !== id; }); l.push({ id: id, code: code, at: Date.now() }); localStorage.setItem('vle.myAttempts', JSON.stringify(l.slice(-200))); } catch (e) { /* ignora */ }
+  }
+  /** Riquadro di accesso dello studente: email → codice → dentro. Al primo accesso chiede anche nome e cognome. */
+  function stuLoginBox(T, onDone) {
+    const box = el('div', { class: 'stu-login' });
+    const nameIn = el('input', { type: 'text', placeholder: T.yourName, autocomplete: 'name', maxlength: '80' });
+    let saved = ''; try { saved = localStorage.getItem('vle.studentName') || ''; } catch (e) { /* ignora */ }
+    nameIn.value = saved;
+    const mailIn = el('input', { type: 'email', placeholder: T.email, autocomplete: 'email', inputmode: 'email' });
+    const codeIn = el('input', { type: 'text', placeholder: T.code, inputmode: 'numeric', autocomplete: 'one-time-code', style: 'display:none;letter-spacing:.2em;font-size:20px' });
+    const msg = el('div', { class: 'hint' });
+    const go = el('button', { class: 'primary', text: T.sendCode });
+    let step = 'email';
+    const done = function (user) {
+      STU.user = user;
+      const ids = myAttempts().map(function (x) { return x.id; });
+      studentBackend(function (be) {
+        const fin = function (n) { if (n) toast(T.linked.split('{n}').join(n), 5000); onDone(); };
+        if (be && be.claimResults && ids.length) be.claimResults(ids).then(fin, function () { fin(0); }); else fin(0);
+      });
+    };
+    go.addEventListener('click', function () {
+      const email = mailIn.value.trim();
+      if (step === 'email') {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { mailIn.focus(); return; }
+        go.disabled = true;
+        const after = function () { step = 'code'; go.disabled = false; go.textContent = T.enter; codeIn.style.display = ''; codeIn.focus(); msg.textContent = T.codeSent.split('{e}').join(email); };
+        if (S.mock) return after();
+        stuClient(function (c) {
+          if (!c) { go.disabled = false; msg.textContent = 'Offline'; return; }
+          c.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true, data: { name: VLClass.cleanName(nameIn.value) } } })
+            .then(function (r) { if (r.error) { go.disabled = false; msg.textContent = r.error.message; return; } after(); });
+        });
+        return;
+      }
+      const token = codeIn.value.replace(/\D/g, '');
+      if (token.length < 6) { codeIn.focus(); return; }
+      go.disabled = true;
+      if (S.mock) {
+        if (token !== '123456') { go.disabled = false; msg.textContent = T.badCode; return; }
+        const u = { id: 'mock-' + email, email: email, user_metadata: { name: VLClass.cleanName(nameIn.value) } };
+        localStorage.setItem('vle.mockStudent', JSON.stringify(u));
+        return done(u);
+      }
+      STU.client.auth.verifyOtp({ email: email, token: token, type: 'email' }).then(function (r) {
+        if (r.error || !r.data || !r.data.user) { go.disabled = false; msg.textContent = T.badCode; return; }
+        let u = r.data.user;
+        const nm = VLClass.cleanName(nameIn.value);
+        if (nm && !stuName(u)) STU.client.auth.updateUser({ data: { name: nm } }).then(function () { /* ok */ });
+        if (nm && !stuName(u)) u = Object.assign({}, u, { user_metadata: Object.assign({}, u.user_metadata, { name: nm }) });
+        done(u);
+      });
+    });
+    [mailIn, codeIn].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') go.click(); }); });
+    box.appendChild(nameIn); box.appendChild(mailIn); box.appendChild(codeIn);
+    box.appendChild(el('div', { class: 'row', style: 'margin-top:8px' }, go)); box.appendChild(msg);
+    return box;
+  }
+  function stuLogout(then) {
+    if (S.mock) { localStorage.removeItem('vle.mockStudent'); STU.user = null; return then(); }
+    stuClient(function (c) { if (!c) return then(); c.auth.signOut().then(function () { STU.user = null; then(); }, function () { STU.user = null; then(); }); });
+  }
+  /** "I miei compiti" (#me): elenco dei compiti collegati al profilo, con "Rivedi" (errori e soluzioni) e "Rifai". */
+  function openMine() {
+    document.body.classList.add('standalone');
+    S.standalone = true;
+    show('assign');
+    $('#view-assign').classList.add('as-set');
+    let lang = 'it'; try { lang = localStorage.getItem('vle.stuLang') || 'it'; } catch (e) { /* ignora */ }
+    const T = ASG_T[lang] || ASG_T.it;
+    const box = $('#as-box'); box.innerHTML = '';
+    box.appendChild(el('p', { class: 'hint', text: '…' }));
+    studentBackend(function (be) {
+      box.innerHTML = '';
+      box.appendChild(el('h2', { style: 'margin-top:0', text: T.me }));
+      if (!be) return box.appendChild(el('div', { class: 'notice bad', text: 'Offline' }));
+      if (!STU.user) {
+        box.appendChild(el('p', { class: 'hint', text: T.meSub }));
+        box.appendChild(stuLoginBox(T, openMine));
+        return;
+      }
+      box.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;gap:8px;flex-wrap:wrap' },
+        el('span', { class: 'meta', text: T.signedAs.split('{e}').join(stuName(STU.user) || STU.user.email) }),
+        el('button', { class: 'small', text: T.logout, onclick: function () { stuLogout(openMine); } })));
+      const list = el('div', { class: 'me-list' }, el('p', { class: 'hint', text: '…' }));
+      box.appendChild(list);
+      be.myResults().then(function (rows) {
+        list.innerHTML = '';
+        // un compito può essere stato fatto più volte: si mostra il tentativo che vale (VLClass.pickAttempt)
+        const byCode = {};
+        (rows || []).forEach(function (r) { (byCode[r.code] = byCode[r.code] || []).push(r); });
+        const codes = Object.keys(byCode);
+        if (!codes.length) { list.appendChild(el('p', { class: 'muted', text: T.none })); return; }
+        codes.map(function (c) { return VLClass.pickAttempt(byCode[c]); }).sort(function (a, b) { return String(b.updated_at).localeCompare(String(a.updated_at)); }).forEach(function (r) {
+          const m = VLClass.reportMatrix(r.lesson, [r]);
+          const st = m.students[0];
+          const dots = el('div', { class: 'live-dots' });
+          m.exercises.forEach(function (e) { dots.appendChild(el('span', { class: 'ld ' + st.cells[e.id].state })); });
+          const card = el('div', { class: 'me-card' },
+            el('div', { class: 'row', style: 'justify-content:space-between;gap:8px' },
+              el('b', { text: r.title || '—' }), el('span', { class: 'badge', text: r.score + '/' + r.total })),
+            el('div', { class: 'meta', text: (r.className ? r.className + ' · ' : '') + fmtDate(r.updated_at) + ' · ' + (r.finished ? T.done2 : T.inProgress) }),
+            dots);
+          const rev = el('div', { class: 'me-rev', style: 'display:none' });
+          const acts = el('div', { class: 'row', style: 'gap:6px;margin-top:6px' },
+            el('button', { class: 'small primary', text: T.review2, onclick: function () {
+              if (rev.style.display === 'none') {
+                rev.innerHTML = '';
+                m.exercises.forEach(function (e) {
+                  const c = st.cells[e.id];
+                  if (c.state === 'ok') return;
+                  const wrong = c.tries.filter(function (t) { return !t.ok; }).map(function (t) { return t.a; });
+                  rev.appendChild(el('div', { class: 'me-item ' + c.state },
+                    el('div', { text: e.n + '. ' + (e.prompt || e.sentence).split('\n')[0] }),
+                    wrong.length ? el('div', { class: 'meta', text: T.youWrote + wrong.join(' · ') }) : null,
+                    el('div', { class: 'as-sol', text: T.correct + e.solution })));
+                });
+                if (!rev.childNodes.length) rev.appendChild(el('div', { class: 'as-sol', text: T.ok }));
+                rev.style.display = '';
+              } else rev.style.display = 'none';
+            } }),
+            r.open && r.kind !== 'live' ? el('a', { class: 'small btn-link', href: '#a=' + r.code, text: T.redo, onclick: function (ev) { ev.preventDefault(); openAssignmentStudent(r.code); } }) : null);
+          card.appendChild(acts); card.appendChild(rev);
+          list.appendChild(card);
+        });
+      }, function (e) { list.innerHTML = ''; list.appendChild(el('div', { class: 'notice bad', text: e.message })); });
     });
   }
   function assignUrl(code) { return location.origin + location.pathname + '#a=' + code; }
@@ -7765,20 +7911,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
    *  lingua dell'interfaccia DELLO STUDENTE nei compiti (nome, istruzioni, correzione, riepilogo, invio). La sceglie il
    *  docente nel dialogo Assegna; si salva sulla lezione (ls.studentLang) e viaggia nel compito (lesson.uiLang). */
   const ASG_T = {
-    it: { name: 'Il tuo nome e cognome', namePh: 'Nome e cognome', privacy: 'Il tuo nome e le tue risposte li vede solo il docente. Nessun account, nessuna email.', start: 'Inizia ▶', exercises: 'esercizi', needName: 'Scrivi nome e cognome',
+    it: { name: 'Il tuo nome e cognome', namePh: 'Nome e cognome', privacy: 'Il tuo nome e le tue risposte li vede solo il docente. Non serve un account.', start: 'Inizia ▶', exercises: 'esercizi', needName: 'Scrivi nome e cognome',
       check: 'Controlla', retry: '✗ Non è giusto: riprova.', almost: '✗ Quasi ({p}% giusto): riprova.', ok: '✓ Giusto!', okLate: '✓ Giusto al secondo tentativo', wrong: '✗ Sbagliato', solution: 'Soluzione: ', next: 'Avanti ▶', result: 'Vedi il risultato ▶',
       review: 'Da ripassare', youWrote: 'Hai scritto: ', correct: 'Giusto: ', again: '↻ Rifai da capo', accents: ' Attenzione agli accenti (è ≠ e).', answerFirst: 'Prima rispondi', wrongPh: 'Scrivi la parola giusta', missPh: 'La parola che manca', scrHint: 'Tocca le parole qui sotto nell’ordine giusto',
       hint: '💡 Aiuto', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
       hExtraA: 'La parola in più è nella prima metà della frase', hExtraB: 'La parola in più è nella seconda metà della frase', hScr: 'La frase comincia con «{w}»', hMatch: 'Una coppia giusta: {w}', hMc: 'Ho tolto {n} risposte sbagliate', okHelp: '✓ Giusto, con l\'aiuto', koHelp: '✗ Sbagliato anche con l\'aiuto',
+      me: '📚 I miei compiti', meSub: 'Entra con la tua email: ritrovi i compiti fatti e gli errori da ripassare, dal telefono o dal PC.', meOpt: '👤 Entra per ritrovare i tuoi compiti (facoltativo)', signedAs: 'Collegato come {e}', logout: 'Esci', email: 'La tua email', sendCode: 'Inviami il codice', codeSent: 'Ti ho mandato un codice a {e}: scrivilo qui (guarda anche nello spam).', code: 'Codice', enter: 'Entra', badCode: 'Codice sbagliato o scaduto', none: 'Non hai ancora compiti collegati al tuo profilo.', review2: 'Rivedi', redo: 'Rifai', done2: 'consegnato', inProgress: 'in corso', yourName: 'Nome e cognome', backList: '← I miei compiti', linked: '{n} compiti fatti su questo dispositivo collegati al tuo profilo',
       waitTitle: 'Sei dentro! ✓', waitMsg: 'Aspetta: il quiz parte quando lo dice il docente…', ended: 'La sessione è finita: il docente ha chiuso il quiz.', timeUp: '⏰ Tempo scaduto!', stopped: '⏹ Il docente ha fermato il quiz.',
       done: '✓ Consegnato: il docente vede i tuoi risultati ({n}).', closed: 'Il docente ha chiuso questo compito: i risultati non sono stati inviati.', notSent: 'Non inviato ({e}). ', resend: 'Riprova', sending: 'Invio dei risultati al docente…',
       k: { gap: 'Completa gli spazi', gapbank: 'Completa con le parole', mc: 'Scelta multipla', scramble: 'Riordina la frase', extra: 'Trova la parola in più', missing: 'Trova la parola mancante', wrong: 'Trova la parola sbagliata', match: 'Abbina le coppie' },
       i: { gap: 'Scrivi la parola che manca.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' } },
-    en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. No account, no email.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
+    en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. You don\'t need an account.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
       check: 'Check', retry: '✗ Not quite: try again.', almost: '✗ Almost ({p}% right): try again.', ok: '✓ Correct!', okLate: '✓ Correct on the second try', wrong: '✗ Wrong', solution: 'Answer: ', next: 'Next ▶', result: 'See your result ▶',
       review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
       hint: '💡 Hint', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
       hExtraA: 'The extra word is in the first half of the sentence', hExtraB: 'The extra word is in the second half of the sentence', hScr: 'The sentence starts with «{w}»', hMatch: 'One right pair: {w}', hMc: 'I removed {n} wrong answers', okHelp: '✓ Correct, with the hint', koHelp: '✗ Wrong, even with the hint',
+      me: '📚 My assignments', meSub: 'Sign in with your email: find the assignments you did and the mistakes to review, on your phone or computer.', meOpt: '👤 Sign in to keep your assignments (optional)', signedAs: 'Signed in as {e}', logout: 'Sign out', email: 'Your email', sendCode: 'Send me the code', codeSent: 'We sent a code to {e}: type it here (check your spam folder too).', code: 'Code', enter: 'Sign in', badCode: 'Wrong or expired code', none: 'No assignments linked to your profile yet.', review2: 'Review', redo: 'Do it again', done2: 'submitted', inProgress: 'in progress', yourName: 'First and last name', backList: '← My assignments', linked: '{n} assignments done on this device linked to your profile',
       waitTitle: 'You\'re in! ✓', waitMsg: 'Wait: the quiz starts when your teacher says so…', ended: 'The session is over: your teacher closed the quiz.', timeUp: '⏰ Time\'s up!', stopped: '⏹ Your teacher stopped the quiz.',
       done: '✓ Submitted: your teacher can see your results ({n}).', closed: 'Your teacher has closed this assignment: your results were not sent.', notSent: 'Not sent ({e}). ', resend: 'Try again', sending: 'Sending your results to your teacher…',
       k: { gap: 'Fill in the gaps', gapbank: 'Fill in with the words', mc: 'Multiple choice', scramble: 'Put the sentence in order', extra: 'Find the extra word', missing: 'Find the missing word', wrong: 'Find the wrong word', match: 'Match the pairs' },
@@ -8248,6 +8396,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     box.appendChild(inp);
     box.appendChild(el('p', { class: 'hint', text: T.privacy }));
     box.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, go));
+    // v132: profilo facoltativo
+    if (STU.user) {
+      if (stuName(STU.user) && !inp.value) inp.value = stuName(STU.user);
+      box.appendChild(el('p', { class: 'meta', text: T.signedAs.split('{e}').join(stuName(STU.user) || STU.user.email) + ' · ' }, el('a', { href: '#me', text: T.me, onclick: function (ev) { ev.preventDefault(); openMine(); } })));
+    } else {
+      const lg = el('div', { style: 'display:none' });
+      box.appendChild(el('p', { class: 'meta' }, el('a', { href: '#', text: T.meOpt, onclick: function (ev) { ev.preventDefault(); lg.style.display = lg.style.display === 'none' ? '' : 'none'; } })));
+      lg.appendChild(stuLoginBox(T, function () { studentBackend(function (be2) { renderAssignStart(be2, a); }); }));
+      box.appendChild(lg);
+    }
     setTimeout(function () { inp.focus(); }, 50);
   }
   /** v126: esercitazione senza video (set di esercizi) fatta come compito. Un esercizio alla volta; se la risposta
@@ -8399,6 +8557,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('div', { class: 'as-sol', text: T.correct + VLChal.solutionText(it) }));
         })));
       }
+      box.appendChild(el('p', { style: 'margin-top:12px' }, el('a', { href: '#me', text: T.me + (STU.user ? '' : ' · ' + T.meOpt.replace(/^👤 /, '')), onclick: function (ev) { ev.preventDefault(); openMine(); } })));
       if (!live) box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: T.again, onclick: function () { assignNewAttempt(); if (shuffleOn) items = VLChal.shuffleArr(items, Math.random); i = 0; over = false; step(); } })));
     };
     step();
@@ -8446,6 +8605,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   function assignSend(finished) {
     const A = S.assign; if (!A) return Promise.resolve(false);
+    rememberAttempt(A.id, A.code);   // v132: per collegarlo al profilo se lo studente entra dopo
+    try { localStorage.setItem('vle.stuLang', (A.lesson && A.lesson.uiLang) || 'it'); } catch (e) { /* ignora */ }
     const sc = VLClass.scoreOf(A.lesson, A.detail);
     if (finished) A.status = 'sending';
     paintAssignStatus();
@@ -8518,6 +8679,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       renderHome();
       return setTimeout(wait, 300);
     }
+    if (h === '#me' || h.indexOf('#me') === 0 && h.length === 3) { return openMine(); }   // v132: "I miei compiti" dello studente
     if (h.indexOf('#a=') === 0) {   // v125: compito assegnato a una classe (lo studente scrive il nome, i risultati vanno al docente)
       S.standalone = true;
       return openAssignmentStudent(decodeURIComponent(h.slice(3)));

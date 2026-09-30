@@ -1,5 +1,26 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- PROFILO STUDENTE "I MIEI COMPITI" + LIMITI EMAIL (v132, 30/9). Edoardo: "lo studente può creare un profilo così si
+  ritrova le cose che ha fatto?" + "colleghiamo resend, così anche 30 studenti a sera possono creare profilo, se vogliono
+  entrare da cell o da pc è una scelta loro". SCOPERTA: Resend era GIÀ collegato dal 19/9: account Resend = login Google
+  di Edoardo (edoardodesantislnd), dominio send.pauselearn.com Verified, chiave "pauselearn"; su Supabase (pauselearn)
+  Custom SMTP acceso: smtp.resend.com:465, user resend, mittente no-reply@send.pauselearn.com "PauseLearn". Esiste anche
+  un SECONDO account Resend (edoardo@pauselearn.com, creato il 30/9) con una richiesta "Not Started" sullo stesso dominio:
+  NON aggiungere il TXT di verifica, sposterebbe il dominio e romperebbe le email. Rate limits Auth alzati il 30/9:
+  email 30→100/h, verifiche OTP 30→100 e sign-in/sign-up 30→100 (per 5 min per IP: in aula tutti escono dallo stesso IP).
+  DATABASE (sql/2026-09-30-profilo-studente.sql, eseguito): results.user_id (auth.users, null = anonimo);
+  submit_result scrive user_id = auth.uid() (coalesce: non si sovrascrive); my_results() (authenticated) = i risultati
+  dello studente con titolo, classe, codice e LEZIONE (per rivedere); claim_results(uuid[]) collega i tentativi fatti su
+  quel dispositivo prima di entrare (id = uuid casuali del suo browser, localStorage vle.myAttempts). APP: client
+  Supabase SEPARATO per lo studente (STU, storageKey 'pl-student', sessione salvata) = non tocca la sessione del docente;
+  studentBackend lo usa sempre (anonimo o collegato). Accesso studente (stuLoginBox): nome, email → codice (signInWithOtp
+  con data.name; verifyOtp) → claim dei tentativi. Schermata del nome: "👤 Entra per ritrovare i tuoi compiti
+  (facoltativo)" SOTTO "Inizia"; da collegato nome precompilato + link. Fine compito: link "📚 I miei compiti". Rotta
+  #me = openMine: elenco (un compito = il tentativo che vale, VLClass.pickAttempt), punteggio, pallini colorati,
+  "Rivedi" (esercizi non giusti al primo colpo: cosa ha scritto e la soluzione), "Rifai" se il compito è aperto e non dal
+  vivo, "Esci". Lingua dell'ultima esercitazione fatta (vle.stuLang). Mock: codice 123456, utente in vle.mockStudent,
+  memoryBackend(storage, key, userId). e2e locale e2e132.js ok.
+
 - SESSIONE DAL VIVO: SALA D'ATTESA, VIA, BARRE, TIMER, SCHERMO DOCENTE (v131, 30/9). Edoardo: "voglio una schermata che
   mostro il QR, mentre gli studenti entrano si vedono i nomi LIVE, poi faccio partire il quiz (stesse domande in ordine o
   random) e si vede la barra dei singoli studenti e una barra generale (media errori e giuste) con un timer (opzionale)

@@ -188,6 +188,9 @@
       // studente (anonimo)
       getAssignment: function (code) { return q(client.rpc('get_assignment', { p_code: code })); },
       getLive: function (code) { return q(client.rpc('get_live', { p_code: code })); },   // v131: stato della sessione dal vivo
+      // v132: profilo studente (client con la sessione dello studente)
+      myResults: function () { return q(client.rpc('my_results')); },
+      claimResults: function (ids) { return q(client.rpc('claim_results', { p_ids: ids })); },
       submitResult: function (r) {
         return q(client.rpc('submit_result', { p_code: r.code, p_id: r.id, p_name: r.name, p_detail: r.detail, p_score: r.score, p_total: r.total, p_finished: !!r.finished }));
       }
@@ -195,7 +198,7 @@
   }
 
   /** Backend finto con le STESSE regole del vero (compito chiuso = niente invii; un id non cambia compito). */
-  function memoryBackend(storage, key) {
+  function memoryBackend(storage, key, userId) {
     key = key || 'vle.mockClassroom';
     const load = function () { try { return JSON.parse(storage.getItem(key) || '') || null; } catch (e) { return null; } };
     const db = function () { return load() || { classes: [], assignments: [], results: [] }; };
@@ -233,6 +236,20 @@
         const c = d.classes.find(function (x) { return x.id === a.class_id; }) || {};
         return P({ code: a.code, title: a.title, kind: a.kind, open: a.open, className: c.name || '', lesson: a.open ? a.lesson : null, live: a.live || null, now: now() });
       },
+      myResults: function () {
+        const d = db();
+        return P(d.results.filter(function (r) { return userId && r.user_id === userId; }).map(function (r) {
+          const a = d.assignments.find(function (x) { return x.id === r.assignment_id; }) || {};
+          const c = d.classes.find(function (x) { return x.id === a.class_id; }) || {};
+          return Object.assign({}, r, { code: a.code, title: a.title, kind: a.kind, open: a.open, className: c.name || '', lesson: a.lesson });
+        }).sort(function (x, y) { return String(y.updated_at).localeCompare(String(x.updated_at)); }));
+      },
+      claimResults: function (ids) {
+        if (!userId) return P(0);
+        const d = db(); let n = 0;
+        d.results.forEach(function (r) { if (ids.indexOf(r.id) !== -1 && !r.user_id) { r.user_id = userId; n++; } });
+        save(d); return P(n);
+      },
       getLive: function (code) {
         const a = db().assignments.find(function (x) { return x.code === String(code || '').trim().toUpperCase(); });
         return P(a ? { open: a.open, live: a.live || null, now: now() } : null);
@@ -245,6 +262,7 @@
         const row = ex || { id: r.id, assignment_id: a.id, started_at: now(), finished: false };
         row.student_name = cleanName(r.name); row.detail = r.detail; row.score = r.score; row.total = r.total;
         row.finished = !!(row.finished || r.finished); row.updated_at = now();
+        if (!row.user_id && userId) row.user_id = userId;   // v132
         if (!ex) d.results.push(row);
         save(d); return P(true);
       }

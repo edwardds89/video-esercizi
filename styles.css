@@ -1610,3 +1610,14 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .tq-row.ko { border-left: 6px solid #e5484d; } .tq-row.ko-help { border-left: 6px solid #8b5a2b; } .tq-row.ok-help { border-left: 6px solid #f08c00; } .tq-row.ok-late { border-left: 6px solid #e0a100; } .tq-row.ok { border-left: 6px solid var(--ok, #1c7c3e); opacity: .6; }
 .tq-ans { color: #b3261e; font-weight: 600; }
 @media (max-width: 720px) { .lobby { grid-template-columns: 1fr; } .tq-row { grid-template-columns: 1fr 1fr; } .tq-ans { grid-column: 1 / -1; } }
+
+/* v132: profilo studente */
+.stu-login { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.stu-login input { font-size: 17px; padding: 10px; }
+.me-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.me-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff; }
+.me-card .live-dots { margin-top: 6px; }
+.me-rev { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.me-item { border-left: 4px solid #e5484d; padding-left: 8px; }
+.me-item.ok-help { border-color: #f08c00; } .me-item.ko-help { border-color: #8b5a2b; } .me-item.ok-late { border-color: #e0a100; } .me-item.none { border-color: #c8ced6; }
+.btn-link { display: inline-block; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; }
