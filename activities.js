@@ -11,6 +11,8 @@
   // props = elementi ICONICI fissi e ben visibili (x,y in %, s = dimensione px, r = rotazione): sono loro a "dire" il tema.
   // deco = pochi elementi animati "una volta ogni tanto" (mai un loop fitto: non devono distrarre gli studenti).
   const THEMES = [
+    // v124 (Edoardo): 'un tema white che prende lo stesso colore e font del sito, bianco con testo nero' — nessuna decorazione
+    { id: 'white', name: 'Bianco', emoji: '', deco: [], motion: 'float', props: [], sw: '#ffffff' },
     { id: 'classic', name: 'Classico', emoji: '📖', deco: [], motion: 'float', props: [], sw: 'linear-gradient(135deg,#f6f1e6,#dcd0b6)' },
     { id: 'notebook', name: 'Quaderno', emoji: '📝', deco: [], motion: 'float', props: [{ e: '✏️', x: 1, y: 80, s: 52, r: -35 }], sw: 'linear-gradient(180deg,#fdfdf6 60%,#bcd6ee)' },
     { id: 'blackboard', name: 'Lavagna', emoji: '✏️', deco: [], motion: 'float', props: [{ e: '🍎', x: 91, y: 82, s: 44 }], sw: 'linear-gradient(135deg,#33473d,#2b3d34)' },
@@ -182,6 +184,7 @@
   function decorate(rootEl, act, opts) {
     const th = THEMES.find(function (t) { return t.id === themeOf(act); });
     if (!th) return null;
+    if (opts && opts.props === false) return null;   // v124: schede Parole utili senza oggetti disegnati (solo sfondo, colori, font)
     if (th.props && th.props.length) {
       const props = h('div', { class: 'act-props', 'aria-hidden': 'true' });
       th.props.forEach(function (p) {

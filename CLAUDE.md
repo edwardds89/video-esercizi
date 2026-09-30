@@ -1,5 +1,17 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- PAROLE UTILI: TEMA BIANCO, NIENTE EMOTICON, NIENTE DECORAZIONI, FONT LEGGIBILI (v124, 29/9). Edoardo: "non mi piace che
+  usi le emoticons, toglile e poi rendi i font più leggibili, e vorrei un tema white che prende lo stesso colore e font
+  del sito, bianco con testo nero". Scelte confermate da lui: via le emoticon sia dai NOMI dei template (chip: t.name
+  senza t.emoji, in tutti e tre i selettori: parole utili, giochi in corso, scelta template attività) sia dalle
+  DECORAZIONI sulle schede Parole utili (oggetti fissi .act-props e animate .act-deco): ACT.decorate accetta
+  opts.props === false e non disegna nulla; panelTheme, vocabPreviewPanel e il retheme dal 🎨 (se rootEl è .vocab-act)
+  lo passano. I GIOCHI (Memory, Quiz, Anagramma, Ruota) tengono le decorazioni: la richiesta era sulle schede.
+  Font: Quaderno e Lavagna passano da Caveat (scrittura a mano) a Nunito; tolti i due override di font-size che
+  compensavano Caveat. Nuovo tema `white` "Bianco", PRIMO in THEMES (così è tra i 4 chip visibili): --act-* bianco/nero,
+  --act-display: var(--font) (lo stesso carattere del sito), nessun oggetto. Default per le lezioni resta Classico.
+  Test: test/act.test.js aggiornato (19 temi, Bianco per primo; decorate con props:false non disegna).
+
 - IMPORT: SCELTA MULTIPLA ISL, RISPOSTA GIUSTA DAL FLAG `right` (v123, 25/9). Scoperto importando "Come funziona
   Neuralink": ISL chiama la scelta multipla Q_MULTI_SELECT con options[{text, right}]; la v120 cercava
   correct/isCorrect e finiva sempre su correct=0 (prima opzione). Ora si legge `right`; se le risposte giuste sono

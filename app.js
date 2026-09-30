@@ -2760,7 +2760,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /** Replica FEDELE delle schede Parole utili (abbinamento) con il template: stesse classi del pannello dello studente, parole vere se ce ne sono. */
   function vocabPreviewPanel(themeId, ls) {
     const panel = el('div', { class: 'ex-panel pop vocab-act act', 'data-theme': themeId, style: 'position:relative;width:900px;height:620px;padding:44px 24px 12px;overflow:hidden;display:block;isolation:isolate;--rowh:64px;border-radius:14px' });
-    ACT.decorate(panel, { id: 'vp', theme: themeId }, { fx: true });
+    ACT.decorate(panel, { id: 'vp', theme: themeId }, { fx: false, props: false });   // v124: anteprima fedele: schede senza decorazioni
     const wrap = el('div', { class: 'vocab-wrap' });
     panel.appendChild(wrap);
     const real = ls ? cardVocab(ls) : [];
@@ -2833,7 +2833,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       vis.forEach(function (t) {
         const c = el('button', { type: 'button', class: 'theme-chip' + (current === t.id ? ' sel' : ''), title: t.name + ' — passa il mouse per l\'anteprima' },
           el('span', { class: 'sw', style: 'background:' + t.sw }),
-          t.emoji + ' ' + t.name);
+          t.name);   // v124: niente emoticon nei nomi dei template
         c.addEventListener('click', function () { hideThemePreview(); onPick(t.id); });
         c.addEventListener('mouseenter', function () { showThemePreview(c, t.id, spec); });
         c.addEventListener('mouseleave', hideThemePreview);
@@ -2862,9 +2862,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const chips = el('div', { class: 'chips' });
       ACT.THEMES.forEach(function (t) {
         const c = el('button', { type: 'button', class: 'theme-chip' + (ACT.themeOf(act) === t.id ? ' sel' : ''), title: t.name },
-          el('span', { class: 'sw', style: 'background:' + t.sw }), t.emoji + ' ' + t.name);
+          el('span', { class: 'sw', style: 'background:' + t.sw }), t.name);
         c.addEventListener('click', function () {
-          if (!ACT.retheme(rootEl, act, t.id, { fx: o.fx !== false })) return;
+          if (!ACT.retheme(rootEl, act, t.id, rootEl.classList.contains('vocab-act') ? { fx: false, props: false } : { fx: o.fx !== false })) return;
           if (o.onPick) o.onPick(t.id);
           close();
         });
@@ -3114,7 +3114,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       ACT.THEMES.forEach(function (th) {
         const item = el('button', { type: 'button', class: 'an-theme', 'data-tid': th.id, title: th.name });
         item.appendChild(themePreviewNode(th.id, 0.27, { act: { type: type, theme: th.id, data: {} } }));   // anteprima DEL TIPO scelto
-        item.appendChild(el('div', { class: 'lbl', text: th.emoji + ' ' + th.name }));
+        item.appendChild(el('div', { class: 'lbl', text: th.name }));
         item.addEventListener('click', function () { dlg.close(); themes.innerHTML = ''; onPick(type, th.id); });
         themes.appendChild(item);
       });
@@ -6207,7 +6207,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $$(':scope > .act-deco, :scope > .act-props, :scope > .act-theme-btn, :scope > .act-theme-pop', p).forEach(function (n) { n.remove(); });
     if (!th) { p.classList.remove('act', 'vocab-act'); p.removeAttribute('data-theme'); return; }
     p.classList.add('act', 'vocab-act'); p.setAttribute('data-theme', th);
-    ACT.decorate(p, { id: 'v' + (ls ? ls.id : ''), theme: th }, { fx: !ls || !ls.options || ls.options.fx !== false });
+    ACT.decorate(p, { id: 'v' + (ls ? ls.id : ''), theme: th }, { fx: false, props: false });   // v124: sulle schede niente oggetti né decorazioni
   }
   function renderVocabCard() {
     const st = S.student; const ls = st.lesson;

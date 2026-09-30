@@ -673,23 +673,30 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
   --act-display: 'Fraunces', Georgia, 'Times New Roman', serif; }
 .act[data-theme="classic"] { box-shadow: inset 0 0 0 1px #e6ddc9, inset 0 0 0 7px var(--act-bg), inset 0 0 0 8px #d8cdb2; }
 
+/* Bianco (v124) — lo stesso colore e carattere del sito: bianco, testo nero, nessuna decorazione */
+.act[data-theme="white"] { --act-bg: #ffffff; --act-ink: #111111; --act-muted: #5d6675; --act-card: #ffffff; --act-card-ink: #111111;
+  --act-line: #dfe3e8; --act-accent: #1f6feb; --act-accent-ink: #ffffff; --act-good: #1a7f37; --act-bad: #c62828;
+  --act-back: #f6f7f9; --act-back-ink: #5d6675;
+  --act-display: var(--font);
+  background: #ffffff; box-shadow: inset 0 0 0 1px #dfe3e8; }
+.act[data-theme="white"] .mchip, .act[data-theme="white"] .flashcard, .act[data-theme="white"] .mem-card { box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
 /* Quaderno — carta a righe, margine rosso, scrittura a mano: caldo e familiare per la scuola */
 .act[data-theme="notebook"] { --act-ink: #24344a; --act-muted: #7d8aa0; --act-card: #ffffff; --act-card-ink: #24344a;
   --act-line: #c8d8ea; --act-accent: #2456c9; --act-accent-ink: #fff; --act-good: #2e7d4f; --act-bad: #c9302e;
   --act-back: repeating-linear-gradient(180deg, #fdfdf6 0 9px, #cfe0f0 9px 10px); --act-back-ink: #b3452f;
-  --act-display: 'Caveat', 'Segoe Script', cursive;
+  --act-display: 'Nunito', var(--font);   /* v124: niente scrittura a mano, più leggibile */
   background:
     linear-gradient(90deg, transparent 0 56px, rgba(214,72,56,.55) 56px 58px, transparent 58px),
     repeating-linear-gradient(180deg, transparent 0 33px, rgba(90,150,205,.28) 33px 34.5px),
     #fdfdf6; }
-.act[data-theme="notebook"] .act-title, .act[data-theme="notebook"] .quiz-q { font-size: clamp(28px, 4vw, 44px); }
 .act[data-theme="notebook"] .act-stage { padding-left: clamp(70px, 8vw, 90px); }
 
 /* Lavagna — verde ardesia, aloni di gesso, cornice di legno, scrittura a mano (sobria) */
 .act[data-theme="blackboard"] { --act-ink: #f2f5f0; --act-muted: #b7c4b8; --act-card: #3a4f43; --act-card-ink: #f2f5f0;
   --act-line: rgba(255,255,255,.35); --act-accent: #f5d76e; --act-accent-ink: #33301c; --act-good: #8fd694; --act-bad: #ff9d8a;
   --act-back: linear-gradient(135deg, #3a4f43, #2e4038); --act-back-ink: #cfdacd;
-  --act-display: 'Caveat', 'Segoe Script', cursive;
+  --act-display: 'Nunito', var(--font);   /* v124: niente scrittura a mano, più leggibile */
   border: 10px solid #7d5433; border-radius: 8px;
   background:
     radial-gradient(ellipse 340px 70px at 18% 88%, rgba(255,255,255,.05), transparent 60%),
@@ -697,7 +704,6 @@ input.hinted { border-color: #d99a00; background: #fff8e1; }
     radial-gradient(ellipse 200px 50px at 45% 55%, rgba(255,255,255,.035), transparent 60%),
     linear-gradient(160deg, #33473d, #2b3d34);
   box-shadow: inset 0 0 46px rgba(0,0,0,.4); }
-.act[data-theme="blackboard"] .act-title, .act[data-theme="blackboard"] .quiz-q { letter-spacing: .4px; font-size: clamp(26px, 3.8vw, 42px); }
 .act[data-theme="blackboard"] .mem-back, .act[data-theme="blackboard"] .mem-front, .act[data-theme="blackboard"] .quiz-opt, .act[data-theme="blackboard"] .ana-tile { border: 2px dashed rgba(255,255,255,.45); box-shadow: none; }
 .act[data-theme="blackboard"] .act-stat { background: transparent; color: var(--act-ink); border: 1.5px dashed rgba(255,255,255,.4); }
 .pop.vocab-act[data-theme="blackboard"] .mchip, .pop.vocab-act[data-theme="blackboard"] .flashcard .face { border-style: dashed; box-shadow: none; }
