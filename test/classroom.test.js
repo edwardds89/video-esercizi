@@ -94,4 +94,29 @@ test('classe → compito → invio studente → report; compito chiuso rifiuta; 
   assert.strictEqual((await be.listAssignments()).length, 0); assert.strictEqual((await be.listResults([a.id])).length, 0);
 });
 
+// v126: compito = esercitazione senza video (set di esercizi, ls.chal.items)
+const SET = { v: 1, id: 'chal-1', title: 'Verbi', chal: { items: [
+  { id: 'i1', kind: 'gap', strict: true, sentence: 'Io (prendere) prendo il treno.', data: { tokens: ['Io', '(prendere)', 'prendo', 'il', 'treno.'], gapIndices: [2], answers: ['prendo'] } },
+  { id: 'i2', kind: 'mc', sentence: '', data: { question: 'Lei ___ italiana.', options: ['è', 'sei'], correct: 0 } },
+  { id: 'i3', kind: 'match', pairs: [{ a: 'la chiave', b: 'le chiavi' }, { a: 'il gelato', b: 'i gelati' }] }
+] } };
+test('set: asgItems, punteggio, report con abbina e soluzioni', function () {
+  assert.ok(C.isSet(SET)); assert.ok(!C.isSet(LESSON));
+  const it = C.asgItems(SET);
+  assert.deepStrictEqual(it.map(function (x) { return x.type; }), ['gap', 'mc', 'match']);
+  const det = { i1: { t: 'gap', ok: false, how: 'revealed', tries: [{ a: 'prenda', ok: false }, { a: 'prende', ok: false }] }, i2: { t: 'mc', ok: true, how: 'solved', tries: [{ a: 'è', ok: true }] }, i3: { t: 'match', ok: true, how: 'solved', tries: [{ a: 'x', ok: false }, { a: 'y', ok: true }] } };
+  assert.deepStrictEqual(C.scoreOf(SET, det), { score: 2, total: 3 });
+  const m = C.reportMatrix(SET, [{ id: 'r1', student_name: 'Anna Bianchi', detail: det, finished: true, updated_at: '2026-10-05T18:00:00Z' }]);
+  assert.strictEqual(m.exercises.length, 3);
+  assert.strictEqual(m.exercises[0].solution, 'prendo');
+  assert.strictEqual(m.exercises[1].sentence, 'Lei ___ italiana.');
+  assert.strictEqual(m.exercises[2].label, 'Abbina le coppie');
+  assert.strictEqual(m.exercises[2].solution, 'la chiave ↔ le chiavi · il gelato ↔ i gelati');
+  const s = m.students[0];
+  assert.strictEqual(s.cells.i1.state, 'ko'); assert.strictEqual(s.cells.i3.state, 'ok-late');
+  assert.ok(C.toCSV(m).indexOf('sbagliato (prenda / prende)') !== -1);
+  assert.strictEqual(C.answerText({ type: 'mc', data: SET.chal.items[1].data }, 1), 'sei');
+  assert.strictEqual(C.answerText({ type: 'match', data: {} }, 'la chiave → i gelati'), 'la chiave → i gelati');
+});
+
 Promise.all(pending).then(function () { console.log('\n' + passed + ' test passati' + (process.exitCode ? ', con errori' : '')); });

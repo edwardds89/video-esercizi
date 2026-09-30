@@ -140,4 +140,53 @@ test('Q_MULTI_SELECT con più risposte giuste → skipped (PauseLearn ha una sol
   assert.strictEqual(r.skipped.length, 1);
 });
 
+// ---------- Wayground (v126): struttura reale di /api/main/quiz/616ed46792065b001d1dac51 ("Verbi Regolari Presente") ----------
+const CH = require('../challenge.js');
+const WG_API = { data: { quiz: { _id: '616ed46792065b001d1dac51', info: { name: 'Verbi Regolari Presente', lang: 'Italian', questions: [
+  { _id: 'q1', type: 'BLANK', structure: { settings: { ignoreAccentMarksForEvaluation: false }, query: { text: '<p>Francesca (lavorare) <blank id="ab001d45b8ed"></blank> al supermercato.</p>' }, options: [{ id: '616ed7c8ead6ab001d45b8e0', text: 'lavora' }], answer: [{ targetId: 'ab001d45b8ed', optionId: ['616ed7c8ead6ab001d45b8e0'] }], explain: { text: '' } } },
+  { _id: 'q2', type: 'BLANK', structure: { settings: { ignoreAccentMarksForEvaluation: false }, query: { text: '<p>Andrea (finire) <blank id="ca001dc8da65"></blank> di lavorare alle 17:00.</p>' }, options: [{ id: 'o2', text: 'finisce' }], answer: [{ targetId: 'ca001dc8da65', optionId: ['o2'] }], explain: { text: '<p>Finire, like capire, takes -isc-</p>' } } },
+  { _id: 'q3', type: 'BLANK', structure: { settings: {}, query: { text: '<p>A che ora (tu/arrivare) <blank id="b3"></blank>?</p>' }, options: [{ id: 'o3', text: 'arrivi' }], answer: [{ targetId: 'b3', optionId: ['o3'] }] } },
+  { _id: 'q4', type: 'MCQ', structure: { settings: {}, query: { text: '<p>Lei &egrave; ___.</p>' }, options: [{ id: 'a', text: '<p>italiana</p>' }, { id: 'b', text: 'italiano' }], answer: 0 } },
+  { _id: 'q5', type: 'MATCH', structure: { query: { text: 'x' }, options: [], answer: [] } }
+] } } } };
+test('Wayground: wgSlim + fromWayground → set di esercizi con lo spazio dove l\'ha messo l\'autore', function () {
+  const slim = P.wgSlim(WG_API.data);
+  assert.strictEqual(slim.site, 'wayground'); assert.strictEqual(slim.questions.length, 5);
+  const r = P.convert(slim, { lang: 'it' });
+  assert.ok(r.set && !r.lesson);
+  assert.strictEqual(r.set.title, 'Verbi Regolari Presente');
+  assert.strictEqual(r.set.items.length, 4);
+  assert.deepStrictEqual(r.skipped, [{ n: 5, type: 'MATCH' }]);
+  const g = r.set.items[0];
+  assert.strictEqual(g.kind, 'gap');
+  assert.deepStrictEqual(g.data.tokens, ['Francesca', '(lavorare)', 'lavora', 'al', 'supermercato.']);
+  assert.deepStrictEqual(g.data.gapIndices, [2]);
+  assert.strictEqual(CH.gapText(g), 'Francesca (lavorare) _____ al supermercato.');
+  assert.strictEqual(g.strict, true);
+  assert.strictEqual(r.set.items[1].explain, 'Finire, like capire, takes -isc-');
+  assert.deepStrictEqual(r.set.items[2].data.tokens.slice(-2), ['arrivi', '?']);
+  const mc = r.set.items[3];
+  assert.strictEqual(mc.kind, 'mc'); assert.strictEqual(mc.data.question, 'Lei è ___.'); assert.deepStrictEqual(mc.data.options, ['italiana', 'italiano']); assert.strictEqual(mc.data.correct, 0);
+  assert.strictEqual(r.set.importedFrom.id, '616ed46792065b001d1dac51');
+  assert.strictEqual(P.detectLanguage(slim, ['it', 'en']).lang, 'it');
+});
+test('Wayground: correzione (maiuscole libere, accenti che contano se il quiz lo chiede)', function () {
+  const r = P.fromWayground(P.wgSlim(WG_API.data));
+  assert.strictEqual(CH.checkItem(r.set.items[0], ['Lavora']).correct, true);
+  assert.strictEqual(CH.checkItem(r.set.items[0], ['lavori']).correct, false);
+  const acc = { kind: 'gap', strict: true, data: { tokens: ['Lui', 'è', 'qui'], gapIndices: [1], answers: ['è'] } };
+  assert.strictEqual(CH.checkItem(acc, ['e']).correct, false);
+  assert.strictEqual(CH.checkItem(acc, ['è']).correct, true);
+  delete acc.strict;
+  assert.strictEqual(CH.checkItem(acc, ['e']).correct, true);
+});
+test('Wayground: MSQ con più giuste, risposte solo-immagine → skipped', function () {
+  const r = P.fromWayground({ questions: [
+    { id: 'a', type: 'MSQ', html: 'Quali?', options: [{ id: '1', text: 'x' }, { id: '2', text: 'y' }], answer: [0, 1] },
+    { id: 'b', type: 'MCQ', html: 'Quale?', options: [{ id: '1', text: '' }, { id: '2', text: 'y' }], answer: 1 },
+    { id: 'c', type: 'MSQ', html: 'Quale?', options: [{ id: '1', text: 'x' }, { id: '2', text: 'y' }], answer: [1] }] });
+  assert.strictEqual(r.set.items.length, 1); assert.strictEqual(r.set.items[0].data.correct, 1);
+  assert.strictEqual(r.skipped.length, 2);
+});
+
 console.log('\n' + passed + ' test passati' + (process.exitCode ? ', con errori' : ''));
