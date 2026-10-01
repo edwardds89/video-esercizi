@@ -1630,3 +1630,15 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v134: incolla / link immagine nell'esercizio */
 .ca-paste { border: 2px dashed var(--line); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted, #667); background: #fafbfc; cursor: text; font-size: 14px; }
 .ca-paste:focus { outline: none; border-color: var(--accent, #1f6feb); background: #eef4ff; color: #1c2330; }
+
+/* v135: revisione e report della sfida */
+.chal-review { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.rv-item { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff; }
+.rv-q { font-size: 20px; font-weight: 600; white-space: pre-line; margin-bottom: 8px; }
+.rv-sol { border: 2px dashed #b9c4d2; background: #f6f8fb; border-radius: 10px; padding: 8px 14px; font-size: 18px; cursor: pointer; text-align: left; }
+.rv-sol .rv-txt { display: none; }
+.rv-sol.open { border-style: solid; border-color: var(--ok, #1c7c3e); background: #eef9f1; }
+.rv-sol.open .rv-hid { display: none; }
+.rv-sol.open .rv-txt { display: inline; color: var(--ok, #1c7c3e); font-weight: 800; }
+.chp-wrap .rv-q { font-size: 16px; }
+.chp-wrap .rv-sol { font-size: 15px; }

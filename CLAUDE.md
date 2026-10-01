@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- REPORT, REVISIONE E COMPITO DALLA SFIDA IN CLASSE (v135, 1/10). Edoardo: report che vede solo lui in una nuova tab,
+  revisione finale con soluzioni nascoste, e poter dare gli stessi esercizi come compito con link. CHAL.log[i][playerId]
+  = {nick,a,ok,frac} (chalLog), alimentato da 'ans' (modalità tp) e da 'score.last' (modalità sp, il telefono manda
+  last:{i,a,ok,frac}). chalSaveReport scrive localStorage 'pl-chalrep' e la tab #chalrep (renderChalReport, tabella
+  giocatori × domande, clic sulla cella = risposta data) si aggiorna con l'evento storage: resta SOLO sul computer
+  dell'insegnante, niente DB. 'end' porta review:[{k,p,s,x}] e i telefoni mostrano chalReview (soluzioni .rv-sol nascoste,
+  clic per vederle, "👁 Mostra tutte"). Bottoni #chal-report, #chal-review, #chal-report2, #chal-assign (= openAssignDialog
+  sul set S.lessons[CHAL.setId]). Test: e2e135.js.
 - IMMAGINE DELL'ESERCIZIO DA LINK O INCOLLATA (v134, 30/9). Edoardo: "ma l'immagine non posso metterla con link? o
   incollare uno screenshot non salvato sul mac?". L'incolla c'era già (listener paste col dialog aperto) ma era solo una
   riga di testo: ora nel dialogo ✎ c'è un riquadro .ca-paste ("Clicca qui e premi ⌘V", con la scorciatoia Mac ⌘⇧⌃4 per

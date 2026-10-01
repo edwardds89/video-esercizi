@@ -7138,8 +7138,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     overlay(true);
     chalJoin(pin, function (conn) {
       overlay(false);
-      CHAL = { pin: pin, title: setLs.title || 'Sfida', play: cfg.play, items: items, mode: cfg.mode, secs: cfg.secs, showQ: cfg.showQ,
-        conn: conn, state: cfg.play === 'tp' ? VLChal.tpNew() : VLChal.newState(), pub: null, ended: false, boardAt: 0, boardTimer: null, clock: null };
+      CHAL = { pin: pin, setId: setLs.id, title: setLs.title || 'Sfida', play: cfg.play, items: items, mode: cfg.mode, secs: cfg.secs, showQ: cfg.showQ,
+        conn: conn, state: cfg.play === 'tp' ? VLChal.tpNew() : VLChal.newState(), pub: null, ended: false, boardAt: 0, boardTimer: null, clock: null, log: {} };
+      chalSaveReport();
       conn.on('hello', function (p) {
         if (!p || !p.id) return;
         if (CHAL.play === 'tp') {
@@ -7154,6 +7155,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       conn.on('score', function (p) {   // solo student-paced
         if (CHAL.play !== 'sp') return;
         VLChal.reduce(CHAL.state, 'score', p);
+        if (p && p.last && CHAL.state.players[p.id]) chalLog(p.last.i, p.id, p.nick, p.last.a, p.last.ok, p.last.frac);   // v135
         renderChalBoard(); chalBoardOut();
       });
       conn.on('ans', function (p) {     // solo teacher-paced
@@ -7162,6 +7164,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (!item) return;
         const r = VLChal.tpAnswer(CHAL.state, p, item, CHAL.mode, CHAL.pub);
         if (r) {
+          chalLog(CHAL.state.i, p.id, p.nick, chalAnswerText(item, p.value, CHAL.pub), r.ok, r.frac);   // v135
           chalAnswered();
           if (VLChal.tpAllAnswered(CHAL.state)) chalCloseQuestion();   // tutti hanno risposto: si chiude da sola
         }
@@ -7169,6 +7172,89 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       show('chal');
       renderChal();
     }, function (err) { overlay(false); toast(err, 6000); });
+  }
+  /** v135 (Edoardo: "manca funzione report che vedo solo io e si apre in una nuova tab, così vedo chi ha detto cosa"):
+   *  l'host registra ogni risposta (CHAL.log[i][id] = {nick, a, ok, frac}) e salva un'istantanea in localStorage
+   *  ('pl-chalrep'): la scheda #chalrep la legge e si aggiorna da sola (evento storage). Resta su QUESTO computer: gli
+   *  studenti non la vedono. Nella modalità al proprio ritmo il telefono manda la sua risposta dentro 'score' (last). */
+  function chalAnswerText(item, v, pub) {
+    if (item.kind === 'match') return ((pub && pub.left) || item.pairs.map(function (p) { return p.a; })).map(function (l, k) { const j = Array.isArray(v) ? v[k] : -1; return l + ' → ' + (j == null || j === -1 ? '?' : ((pub && pub.right) || [])[j] || '?'); }).join(' · ');
+    return VLClass.answerText({ type: item.kind, data: item.data }, v);
+  }
+  function chalLog(i, id, nick, a, ok, frac) {
+    if (!CHAL || i == null) return;
+    (CHAL.log[i] = CHAL.log[i] || {})[id] = { nick: nick, a: String(a || '').slice(0, 300), ok: !!ok, frac: frac || 0 };
+    chalSaveReport();
+  }
+  function chalReviewList(items) {
+    return items.map(function (it) {
+      const e = { type: it.kind, data: it.data || {}, pairs: it.pairs, sentence: it.sentence };
+      return { k: VLChal.itemLabel(it.kind), p: VLClass.promptOf(e), s: VLChal.solutionText(it), x: it.explain || '' };
+    });
+  }
+  function chalSaveReport() {
+    if (!CHAL) return;
+    const snap = { pin: CHAL.pin, title: CHAL.title, at: Date.now(), ended: CHAL.ended, items: chalReviewList(CHAL.items),
+      players: VLChal.leaderboard(CHAL.state).map(function (r) { return { id: r.id, nick: r.nick, score: r.score, right: r.right }; }), log: CHAL.log };
+    try { localStorage.setItem('pl-chalrep', JSON.stringify(snap)); } catch (e) { /* pieno: pazienza */ }
+  }
+  function chalOpenReport() { window.open(location.pathname + location.search + '#chalrep', 'pl-chalrep'); }
+  /** Scheda del report (#chalrep): studenti × domande, clic su una casella = cosa ha risposto. */
+  function renderChalReport() {
+    show('report');
+    $('#view-report').classList.add('rep-big');
+    const root = $('#rep-root');
+    const paint = function () {
+      let R = null; try { R = JSON.parse(localStorage.getItem('pl-chalrep') || 'null'); } catch (e) { /* ignora */ }
+      root.innerHTML = '';
+      if (!R) { root.appendChild(el('p', { class: 'muted', text: 'Nessuna sfida in corso su questo computer.' })); return; }
+      root.appendChild(el('h2', { style: 'margin-top:0', text: '📊 ' + R.title + ' · PIN ' + R.pin + (R.ended ? ' · chiusa' : ' · in corso') }));
+      root.appendChild(el('p', { class: 'hint', text: 'Solo per te: si aggiorna da sola. Clicca una casella per vedere la risposta.' }));
+      const det = el('div', { class: 'rep-detail' });
+      const tb = el('table', { class: 'rep-table' });
+      const hr = el('tr', {}, el('th', { class: 'rep-name', text: 'Studente' }), el('th', { text: 'Punti' }));
+      R.items.forEach(function (it, i) { hr.appendChild(el('th', { class: 'rep-ex', title: it.p }, el('button', { class: 'rep-exbtn', text: String(i + 1), onclick: function () { showQ(i); } }))); });
+      tb.appendChild(el('thead', {}, hr));
+      const body = el('tbody');
+      R.players.forEach(function (pl) {
+        const tr = el('tr', {}, el('td', { class: 'rep-name', text: pl.nick }), el('td', { class: 'rep-score', text: pl.score + ' pt · ' + pl.right + '/' + R.items.length }));
+        R.items.forEach(function (it, i) {
+          const c = (R.log[i] || {})[pl.id];
+          const st = !c ? 'none' : c.ok ? 'ok' : c.frac > 0 ? 'ok-late' : 'ko';
+          tr.appendChild(el('td', { class: 'rep-cell ' + st }, el('button', { class: 'rep-cellbtn', text: { ok: '✓', 'ok-late': '½', ko: '✗', none: '·' }[st], onclick: function () { showQ(i, pl.id); } })));
+        });
+        body.appendChild(tr);
+      });
+      tb.appendChild(body);
+      root.appendChild(el('div', { class: 'rep-wrap' }, tb));
+      root.appendChild(det);
+      function showQ(i, only) {
+        const it = R.items[i]; det.innerHTML = '';
+        det.appendChild(el('h3', { text: (i + 1) + '. ' + it.k }));
+        det.appendChild(el('p', { class: 'meta', style: 'white-space:pre-line', text: it.p }));
+        det.appendChild(el('p', { class: 'as-sol', text: '✓ ' + it.s }));
+        R.players.filter(function (pl) { return !only || pl.id === only; }).forEach(function (pl) {
+          const c = (R.log[i] || {})[pl.id];
+          det.appendChild(el('div', { class: 'rep-ans ' + (!c ? 'none' : c.ok ? 'ok' : 'ko') }, el('b', { text: pl.nick + ': ' }), document.createTextNode(c ? (c.ok ? '✓ ' : '✗ ') + c.a : 'non ha risposto')));
+        });
+      }
+    };
+    paint();
+    window.addEventListener('storage', function (e) { if (e.key === 'pl-chalrep' && S.view === 'report') paint(); });
+  }
+  /** v135 REVISIONE sullo schermo a fine sfida: tutte le frasi, soluzione nascosta che si apre con un clic. */
+  function chalReview(list, host) {
+    const box = el('div', { class: 'chal-review' });
+    box.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;gap:8px' },
+      el('h2', { style: 'margin:0', text: '📖 Revisione' }),
+      el('button', { class: 'small', text: '👁 Mostra tutte', onclick: function () { $$('.rv-sol', box).forEach(function (x) { x.classList.add('open'); }); } })));
+    list.forEach(function (it, i) {
+      const sol = el('button', { class: 'rv-sol', title: 'Clicca per vedere la soluzione' }, el('span', { class: 'rv-hid', text: '👁 Soluzione' }), el('span', { class: 'rv-txt', text: it.s + (it.x ? '  ·  ' + it.x : '') }));
+      sol.addEventListener('click', function () { sol.classList.toggle('open'); });
+      box.appendChild(el('div', { class: 'rv-item' }, el('div', { class: 'rv-q', text: (i + 1) + '. ' + it.p }), sol));
+    });
+    host.innerHTML = ''; host.appendChild(box);
+    return box;
   }
   function chalQPayload() {
     return { i: CHAL.state.i, total: CHAL.items.length, pub: VLChal.wire(CHAL.pub), showQ: !!CHAL.showQ, secs: CHAL.secs || 0 };
@@ -7254,7 +7340,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!CHAL || CHAL.ended) return;
     CHAL.ended = true;
     clearInterval(CHAL.clock); clearTimeout(CHAL.boardTimer);
-    CHAL.conn.send('end', { rows: VLChal.leaderboard(CHAL.state) });
+    CHAL.conn.send('end', { rows: VLChal.leaderboard(CHAL.state), review: chalReviewList(CHAL.items) });   // v135: la revisione va anche ai telefoni
+    chalSaveReport();
     $('#chal-stagebox').style.display = 'none';
     $('#chal-live').style.display = 'none';
     $('#chal-after').style.display = '';
@@ -7353,6 +7440,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     renderHome();
   }
   $('#chal-exit').addEventListener('click', closeChal);
+  $('#chal-report').addEventListener('click', chalOpenReport);
+  $('#chal-report2').addEventListener('click', chalOpenReport);
+  $('#chal-review').addEventListener('click', function () {
+    if (!CHAL) return;
+    $('#chal-stagebox').style.display = '';
+    $('#chal-progress').textContent = ''; $('#chal-answered').textContent = ''; $('#chal-clock').textContent = '';
+    $('#chal-stage-actions').innerHTML = '';
+    chalReview(chalReviewList(CHAL.items), $('#chal-qbox'));
+    $('#chal-stagebox').scrollIntoView({ behavior: 'smooth' });
+  });
+  $('#chal-assign').addEventListener('click', function () {   // v135: gli stessi esercizi come compito con link
+    const ls = CHAL && S.lessons[CHAL.setId];
+    if (!ls) return toast('Esercitazione non trovata tra le tue lezioni');
+    openAssignDialog(ls);
+  });
 
   // ---- lato studente (telefono, rotta #c=PIN) ----
   function openChalPlay(pin) {
@@ -7403,7 +7505,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('p', { class: 'hint', text: 'Chiedi al docente se puoi rientrare.' })));
           try { conn.close(); } catch (e) { /* ignora */ }
         });
-        conn.on('end', function (p) { chpFinal($('#chp-wrap'), p && p.rows, id); try { conn.close(); } catch (e) { /* ignora */ } });
+        conn.on('end', function (p) {
+          chpFinal($('#chp-wrap'), p && p.rows, id);
+          if (p && p.review && p.review.length) { const h = el('div', { style: 'margin-top:14px' }); $('#chp-wrap').appendChild(h); chalReview(p.review, h); }   // v135
+          try { conn.close(); } catch (e) { /* ignora */ }
+        });
         let tries = 0;
         const hello = function () {
           if (me.started) return;
@@ -7603,8 +7709,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
     let i = 0, score = 0, right = 0, streak = 0;
     const pts = VLChal.pointsFor(mode);
+    let last = null;
     const sendScore = function (done) {
-      me.conn.send('score', { id: me.id, nick: me.nick, score: score, right: right, at: i, total: items.length, done: !!done });
+      me.conn.send('score', { id: me.id, nick: me.nick, score: score, right: right, at: i, total: items.length, done: !!done, last: last });
     };
     const step = function () {
       stage.innerHTML = '';
@@ -7622,6 +7729,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
       stage.appendChild(chpItemInput(pub, { onSubmit: function (v) {
         const res = VLChal.checkItem(item, v, pub);
+        last = { i: i, a: chalAnswerText(item, v, pub).slice(0, 300), ok: !!res.correct, frac: res.frac };   // v135: per il report del prof
         if (res.frac === 1) { right++; score += pts(streak, Date.now() - t0); streak++; if (typeof playWinSound === 'function') playWinSound(); }
         else if (res.frac > 0) { score += Math.round(100 * res.frac); streak = 0; }
         else streak = 0;
@@ -8712,6 +8820,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (VLChal.validPin(pin)) { S.standalone = true; return openChalPlay(pin); }
       toast('PIN della sfida non valido');
     }
+    if (h === '#chalrep') { history.replaceState(null, '', location.pathname + location.search); return renderChalReport(); }   // v135
     if (h.indexOf('#rep=') === 0) {   // v131: schermo docente in un'altra finestra (serve l'accesso: si aspetta il cloud)
       const pr = new URLSearchParams(h.slice(1));
       const rid = pr.get('rep'), rm = pr.get('m') || 'table';
