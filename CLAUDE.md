@@ -1,5 +1,14 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- A1 VUOL DIRE FRASI CORTE, E IL FORMATO DELL'IMMAGINE (v143, 1/10). Edoardo, screenshot del libro "Scrivete le parole al
+  singolare o al plurale" (finestra, pesce, gelato…) con livello A1: "perché mi vengono generate delle frasi così lunghe? è
+  la prima lezione". Il prompt diceva 5-14 parole per tutti i livelli. Ora rawSpec(kinds, lang, focus, level) usa LEN per
+  livello (A1 3-6, A2 4-8, B1 5-12, B2 6-14, C1 6-16) + LEVEL_RULES (A1: lessico di base, solo presente, niente parole
+  rare) anche in Simile/Rigenera; regola "MATCH THE FORMAT OF THE IMAGE": esercizio di parole singole → cornici di 2-4
+  parole ("una finestra → due (finestra) finestre"); la scelta multipla deve contenere la parola (prima usciva "Qual è la
+  forma singolare corretta di questa parola?" senza parola). EX gap: se la parola compare due volte vince quella subito
+  dopo l'indizio ("Dentro la mia ___ c'è una (borse) borsa"). Il livello del dialogo foto resta salvato
+  (S.settings.igLevel). Test: e2e143.js.
 - BARRA COLORATA NELLA CLASSIFICA DELLA SFIDA (v142, 1/10). Edoardo: "la barra di avanzamento è solo blu ma vorrei
   anche l'arancione o rosso per quelle sbagliate". chalBar: un pezzo per domanda (fino a 60, oltre torna la barra unica)
   colorato da CHAL.log[i][id]: .ok colore --accent (verde in quella vista), .half arancione #f08c00 (frac > 0), .ko rosso

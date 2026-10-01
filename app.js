@@ -6556,6 +6556,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     IMGGEN.imgs = []; IMGGEN.items = []; IMGGEN.accept = opts.onAccept; IMGGEN.kinds = opts.kinds;
     IMGGEN.topics = []; IMGGEN.seq++; IMGGEN.lastFocus = false;
     $('#ig-topic').value = opts.topic || '';
+    if (S.settings.igLevel) $('#ig-level').value = S.settings.igLevel;   // v143: il livello scelto resta (A1 per le prime lezioni)
     $('#ig-topics').style.display = 'none'; $('#ig-topics').innerHTML = '';
     igRenderKinds();
     $('#ig-previews').innerHTML = ''; $('#ig-out').innerHTML = ''; $('#ig-msg').textContent = '';
@@ -6682,6 +6683,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     dlg.addEventListener('drop', function (e) { e.preventDefault(); dlg.classList.remove('ig-drop'); igAddFiles(Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || [])); });
   })();
   $('#ig-close').addEventListener('click', function () { $('#dlg-imggen').close(); });
+  $('#ig-level').addEventListener('change', function () { S.settings.igLevel = this.value; saveSettings(); });
   $('#ig-go').addEventListener('click', function () {
     if (!S.settings.apiKey) { $('#ig-msg').textContent = 'Serve la chiave API (Impostazioni AI).'; return; }
     if (!IMGGEN.imgs.length) return;

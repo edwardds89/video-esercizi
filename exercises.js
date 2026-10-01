@@ -76,6 +76,8 @@
         tokens.forEach(function (t, j) { if (/^\(/.test(t.raw)) open = true; cue[j] = open; if (/\)[^\s]*$/.test(t.raw)) open = false; });
         const take = function (w) {
           const n = L.normalize(w);
+          // v143 ("Dentro la mia ___ c'è una (borse) borsa"): se la parola compare più volte, vince quella SUBITO DOPO un indizio
+          for (let j = 1; j < tokens.length; j++) if (!cue[j] && cue[j - 1] && tokens[j].norm === n && idx.indexOf(j) === -1) return j;
           for (let j = 0; j < tokens.length; j++) if (!cue[j] && tokens[j].norm === n && idx.indexOf(j) === -1) return j;
           return -1;
         };

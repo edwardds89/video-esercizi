@@ -875,6 +875,11 @@
     return r;
   }
 
+  /** v143: regole di livello aggiunte ai prompt degli esercizi (foto, Simile, Rigenera). */
+  const LEVEL_RULES = {
+    A1: 'LEVEL A1 (absolute beginners, first lessons): very short items, only the most common everyday words (casa, famiglia, cibo, scuola, colori, numeri), present tense only, no subordinate clauses, no rare words like spolpatrice or acquario.',
+    A2: 'LEVEL A2: short simple sentences, everyday vocabulary, present and passato prossimo at most, one clause.'
+  };
   /** v138: un item grezzo del modello → item pulito (stesso formato per foto, Simile e Rigenera). */
   function cleanRawItem(it, okKinds, focus) {
       if (!it || !okKinds[it.type]) return null;
@@ -907,8 +912,12 @@
   }
 
   /** v138: le forme JSON che il modello deve scrivere per ogni tipo (con un argomento: ogni tipo allena la forma). */
-  function rawSpec(kinds, lang, focus) {
+  function rawSpec(kinds, lang, focus, level) {
     const spec = [];
+    // v143 (Edoardo, prima lezione A1: "perché mi vengono generate delle frasi così lunghe nonostante io abbia selezionato
+    // livello A1?"): la lunghezza segue il livello. A1 = 3-6 parole, lessico di base, presente; il "5-14" valeva per tutti.
+    const LEN = { A1: '3-6', A2: '4-8', B1: '5-12', B2: '6-14', C1: '6-16', C2: '6-16' };
+    const len = LEN[String(level || 'B1').toUpperCase()] || '5-12';
     const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong', 'scramble'].indexOf(k) !== -1; });
     // v136 (Edoardo: "in base a quello si creano diversi tipi di esercizi"): con un argomento di grammatica ogni tipo
     // allena la forma scelta, non una parola a caso. gap/gapbank: lo spazio cade sulla forma (gaps); wrong: la forma
@@ -920,11 +929,11 @@
       : '{"type":"mc","q":"a comprehension or vocabulary question in ' + lang + '","options":["...","...","...","..."],"correct":0} — 4 plausible options, exactly one correct');
     const gapKinds = sentKinds.filter(function (k) { return k === 'gap' || k === 'gapbank'; });
     if (focus) {
-      if (gapKinds.length) spec.push('{"type":"' + gapKinds.join('|') + '","sentence":"a short, natural, CORRECT sentence of 5-14 words in ' + lang + ' that practises the topic","gaps":["the exact word(s) AS WRITTEN in the sentence that the student must write (the inflected form after the cue, e.g. zaini, never the cue zaino), one word per entry"],"distractors":["for gapbank only: 2 wrong forms of the same kind"]} — when the student needs a cue to know which form to write (a verb to conjugate, a singular to put in the plural, a noun whose article is asked), put the cue in round brackets IMMEDIATELY BEFORE the gap word, e.g. "Francesca (lavorare) lavora al supermercato." with gaps ["lavora"], "Sul tavolo ci sono due (chiave) chiavi." with gaps ["chiavi"]; for articles no cue is needed: "Ecco lo zaino di Marco." with gaps ["lo"]');
-      if (sentKinds.indexOf('wrong') !== -1) spec.push('{"type":"wrong","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","wrongWord":"one word of the sentence that is a form of the topic","wrongReplacement":"the typical mistake a student makes for that word (e.g. lavori for lavora, il for lo, chiave for chiavi)"} — the student finds and corrects the wrong word');
-      if (sentKinds.indexOf('missing') !== -1) spec.push('{"type":"missing","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","missingWord":"the word of the sentence that will be removed: a short form of the topic (article, preposition, pronoun, auxiliary, ending word), not the first or last word"} — the student finds where the word is missing and writes it');
-      if (sentKinds.indexOf('extra') !== -1) spec.push('{"type":"extra","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","extraWord":"a word a student would wrongly add, linked to the topic (e.g. an article before a possessive with a family noun, a needless preposition)","extraAfter":"the word of the sentence after which the extra word is inserted"} — the student finds the word that must not be there');
-      if (sentKinds.indexOf('scramble') !== -1) spec.push('{"type":"scramble","sentence":"a short CORRECT sentence of 5-10 words, NO brackets, whose word order shows the topic"} — the student puts the words in order');
+      if (gapKinds.length) spec.push('{"type":"' + gapKinds.join('|') + '","sentence":"a short, natural, CORRECT sentence of ' + len + ' words in ' + lang + ' that practises the topic","gaps":["the exact word(s) AS WRITTEN in the sentence that the student must write (the inflected form after the cue, e.g. zaini, never the cue zaino), one word per entry"],"distractors":["for gapbank only: 2 wrong forms of the same kind"]} — when the student needs a cue to know which form to write (a verb to conjugate, a singular to put in the plural, a noun whose article is asked), put the cue in round brackets IMMEDIATELY BEFORE the gap word, e.g. "Francesca (lavorare) lavora al supermercato." with gaps ["lavora"], "Sul tavolo ci sono due (chiave) chiavi." with gaps ["chiavi"]; for articles no cue is needed: "Ecco lo zaino di Marco." with gaps ["lo"]');
+      if (sentKinds.indexOf('wrong') !== -1) spec.push('{"type":"wrong","sentence":"a short CORRECT sentence of ' + len + ' words, NO brackets","wrongWord":"one word of the sentence that is a form of the topic","wrongReplacement":"the typical mistake a student makes for that word (e.g. lavori for lavora, il for lo, chiave for chiavi)"} — the student finds and corrects the wrong word');
+      if (sentKinds.indexOf('missing') !== -1) spec.push('{"type":"missing","sentence":"a short CORRECT sentence of ' + len + ' words, NO brackets","missingWord":"the word of the sentence that will be removed: a short form of the topic (article, preposition, pronoun, auxiliary, ending word), not the first or last word"} — the student finds where the word is missing and writes it');
+      if (sentKinds.indexOf('extra') !== -1) spec.push('{"type":"extra","sentence":"a short CORRECT sentence of ' + len + ' words, NO brackets","extraWord":"a word a student would wrongly add, linked to the topic (e.g. an article before a possessive with a family noun, a needless preposition)","extraAfter":"the word of the sentence after which the extra word is inserted"} — the student finds the word that must not be there');
+      if (sentKinds.indexOf('scramble') !== -1) spec.push('{"type":"scramble","sentence":"a short CORRECT sentence of ' + len + ' words, NO brackets, whose word order shows the topic"} — the student puts the words in order');
     } else if (sentKinds.length) spec.push('{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
     if (kinds.indexOf('match') !== -1) spec.push('{"type":"match","pairs":[{"a":"word or expression in ' + lang + '","b":"English translation or a short definition"}]} — 4 to 8 pairs');
     if (kinds.indexOf('wheel') !== -1) spec.push('{"type":"wheel","items":["...","..."]} — 6 to 10 short prompts in ' + lang + ' (words to explain, or mini-questions) for a spinning-wheel speaking game');
@@ -948,13 +957,16 @@
     // v136: piu' argomenti scelti dall'insegnante (params.topics) oppure il vecchio campo libero (params.focus)
     const topics = (Array.isArray(params.topics) ? params.topics : []).map(function (t) { return String(t || '').trim(); }).filter(Boolean).slice(0, 6);
     const focus = topics.length ? topics.join('; ') : String(params.focus || '').trim();
-    const spec = rawSpec(kinds, lang, focus);
+    const spec = rawSpec(kinds, lang, focus, level);
     const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong', 'scramble'].indexOf(k) !== -1; });
     const user = [
       'Look carefully at the attached image' + (params.images.length > 1 ? 's' : '') + ' (a textbook page, a screenshot, a slide or a photo).',
       'If it contains TEXT: base the exercises on that content (topic, vocabulary, facts), REWRITING everything at the target level — never copy sentences with mistakes and never quote page numbers or layout.',
       'If it is a SCENE or picture: use what is visible (objects, actions, places).',
       'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
+      LEVEL_RULES[String(level).toUpperCase()] || '',
+      'MATCH THE FORMAT OF THE IMAGE: if the exercise in the image works on SINGLE WORDS (e.g. write the singular or the plural, the article of a noun), keep the items that small: a minimal frame of 2-4 words around the word, e.g. "una finestra → due (finestra) finestre", "il treno → i (treno) treni", "Ecco una (borse) borsa." Never build a long sentence around a word exercise.',
+      'Multiple-choice questions must contain everything needed to answer: never write "this word", "this picture" or refer to the image; write the word itself in the question.',
       topics.length > 1 ? 'The teacher chose SEVERAL topics: ' + topics.map(function (t, i) { return (i + 1) + ') ' + t; }).join(' ') + '. Split the items evenly across them and set "topic" on every item to the topic it practises, copied exactly from this list.' : '',
       focus ? 'TOPIC' + (topics.length > 1 ? 'S' : '') + ' CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise ' + (topics.length > 1 ? 'one of these topics' : 'this topic') + ' (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
       'Write exactly ' + n + ' items, mixing these shapes' + (spec.length > 1 ? ' (use as many DIFFERENT shapes as possible: never two of the same shape in a row, and every shape at least once when there are enough items)' : '') + ':',
@@ -1005,7 +1017,7 @@
     const kind = params.kind;
     const ok = {}; ok[kind] = 1;
     const topic = String(params.topic || '').trim();
-    const spec = rawSpec([kind], lang, topic || 'the same language point as the original exercise');
+    const spec = rawSpec([kind], lang, topic || 'the same language point as the original exercise', params.level);
     const system = 'You are an experienced language-teaching materials author. Output ONLY a JSON object, no prose, no markdown fences.';
     const user = [
       'Here is an exercise of type "' + kind + '" for CEFR ' + (params.level || 'A2') + ' students of ' + lang + ':',
@@ -1016,6 +1028,8 @@
         ? 'Write ONE replacement exercise: the SAME point and the same kind of form being tested, but a completely NEW sentence with a different context and names. The teacher did not like the original, so do not reuse its words.'
         : 'Write ONE SIMILAR exercise to add next to it: the SAME point, but practising a DIFFERENT form of it (e.g. another article: il → lo / gli / l\' ; another person of the verb; singular ↔ plural; masculine ↔ feminine) in a new sentence with a different context.',
       'The sentence must be natural, correct and understandable on its own.',
+      LEVEL_RULES[String(params.level || '').toUpperCase()] || '',
+      'Keep the same SIZE as the original: if it is a 2-4 word frame around a single word, write a 2-4 word frame too.',
       (params.avoid || []).length ? 'Do NOT repeat any of these sentences already in the set: ' + params.avoid.slice(0, 40).map(function (x) { return '"' + String(x).slice(0, 120) + '"'; }).join(' ; ') : '',
       'Shape to use:\n' + spec.join('\n'),
       'SCHEMA: {"item": { ... }}'
