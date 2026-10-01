@@ -1,5 +1,17 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- ARGOMENTI LETTI DALLO SCREENSHOT E TIPI DIVERSI (v136, 1/10). Edoardo: "faccio degli screenshot a degli esercizi e si
+  capisca qual è l'argomento e le cose da ripassare, se ci sono più argomenti mi viene chiesto su che cosa focalizzarsi
+  ... e in base a quello si creano diversi tipi di esercizi". Nel dialog #dlg-imggen, appena arriva un'immagine (incollata,
+  trascinata o scelta), igAnalyze chiama AI.topicsFromImage → {summary, topics:[{name,kind,example}]} e mostra i chip in
+  #ig-topics: un argomento = già spuntato, più argomenti = domanda "Su cosa vuoi concentrarti?" e Genera si rifiuta finché
+  non se ne sceglie almeno uno (o Tutti). #ig-topic resta come precisazione libera e si somma. #ig-kinds: chip dei tipi
+  (solo se il chiamante ne passa 2+; la Sfida ora passa gap, gapbank, mc, wrong, missing, extra, scramble, match).
+  AI.itemsFromImage accetta topics[]: con più argomenti divide gli item e mette item.topic (mostrato nella lista); con un
+  argomento ogni tipo allena la forma: wrong → wrongWord/wrongReplacement (errore tipico), missing → missingWord, extra →
+  extraWord/extraAfter, mc → forme dello stesso tipo; le parentesi-indizio restano solo in gap/gapbank (tolte dagli altri).
+  igChoices passa tutto a VLChal.buildItem (EX.buildExercise le supporta già). IMGGEN.seq scarta analisi vecchie.
+  Test: e2e136.js (API Anthropic finta con page.route).
 - REPORT, REVISIONE E COMPITO DALLA SFIDA IN CLASSE (v135, 1/10). Edoardo: report che vede solo lui in una nuova tab,
   revisione finale con soluzioni nascoste, e poter dare gli stessi esercizi come compito con link. CHAL.log[i][playerId]
   = {nick,a,ok,frac} (chalLog), alimentato da 'ans' (modalità tp) e da 'score.last' (modalità sp, il telefono manda

@@ -1642,3 +1642,17 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .rv-sol.open .rv-txt { display: inline; color: var(--ok, #1c7c3e); font-weight: 800; }
 .chp-wrap .rv-q { font-size: 16px; }
 .chp-wrap .rv-sol { font-size: 15px; }
+
+/* v136: argomenti letti dallo screenshot e tipi di esercizi */
+.ig-topics { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f6f9ff; }
+.ig-topics .ig-sum { font-size: 14px; color: #445; margin-bottom: 6px; }
+.ig-topics .ig-ask { font-weight: 700; margin-bottom: 6px; }
+.ig-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ig-chip { margin: 0 !important; display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: #fff; cursor: pointer; font-size: 14px; }
+.ig-chip input { margin: 0; }
+.ig-chip.on { border-color: var(--accent, #1f6feb); background: #e8f0ff; }
+.ig-chip .ex { color: #778; font-size: 12px; }
+.ig-topics .row { margin-top: 8px; }
+.ig-kinds { margin-top: 10px; }
+.ig-kinds .ig-klab { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.ig-row .topic { font-size: 12px; background: #eef2f7; border-radius: 999px; padding: 1px 8px; white-space: nowrap; color: #445; }

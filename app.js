@@ -6514,7 +6514,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // caricate da nessuna parte: vanno solo all'API col resto della richiesta), l'AI propone il materiale
   // (AI.itemsFromImage), l'insegnante spunta cosa tenere. Ogni chiamante passa i tipi che gli servono e
   // riceve gli item accettati. La costruzione vera resta al motore: il modello scrive frasi/domande/coppie.
-  const IMGGEN = { imgs: [], items: [], accept: null, kinds: null };
+  const IMGGEN = { imgs: [], items: [], accept: null, kinds: null, topics: [], seq: 0, lastFocus: false };
   function imgToJpeg(file, cb, max) {
     const fr = new FileReader();
     fr.onload = function () {
@@ -6538,11 +6538,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (it.type === 'mc') return ['Scelta multipla', it.q + '  (giusta: ' + (it.options[it.correct] || '?') + ')'];
     if (it.type === 'match') return ['Abbina', it.pairs.map(function (p) { return p.a + '↔' + p.b; }).join(' · ')];
     if (it.type === 'wheel') return ['Ruota', it.items.join(' · ')];
-    return [VLChal.itemLabel(it.type), it.sentence + (it.gaps ? '  → spazio: ' + it.gaps.join(', ') : '')];
+    let extra = '';
+    if (it.gaps) extra = '  → spazio: ' + it.gaps.join(', ');
+    else if (it.type === 'wrong' && it.wrongWord) extra = '  → sbagliata: ' + (it.wrongReplacement || '?') + ' (giusta: ' + it.wrongWord + ')';
+    else if (it.type === 'missing' && it.missingWord) extra = '  → manca: ' + it.missingWord;
+    else if (it.type === 'extra' && it.extraWord) extra = '  → in più: ' + it.extraWord;
+    return [VLChal.itemLabel(it.type), it.sentence + extra];
   }
   function openImgGen(opts) {
     IMGGEN.imgs = []; IMGGEN.items = []; IMGGEN.accept = opts.onAccept; IMGGEN.kinds = opts.kinds;
+    IMGGEN.topics = []; IMGGEN.seq++; IMGGEN.lastFocus = false;
     $('#ig-topic').value = opts.topic || '';
+    $('#ig-topics').style.display = 'none'; $('#ig-topics').innerHTML = '';
+    igRenderKinds();
     $('#ig-previews').innerHTML = ''; $('#ig-out').innerHTML = ''; $('#ig-msg').textContent = '';
     $('#ig-go').disabled = true; $('#ig-accept-row').style.display = 'none';
     $('#ig-file').value = '';
@@ -6571,9 +6579,78 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (!left) {
           $('#ig-msg').textContent = IMGGEN.imgs.length ? '' : 'Non sono riuscito a leggere le immagini.';
           $('#ig-go').disabled = !IMGGEN.imgs.length;
+          if (IMGGEN.imgs.length) igAnalyze();
         }
       });
     });
+  }
+  /** v136 (Edoardo: "faccio degli screenshot a degli esercizi e si capisca qual è l'argomento e le cose da ripassare,
+   *  magari se ci sono più argomenti mi viene chiesto su che cosa focalizzarsi"): appena arrivano le immagini l'AI dice
+   *  quali argomenti ci sono (AI.topicsFromImage, pochi centesimi). Un solo argomento: già spuntato. Più argomenti: la
+   *  domanda "Su cosa vuoi concentrarti?" e niente spuntato, si sceglie uno, alcuni o Tutti. Il campo libero sotto
+   *  resta per precisare. IMGGEN.seq scarta le risposte vecchie se nel frattempo si aggiunge un'altra immagine. */
+  function igAnalyze() {
+    const box = $('#ig-topics');
+    if (!S.settings.apiKey) return;
+    const seq = ++IMGGEN.seq;
+    box.style.display = ''; box.innerHTML = '';
+    const msg = el('div', { class: 'hint' }); box.appendChild(msg);
+    busyMsg(msg, 'Leggo l\'immagine per capire l\'argomento…');
+    AI.topicsFromImage({
+      images: IMGGEN.imgs.map(function (i) { return { media_type: i.media_type, data: i.data }; }),
+      lang: $('#ig-lang').value, apiKey: S.settings.apiKey, model: S.settings.model
+    }).then(function (r) {
+      if (seq !== IMGGEN.seq) return;
+      IMGGEN.topics = r.topics;
+      igRenderTopics(r.summary);
+    }).catch(function (e) {
+      if (seq !== IMGGEN.seq) return;
+      box.innerHTML = '';
+      box.appendChild(el('div', { class: 'hint', text: 'Non sono riuscito a capire l\'argomento (' + e.message + '). Scrivilo tu qui sotto, oppure genera lo stesso.' }));
+    });
+  }
+  function igRenderTopics(summary) {
+    const box = $('#ig-topics'); box.innerHTML = ''; box.style.display = '';
+    const t = IMGGEN.topics;
+    if (summary) box.appendChild(el('div', { class: 'ig-sum', text: '🔎 ' + summary }));
+    if (!t.length) { box.appendChild(el('div', { class: 'hint', text: 'Non ho trovato un argomento preciso: scrivilo tu qui sotto, oppure genera lo stesso.' })); return; }
+    box.appendChild(el('div', { class: 'ig-ask', text: t.length === 1 ? 'Argomento trovato:' : 'Ho trovato ' + t.length + ' argomenti. Su cosa vuoi concentrarti? Scegline uno o più.' }));
+    const chips = el('div', { class: 'ig-chips' });
+    const ICON = { grammar: '📐', vocabulary: '📚', function: '💬' };
+    t.forEach(function (tp, i) {
+      const cb = el('input', { type: 'checkbox', 'data-topic': String(i) });
+      if (t.length === 1) cb.checked = true;
+      const lab = el('label', { class: 'ig-chip' + (cb.checked ? ' on' : ''), title: tp.example ? 'Nell\'immagine: ' + tp.example : '' },
+        cb, el('span', { text: (ICON[tp.kind] || '') + ' ' + tp.name }), tp.example ? el('span', { class: 'ex', text: '«' + tp.example + '»' }) : null);
+      cb.addEventListener('change', function () { lab.classList.toggle('on', cb.checked); });
+      chips.appendChild(lab);
+    });
+    box.appendChild(chips);
+    if (t.length > 1) box.appendChild(el('div', { class: 'row' },
+      el('button', { class: 'small', id: 'ig-all', text: '☑ Tutti', onclick: function () { $$('#ig-topics input[data-topic]').forEach(function (c) { c.checked = true; c.parentNode.classList.add('on'); }); } }),
+      el('button', { class: 'small', text: '☐ Nessuno', onclick: function () { $$('#ig-topics input[data-topic]').forEach(function (c) { c.checked = false; c.parentNode.classList.remove('on'); }); } })));
+  }
+  /** v136: con piu' tipi possibili (set della Sfida) l'insegnante sceglie quali usare; di default tutti. */
+  function igRenderKinds() {
+    const box = $('#ig-kinds'); box.innerHTML = '';
+    const ks = IMGGEN.kinds || [];
+    if (ks.length < 2) { box.style.display = 'none'; return; }
+    box.style.display = '';
+    box.appendChild(el('div', { class: 'ig-klab', text: 'Tipi di esercizi da mescolare' }));
+    const chips = el('div', { class: 'ig-chips' });
+    ks.forEach(function (k) {
+      const cb = el('input', { type: 'checkbox', 'data-kind': k }); cb.checked = true;
+      const lab = el('label', { class: 'ig-chip on' }, cb, el('span', { text: VLChal.itemLabel(k) }));
+      cb.addEventListener('change', function () { lab.classList.toggle('on', cb.checked); });
+      chips.appendChild(lab);
+    });
+    box.appendChild(chips);
+  }
+  function igChosenTopics() {
+    const out = $$('#ig-topics input[data-topic]').filter(function (c) { return c.checked; }).map(function (c) { return (IMGGEN.topics[+c.getAttribute('data-topic')] || {}).name; }).filter(Boolean);
+    const extra = ($('#ig-topic').value || '').trim();
+    if (extra) out.push(extra);
+    return out;
   }
   document.addEventListener('paste', function (e) {
     const ca = $('#dlg-chal-add');
@@ -6601,11 +6678,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#ig-go').addEventListener('click', function () {
     if (!S.settings.apiKey) { $('#ig-msg').textContent = 'Serve la chiave API (Impostazioni AI).'; return; }
     if (!IMGGEN.imgs.length) return;
+    const topics = igChosenTopics();
+    if (IMGGEN.topics.length > 1 && !topics.length) { $('#ig-msg').textContent = 'Scegli prima su quale argomento concentrarti (uno, alcuni o Tutti).'; return; }
+    const kchk = $$('#ig-kinds input[data-kind]');
+    const kinds = kchk.length ? kchk.filter(function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-kind'); }) : IMGGEN.kinds;
+    if (kchk.length && !kinds.length) { $('#ig-msg').textContent = 'Scegli almeno un tipo di esercizio.'; return; }
+    IMGGEN.lastFocus = topics.length > 0;
     const go = $('#ig-go'); go.disabled = true;
-    busyMsg($('#ig-msg'), 'Leggo l\'immagine e scrivo gli esercizi… (10-30 secondi)');
+    busyMsg($('#ig-msg'), 'Scrivo gli esercizi' + (topics.length ? ' su: ' + topics.join(', ') : '') + '… (10-30 secondi)');
     AI.itemsFromImage({
       images: IMGGEN.imgs.map(function (i) { return { media_type: i.media_type, data: i.data }; }),
-      n: +$('#ig-n').value || 5, kinds: IMGGEN.kinds, focus: ($('#ig-topic').value || '').trim(),
+      n: +$('#ig-n').value || 5, kinds: kinds, topics: topics,
       lang: $('#ig-lang').value, level: $('#ig-level').value,
       apiKey: S.settings.apiKey, model: S.settings.model
     }).then(function (r) {
@@ -6618,7 +6701,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         out.appendChild(el('label', { class: 'ig-row' },
           el('input', { type: 'checkbox', checked: 'checked', 'data-i': String(i) }),
           el('span', { class: 'kind', text: lb[0] }),
-          el('span', { class: 'txt', text: lb[1] })));
+          el('span', { class: 'txt', text: lb[1] }),
+          it.topic && topics.length > 1 ? el('span', { class: 'topic', text: it.topic }) : null));
       });
       $('#ig-accept-row').style.display = r.items.length ? '' : 'none';
     }).catch(function (e) { go.disabled = false; $('#ig-msg').textContent = 'AI: ' + e.message; });
@@ -7020,15 +7104,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#ca-close').addEventListener('click', function () { CA_EDIT = null; $('#dlg-chal-add').close(); });
   // v70: esercizi del set generati da una foto o screenshot
   function chalFromPhoto() {
-    openImgGen({ kinds: ['gap', 'gapbank', 'mc', 'match'], onAccept: function (items) {
+    openImgGen({ kinds: ['gap', 'gapbank', 'mc', 'wrong', 'missing', 'extra', 'scramble', 'match'], onAccept: function (items) {
       const ls = current(); if (!ls || !ls.chal) return;
-      const withTopic = !!($('#ig-topic').value || '').trim();
+      const withTopic = IMGGEN.lastFocus;
       let n = 0;
       items.forEach(function (it) {
         let built = null;
         if (it.type === 'mc') built = VLChal.buildItem('mc', it);
         else if (it.type === 'match') built = VLChal.buildItem('match', it.pairs);
-        else built = VLChal.buildItem(it.type, it.sentence, { lang: ls.lang || 'it', seed: Date.now() % 100000, distractors: 2, choices: it.gaps ? { gapWords: it.gaps, distractors: it.distractors } : null });
+        else built = VLChal.buildItem(it.type, it.sentence, { lang: ls.lang || 'it', seed: Date.now() % 100000, distractors: 2, choices: igChoices(it) });
         // v126: esercizi di grammatica = gli accenti contano (è/e, perché/perche)
         if (built && withTopic && built.kind !== 'match' && built.kind !== 'mc') built.strict = true;
         if (built) { ls.chal.items.push(built); n++; }
@@ -7037,6 +7121,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       chalSetTouched(ls);
       toast(n ? n + (n === 1 ? ' esercizio aggiunto dall\'immagine' : ' esercizi aggiunti dall\'immagine') : 'Nessun esercizio costruibile dalle proposte');
     } });
+  }
+  /** v136: le parole scelte dal modello per l'argomento (spazio, parola sbagliata, mancante, in più) */
+  function igChoices(it) {
+    const c = {};
+    if (it.gaps) { c.gapWords = it.gaps; c.distractors = it.distractors; }
+    if (it.wrongWord) { c.wrongWord = it.wrongWord; c.wrongReplacement = it.wrongReplacement; }
+    if (it.missingWord) c.missingWord = it.missingWord;
+    if (it.extraWord) { c.extraWord = it.extraWord; if (it.extraAfter) c.extraAfter = it.extraAfter; }
+    return Object.keys(c).length ? c : null;
   }
   $('#ca-img').addEventListener('click', chalFromPhoto);
   $('#cs-photo').addEventListener('click', function () {

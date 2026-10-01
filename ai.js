@@ -887,18 +887,29 @@
     const lang = params.lang || 'Italian';
     const level = params.level || 'B1';
     const n = Math.max(1, Math.min(12, params.n || 5));
-    const kinds = (params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'extra', 'missing', 'wrong', 'match']);
+    const kinds = (params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'scramble', 'extra', 'missing', 'wrong', 'match']);
     const system = 'You are an experienced language-teaching materials author. You read images (textbook pages, screenshots, slides, photos) and write exercise material. Output ONLY a JSON object, no prose, no markdown fences.';
     const spec = [];
-    if (kinds.indexOf('mc') !== -1) spec.push('{"type":"mc","q":"a comprehension or vocabulary question in ' + lang + '","options":["...","...","...","..."],"correct":0} — 4 plausible options, exactly one correct');
-    const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong'].indexOf(k) !== -1; });
-    const focus = String(params.focus || '').trim();
-    if (sentKinds.length) spec.push(focus
-      // v126 (Edoardo: "metto degli screenshot e crei degli esercizi su quel tema"): con un argomento di grammatica le
-      // frasi sono CORTE e lo spazio cade proprio sulla forma da allenare, con l'indizio tra parentesi subito prima
-      // (come nei suoi quiz: "Francesca (lavorare) lavora al supermercato."). Lo spazio lo sceglie il modello ("gaps").
-      ? '{"type":"' + sentKinds.join('|') + '","sentence":"a short, natural, CORRECT sentence of 5-14 words in ' + lang + ' that practises the topic","gaps":["the exact word(s) of the sentence the student must write: the forms that practise the topic"],"distractors":["for gapbank only: 2 wrong forms of the same kind"]} — when the student needs a cue to know which form to write (a verb to conjugate, a singular to put in the plural, a noun whose article is asked), put the cue in round brackets IMMEDIATELY BEFORE the gap word, e.g. "Francesca (lavorare) lavora al supermercato." with gaps ["lavora"], "Sul tavolo ci sono due (chiave) chiavi." with gaps ["chiavi"]; for articles no cue is needed: "Ecco lo zaino di Marco." with gaps ["lo"]'
-      : '{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
+    const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong', 'scramble'].indexOf(k) !== -1; });
+    // v136: piu' argomenti scelti dall'insegnante (params.topics) oppure il vecchio campo libero (params.focus)
+    const topics = (Array.isArray(params.topics) ? params.topics : []).map(function (t) { return String(t || '').trim(); }).filter(Boolean).slice(0, 6);
+    const focus = topics.length ? topics.join('; ') : String(params.focus || '').trim();
+    // v136 (Edoardo: "in base a quello si creano diversi tipi di esercizi"): con un argomento di grammatica ogni tipo
+    // allena la forma scelta, non una parola a caso. gap/gapbank: lo spazio cade sulla forma (gaps); wrong: la forma
+    // giusta viene sostituita da un errore tipico (wrongWord → wrongReplacement); missing: manca proprio la forma
+    // (articolo, preposizione, pronome); extra: si aggiunge una parola che uno studente metterebbe per errore;
+    // scramble: frase corta con la struttura da allenare. Le parole le sceglie il modello, l'esercizio lo costruisce l'app.
+    if (kinds.indexOf('mc') !== -1) spec.push(focus
+      ? '{"type":"mc","q":"a sentence in ' + lang + ' with ___ where the topic form goes (or a short question about the topic)","options":["...","...","...","..."],"correct":0} — 4 forms of the same kind (e.g. lo/il/la/gli, lavora/lavori/lavorano/lavoro), exactly one correct'
+      : '{"type":"mc","q":"a comprehension or vocabulary question in ' + lang + '","options":["...","...","...","..."],"correct":0} — 4 plausible options, exactly one correct');
+    const gapKinds = sentKinds.filter(function (k) { return k === 'gap' || k === 'gapbank'; });
+    if (focus) {
+      if (gapKinds.length) spec.push('{"type":"' + gapKinds.join('|') + '","sentence":"a short, natural, CORRECT sentence of 5-14 words in ' + lang + ' that practises the topic","gaps":["the exact word(s) of the sentence the student must write: the forms that practise the topic"],"distractors":["for gapbank only: 2 wrong forms of the same kind"]} — when the student needs a cue to know which form to write (a verb to conjugate, a singular to put in the plural, a noun whose article is asked), put the cue in round brackets IMMEDIATELY BEFORE the gap word, e.g. "Francesca (lavorare) lavora al supermercato." with gaps ["lavora"], "Sul tavolo ci sono due (chiave) chiavi." with gaps ["chiavi"]; for articles no cue is needed: "Ecco lo zaino di Marco." with gaps ["lo"]');
+      if (sentKinds.indexOf('wrong') !== -1) spec.push('{"type":"wrong","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","wrongWord":"one word of the sentence that is a form of the topic","wrongReplacement":"the typical mistake a student makes for that word (e.g. lavori for lavora, il for lo, chiave for chiavi)"} — the student finds and corrects the wrong word');
+      if (sentKinds.indexOf('missing') !== -1) spec.push('{"type":"missing","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","missingWord":"the word of the sentence that will be removed: a short form of the topic (article, preposition, pronoun, auxiliary, ending word), not the first or last word"} — the student finds where the word is missing and writes it');
+      if (sentKinds.indexOf('extra') !== -1) spec.push('{"type":"extra","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","extraWord":"a word a student would wrongly add, linked to the topic (e.g. an article before a possessive with a family noun, a needless preposition)","extraAfter":"the word of the sentence after which the extra word is inserted"} — the student finds the word that must not be there');
+      if (sentKinds.indexOf('scramble') !== -1) spec.push('{"type":"scramble","sentence":"a short CORRECT sentence of 5-10 words, NO brackets, whose word order shows the topic"} — the student puts the words in order');
+    } else if (sentKinds.length) spec.push('{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
     if (kinds.indexOf('match') !== -1) spec.push('{"type":"match","pairs":[{"a":"word or expression in ' + lang + '","b":"English translation or a short definition"}]} — 4 to 8 pairs');
     if (kinds.indexOf('wheel') !== -1) spec.push('{"type":"wheel","items":["...","..."]} — 6 to 10 short prompts in ' + lang + ' (words to explain, or mini-questions) for a spinning-wheel speaking game');
     const user = [
@@ -906,8 +917,10 @@
       'If it contains TEXT: base the exercises on that content (topic, vocabulary, facts), REWRITING everything at the target level — never copy sentences with mistakes and never quote page numbers or layout.',
       'If it is a SCENE or picture: use what is visible (objects, actions, places).',
       'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
-      focus ? 'TOPIC CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise this topic (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
-      'Write exactly ' + n + ' items, mixing these shapes:',
+      topics.length > 1 ? 'The teacher chose SEVERAL topics: ' + topics.map(function (t, i) { return (i + 1) + ') ' + t; }).join(' ') + '. Split the items evenly across them and set "topic" on every item to the topic it practises, copied exactly from this list.' : '',
+      focus ? 'TOPIC' + (topics.length > 1 ? 'S' : '') + ' CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise ' + (topics.length > 1 ? 'one of these topics' : 'this topic') + ' (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
+      'Write exactly ' + n + ' items, mixing these shapes' + (spec.length > 1 ? ' (use as many DIFFERENT shapes as possible: never two of the same shape in a row, and every shape at least once when there are enough items)' : '') + ':',
+      topics.length ? 'Every item may also carry "topic": the topic it practises.' : '',
       spec.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n'),
       'SCHEMA: {"items":[ ... ]}'
     ].join('\n');
@@ -916,15 +929,16 @@
     const okKinds = {}; kinds.forEach(function (k) { okKinds[k] = 1; });
     const items = (Array.isArray(j.items) ? j.items : []).map(function (it) {
       if (!it || !okKinds[it.type]) return null;
+      const topic = String(it.topic || '').trim().slice(0, 80);
       if (it.type === 'mc') {
         const opts = (Array.isArray(it.options) ? it.options : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean);
         const q = String(it.q || '').trim();
         if (!q || opts.length < 2) return null;
-        return { type: 'mc', q: q, options: opts.slice(0, 5), correct: Math.max(0, Math.min(opts.length - 1, it.correct | 0)) };
+        return { type: 'mc', q: q, options: opts.slice(0, 5), correct: Math.max(0, Math.min(opts.length - 1, it.correct | 0)), topic: topic || undefined };
       }
       if (it.type === 'match') {
         const pairs = (Array.isArray(it.pairs) ? it.pairs : []).map(function (p) { return { a: String(p && p.a || '').trim(), b: String(p && p.b || '').trim() }; }).filter(function (p) { return p.a && p.b; });
-        return pairs.length >= 2 ? { type: 'match', pairs: pairs.slice(0, 8) } : null;
+        return pairs.length >= 2 ? { type: 'match', pairs: pairs.slice(0, 8), topic: topic || undefined } : null;
       }
       if (it.type === 'wheel') {
         const its = (Array.isArray(it.items) ? it.items : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean);
@@ -937,9 +951,41 @@
       const out = { type: it.type, sentence: s };
       if (gaps.length) out.gaps = gaps;
       if (dis.length) out.distractors = dis;
+      ['wrongWord', 'wrongReplacement', 'missingWord', 'extraWord', 'extraAfter'].forEach(function (k) { const v = String(it[k] == null ? '' : it[k]).trim(); if (v) out[k] = v; });
+      if (it.type !== 'gap' && it.type !== 'gapbank') out.sentence = s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim();   // l'indizio tra parentesi ha senso solo negli spazi
+      if (topic) out.topic = topic;
       return out;
     }).filter(Boolean);
     return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  /** v136 (Edoardo: "faccio degli screenshot a degli esercizi e si capisca qual è l'argomento e le cose da ripassare,
+   *  se ci sono più argomenti mi viene chiesto su che cosa focalizzarsi"): il modello legge le immagini e dice SOLO quali
+   *  argomenti ci sono (grammatica, lessico, funzioni), con un esempio preso dall'immagine. Niente esercizi qui: li scrive
+   *  itemsFromImage sugli argomenti scelti dall'insegnante.
+   *  params: { images, lang, apiKey, model, fetchImpl } → { summary, topics:[{name, kind, example}], ai } */
+  async function topicsFromImage(params) {
+    const lang = params.lang || 'Italian';
+    const system = 'You are an experienced teacher of ' + lang + ' as a foreign language. You read images of exercises, textbook pages and slides and say what they practise. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = [
+      'Look at the attached image' + ((params.images || []).length > 1 ? 's' : '') + '. Which language points do they practise or present?',
+      'List 1 to 6 topics, the most important first. A topic is something a teacher would write in a lesson plan, specific enough to build exercises on it: e.g. "presente dei verbi regolari in -are", "articoli determinativi", "plurale dei nomi", "preposizioni articolate", "lessico della casa", "chiedere e dire l\'ora". Do not list the same point twice with different words; do not list generic skills like "lettura".',
+      'Write the topic names in Italian (the teacher is Italian), short (2-7 words), without a final period.',
+      'kind: "grammar", "vocabulary" or "function". example: 2-6 words copied from the image that show the topic.',
+      'summary: one short sentence in Italian saying what the image is (e.g. "Esercizio del libro sul presente indicativo").',
+      'SCHEMA: {"summary":"...","topics":[{"name":"...","kind":"grammar","example":"..."}]}'
+    ].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, images: params.images, maxTokens: 900, timeoutMs: 60000, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text) || {};
+    const seen = {};
+    const topics = (Array.isArray(j.topics) ? j.topics : []).map(function (t) {
+      const name = String(t && t.name || '').trim().replace(/[.\s]+$/, '').slice(0, 80);
+      const k = name.toLowerCase();
+      if (!name || seen[k]) return null;
+      seen[k] = 1;
+      return { name: name, kind: ['grammar', 'vocabulary', 'function'].indexOf(t.kind) !== -1 ? t.kind : 'grammar', example: String(t.example || '').trim().slice(0, 80) };
+    }).filter(Boolean).slice(0, 6);
+    return { summary: String(j.summary || '').trim().slice(0, 200), topics: topics, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /** "Chiedi all'AI" dell'editor (v82): dalla richiesta dell'insegnante ("metti un esercizio sul fatto che il
@@ -968,5 +1014,5 @@
       ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, askExercise: askExercise };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, askExercise: askExercise };
 });
