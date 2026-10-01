@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- UNSPLASH AL POSTO DI PEXELS (v140, 1/10). Pexels ha sospeso le chiavi API nuove (screenshot di Edoardo, 1/10/2026).
+  searchScenePhotos prova per ogni ricerca: Unsplash (S.settings.unsplashKey, campo #set-unsplash, header
+  "Authorization: Client-ID …", content_filter=high, urls.small/regular, attribuzione "Foto di X su Unsplash", e alla
+  scelta si chiama links.download_location come chiedono le loro regole), poi Pexels (chi ha già una chiave), poi
+  Openverse. CORS di Unsplash verificato da pauselearn.com. Test: e2e140.js.
 - 🔎 FOTO VERE PER LA FRASE (v139, 1/10). Edoardo: "la ricerca di foto vere per parola, però deve essere interpretata la
   frase: marcella lavora in un negozio di scarpe → shoeshop shopping assistant woman". Nel dialogo ✎ dell'esercizio del set
   (e col bottone 🖼 sulla riga, che apre il dialogo e lancia la ricerca) "🔎 Cerca una foto adatta": AI.photoQueries

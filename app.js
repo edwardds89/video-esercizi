@@ -4269,12 +4269,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#set-key').value = S.settings.apiKey || '';
     $('#set-model').value = S.settings.model || AI.DEFAULT_MODEL;
     $('#set-pexels').value = S.settings.pexelsKey || '';
+    $('#set-unsplash').value = S.settings.unsplashKey || '';
     $('#set-status').textContent = '';
     $('#dlg-settings').showModal();
   });
   $('#set-close').addEventListener('click', function () { $('#dlg-settings').close(); });
   $('#set-save').addEventListener('click', function () {
-    S.settings.apiKey = $('#set-key').value.trim(); S.settings.model = $('#set-model').value; S.settings.pexelsKey = $('#set-pexels').value.trim(); saveSettings();
+    S.settings.apiKey = $('#set-key').value.trim(); S.settings.model = $('#set-model').value; S.settings.pexelsKey = $('#set-pexels').value.trim(); S.settings.unsplashKey = $('#set-unsplash').value.trim(); saveSettings();
     $('#dlg-settings').close(); toast(S.settings.apiKey ? 'Chiave salvata in questo browser' : 'Chiave rimossa');
     if (S.view === 'new') { $('#f-ai').checked = !!S.settings.apiKey; $('#f-ai-status').textContent = S.settings.apiKey ? 'chiave salvata · modello ' + S.settings.model : 'nessuna chiave'; }
   });
@@ -7157,7 +7158,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       searchScenePhotos(queries).then(function (list) {
         if (CA_PHOTO !== P) return;
         P.busy = false; P.results = list;
-        P.msg = list.length ? list.length + ' foto · clicca quella giusta' + (S.settings.pexelsKey ? '' : ' (con una chiave Pexels nelle Impostazioni AI le foto sono più belle)') : 'Nessuna foto: cambia le parole qui sopra (in inglese, 1-3 parole) e cerca di nuovo.';
+        P.msg = list.length ? list.length + ' foto · clicca quella giusta' + (S.settings.unsplashKey || S.settings.pexelsKey ? '' : ' (con una chiave Unsplash nelle Impostazioni AI le foto sono più belle)') : 'Nessuna foto: cambia le parole qui sopra (in inglese, 1-3 parole) e cerca di nuovo.';
         caPhotoPaint(wrap);
       });
     };
@@ -7189,7 +7190,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const b = el('button', { class: 'ca-photo-it' + (CA_IMG === ph.url ? ' on' : ''), title: ph.credit },
         el('img', { src: ph.thumb, alt: ph.title || '', loading: 'lazy', referrerpolicy: 'no-referrer' }));
       b.querySelector('img').addEventListener('error', function () { b.remove(); });
-      b.addEventListener('click', function () { CA_IMG = ph.url; CA_IMG_CREDIT = ph.credit; if (CA_PAINT_IMG) CA_PAINT_IMG(); });
+      b.addEventListener('click', function () { CA_IMG = ph.url; CA_IMG_CREDIT = ph.credit; if (ph.ping && S.settings.unsplashKey) fetch(ph.ping, { headers: { Authorization: 'Client-ID ' + S.settings.unsplashKey } }).catch(function () {}); if (CA_PAINT_IMG) CA_PAINT_IMG(); });
       grid.appendChild(b);
     });
     box.appendChild(grid);
@@ -7204,6 +7205,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           ((j && j.photos) || []).forEach(function (p) { add({ thumb: p.src.medium, url: p.src.large, title: p.alt || q, credit: 'Foto di ' + p.photographer + ' su Pexels' }); });
         }).catch(function () { /* ignora */ });
     };
+    // v140: Pexels ha sospeso le chiavi nuove (1/10/2026): Unsplash (Client-ID, hotlink obbligatorio = l'URL salvato va
+    // bene, attribuzione "Foto di X su Unsplash", e la segnalazione di download quando la foto viene scelta).
+    const unsplash = function (q) {
+      return fetch('https://api.unsplash.com/search/photos?per_page=12&content_filter=high&query=' + encodeURIComponent(q), { headers: { Authorization: 'Client-ID ' + S.settings.unsplashKey } })
+        .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+          ((j && j.results) || []).forEach(function (p) { add({ thumb: p.urls.small, url: p.urls.regular, title: p.alt_description || q, credit: 'Foto di ' + ((p.user && p.user.name) || 'autore') + ' su Unsplash', ping: p.links && p.links.download_location }); });
+        }).catch(function () { /* ignora */ });
+    };
     const openverse = function (q) {
       return fetch('https://api.openverse.org/v1/images/?page_size=12&mature=false&q=' + encodeURIComponent(q))
         .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
@@ -7215,6 +7224,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     };
     const steps = [];
     queries.forEach(function (q) {
+      if (S.settings.unsplashKey) steps.push(function () { return out.length >= 18 ? null : unsplash(q); });
       if (S.settings.pexelsKey) steps.push(function () { return out.length >= 18 ? null : pexels(q); });
       steps.push(function () { return out.length >= 18 ? null : openverse(q); });
     });
