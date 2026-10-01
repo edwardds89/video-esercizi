@@ -1,5 +1,16 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- ✨ SIMILE E ↻ RIGENERA NEL SET, E LO SPAZIO SULL'INDIZIO (v138, 1/10). Edoardo: "per ogni tipo di esercizio voglio un
+  pulsante tipo create similar che mi genera una frase con un articolo diverso, e poter rigenerare la stessa se non mi
+  piace". Ogni riga di renderChalSet (tranne wheel) ha ✨ Simile (AI.similarItem mode 'similar': stesso punto, ALTRA forma,
+  inserito subito sotto) e ↻ (mode 'regen': stesso punto e forma, frase nuova, sostituisce mantenendo l'id; la versione
+  vecchia sta in CS_UNDO[id] e il bottone ↶ la ripristina finché non si ricarica). Il modello riceve tipo, frase,
+  soluzione, item.topic (ora salvato da chalBuildRaw quando l'esercizio nasce dalla foto) e le frasi del set da non
+  ripetere. ai.js: cleanRawItem e rawSpec estratti da itemsFromImage e condivisi. BUG CORRETTO (screenshot "molti ___ ___
+  ___ sotto i ___" → "zaino, colorati, banchi"): in EX.buildExercise gap/gapbank una gapWord uguale all'indizio tra
+  parentesi "(zaino)" faceva diventare spazio l'indizio; ora i token tra parentesi non sono mai spazi, una gapWord uguale
+  all'indizio va sulla parola dopo, e una gapWord di più parole fa uno spazio per parola (prima spariva). Il prompt chiede
+  la forma COME SCRITTA nella frase. Test: e2e138.js.
 - REPORT DELLE SFIDE NEL CLOUD CON LA CLASSE (v137, 1/10). Edoardo: "perché non c'è un database dietro ai report?" e
   "voglio anche poter mettere un label tipo Polimi lun/mer". Tabella chal_reports (sql/2026-10-01-report-sfide.sql: id
   dal client, owner, class_id → classes on delete set null, report jsonb = la stessa istantanea di 'pl-chalrep', RLS sul

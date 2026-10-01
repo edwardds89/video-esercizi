@@ -1660,3 +1660,6 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v137: sfide salvate sotto la classe */
 .cls-chal-h { margin: 12px 0 4px; font-weight: 700; font-size: 14px; color: #445; }
 .cls-chal { border-left: 3px solid #f08c00; }
+
+/* v138: Simile / Rigenera nel set */
+.cs-item .cs-ai { white-space: nowrap; }

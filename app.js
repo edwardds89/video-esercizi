@@ -6514,7 +6514,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // caricate da nessuna parte: vanno solo all'API col resto della richiesta), l'AI propone il materiale
   // (AI.itemsFromImage), l'insegnante spunta cosa tenere. Ogni chiamante passa i tipi che gli servono e
   // riceve gli item accettati. La costruzione vera resta al motore: il modello scrive frasi/domande/coppie.
-  const IMGGEN = { imgs: [], items: [], accept: null, kinds: null, topics: [], seq: 0, lastFocus: false };
+  const IMGGEN = { imgs: [], items: [], accept: null, kinds: null, topics: [], seq: 0, lastFocus: false, lastTopics: [] };
   function imgToJpeg(file, cb, max) {
     const fr = new FileReader();
     fr.onload = function () {
@@ -6683,7 +6683,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const kchk = $$('#ig-kinds input[data-kind]');
     const kinds = kchk.length ? kchk.filter(function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-kind'); }) : IMGGEN.kinds;
     if (kchk.length && !kinds.length) { $('#ig-msg').textContent = 'Scegli almeno un tipo di esercizio.'; return; }
-    IMGGEN.lastFocus = topics.length > 0;
+    IMGGEN.lastFocus = topics.length > 0; IMGGEN.lastTopics = topics;
     const go = $('#ig-go'); go.disabled = true;
     busyMsg($('#ig-msg'), 'Scrivo gli esercizi' + (topics.length ? ' su: ' + topics.join(', ') : '') + '… (10-30 secondi)');
     AI.itemsFromImage({
@@ -6938,12 +6938,43 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         it.image ? el('img', { class: 'cs-thumb', src: it.image, alt: '' }) : null,
         el('span', { class: 'txt grow' }, el('span', { text: chalItemSummary(it) }), el('span', { class: 'cs-sol', text: '  → ' + VLChal.solutionText(it) }),
           it.explain ? el('span', { class: 'cs-exp', title: it.explain, text: ' 💬' }) : null),
+        it.kind !== 'wheel' ? el('button', { class: 'small cs-ai', text: '✨ Simile', title: 'Crea un esercizio simile (stesso argomento, un\'altra forma: per esempio un altro articolo) e mettilo subito sotto', onclick: function (e) { chalAiItem(ls, i, 'similar', e.currentTarget); } }) : null,
+        it.kind !== 'wheel' ? el('button', { class: 'small cs-ai', text: '↻', title: 'Rigenera: stessa cosa da allenare, frase nuova (sostituisce questa)', onclick: function (e) { chalAiItem(ls, i, 'regen', e.currentTarget); } }) : null,
+        CS_UNDO[it.id] ? el('button', { class: 'small', text: '↶', title: 'Torna alla versione di prima', onclick: function () { items[i] = CS_UNDO[it.id]; delete CS_UNDO[it.id]; chalSetTouched(ls); toast('Versione di prima ripristinata'); } }) : null,
         el('button', { class: 'small', text: '✎', title: 'Modifica', onclick: function () { openChalAdd(i); } }),
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { const t = items[i - 1]; items[i - 1] = it; items[i] = t; chalSetTouched(ls); } }),
         el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === items.length - 1 ? 'disabled' : null, onclick: function () { const t = items[i + 1]; items[i + 1] = it; items[i] = t; chalSetTouched(ls); } }),
         el('button', { class: 'small danger', text: '✕', onclick: function () { items.splice(i, 1); chalSetTouched(ls); toast('Esercizio tolto dal set'); } }));
       box.appendChild(row);
     });
+  }
+  /** v138 (Edoardo: "per ogni tipo di esercizio voglio un pulsante create similar ... e poter rigenerare la stessa se non
+   *  mi piace"): ✨ Simile aggiunge sotto un esercizio dello stesso tipo e argomento con un'altra forma; ↻ Rigenera lo
+   *  sostituisce con una frase nuova (la versione di prima resta un clic su ↶ finché non si ricarica la pagina);
+   *  ✎ resta per ritoccarlo a mano. Gli accenti contano (strict) come negli esercizi di grammatica dalla foto. */
+  const CS_UNDO = {};
+  function chalAiItem(ls, i, mode, btn) {
+    if (!S.settings.apiKey) return toast('Serve la chiave AI: Impostazioni AI in alto', 6000);
+    const items = ls.chal.items, it = items[i]; if (!it) return;
+    const label = btn.textContent; btn.disabled = true; btn.textContent = '…';
+    const avoid = items.map(function (x) { return chalItemSummary(x); });
+    AI.similarItem({
+      kind: it.kind, mode: mode, topic: it.topic || '',
+      sentence: it.kind === 'mc' ? it.data.question + '  Options: ' + (it.data.options || []).filter(Boolean).join(' / ') : it.kind === 'match' ? it.pairs.map(function (p) { return p.a + ' = ' + p.b; }).join('; ') : (it.sentence || chalItemSummary(it)),
+      solution: VLChal.solutionText(it), avoid: avoid,
+      lang: String(ls.lang || 'it').slice(0, 2) === 'en' ? 'English' : 'Italian', level: ($('#ig-level') && $('#ig-level').value) || 'A2',
+      apiKey: S.settings.apiKey, model: S.settings.model
+    }).then(function (r) {
+      btn.disabled = false; btn.textContent = label;
+      const cur = items.indexOf(it); if (cur === -1) return;
+      const built = chalBuildRaw(r.item, ls, it.strict || !!it.topic || it.kind === 'gap' || it.kind === 'gapbank', it.topic || '');
+      if (!built) return toast('L\'AI ha scritto un esercizio che non riesco a costruire: riprova', 5000);
+      if (it.explain && mode === 'regen') built.explain = '';
+      if (mode === 'regen') { built.id = it.id; CS_UNDO[built.id] = it; items[cur] = built; }
+      else items.splice(cur + 1, 0, built);
+      chalSetTouched(ls);
+      toast(mode === 'regen' ? 'Rigenerato (↶ per tornare a prima)' : 'Esercizio simile aggiunto sotto');
+    }, function (e) { btn.disabled = false; btn.textContent = label; toast('AI: ' + e.message, 6000); });
   }
   function chalItemSummary(it) {
     if (it.kind === 'mc') return it.data.question + '  (' + (it.data.options || []).filter(Boolean).length + ' risposte)';
@@ -7109,18 +7140,25 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const withTopic = IMGGEN.lastFocus;
       let n = 0;
       items.forEach(function (it) {
-        let built = null;
-        if (it.type === 'mc') built = VLChal.buildItem('mc', it);
-        else if (it.type === 'match') built = VLChal.buildItem('match', it.pairs);
-        else built = VLChal.buildItem(it.type, it.sentence, { lang: ls.lang || 'it', seed: Date.now() % 100000, distractors: 2, choices: igChoices(it) });
-        // v126: esercizi di grammatica = gli accenti contano (è/e, perché/perche)
-        if (built && withTopic && built.kind !== 'match' && built.kind !== 'mc') built.strict = true;
+        const built = chalBuildRaw(it, ls, withTopic, IMGGEN.lastTopics.length === 1 ? IMGGEN.lastTopics[0] : '');
         if (built) { ls.chal.items.push(built); n++; }
       });
       if ($('#dlg-chal-add').open) $('#dlg-chal-add').close();
       chalSetTouched(ls);
       toast(n ? n + (n === 1 ? ' esercizio aggiunto dall\'immagine' : ' esercizi aggiunti dall\'immagine') : 'Nessun esercizio costruibile dalle proposte');
     } });
+  }
+  /** v138: item grezzo dell'AI → esercizio del set (foto, Simile, Rigenera). topic resta sull'item: serve a Simile. */
+  function chalBuildRaw(it, ls, strict, topic) {
+    let built = null;
+    if (it.type === 'mc') built = VLChal.buildItem('mc', it);
+    else if (it.type === 'match') built = VLChal.buildItem('match', it.pairs);
+    else built = VLChal.buildItem(it.type, it.sentence, { lang: ls.lang || 'it', seed: Date.now() % 100000, distractors: 2, choices: igChoices(it) });
+    if (!built) return null;
+    // v126: esercizi di grammatica = gli accenti contano (è/e, perché/perche)
+    if (strict && built.kind !== 'match' && built.kind !== 'mc') built.strict = true;
+    if (it.topic || topic) built.topic = it.topic || topic;
+    return built;
   }
   /** v136: le parole scelte dal modello per l'argomento (spazio, parola sbagliata, mancante, in più) */
   function igChoices(it) {

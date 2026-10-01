@@ -69,7 +69,25 @@
       // Almeno 3 spazi (se la frase lo permette), circa uno ogni 7 parole; parole piene, mai adiacenti, mai la prima
       let idx = [];
       if (ch.gapWords && ch.gapWords.length) {
-        for (const w of ch.gapWords) { const i = findIndex(tokens, w); if (i !== -1 && idx.indexOf(i) === -1) idx.push(i); }
+        // v138 (screenshot di Edoardo: "molti ___ ___ ___ sotto i ___" con soluzione "zaino, colorati, banchi"): l'indizio
+        // tra parentesi "(zaino) zaini" NON e' mai uno spazio, anche se il modello scrive la forma base come risposta; e
+        // una risposta di piu' parole ("zaini colorati") diventa uno spazio per parola invece di sparire.
+        const cue = []; let open = false;
+        tokens.forEach(function (t, j) { if (/^\(/.test(t.raw)) open = true; cue[j] = open; if (/\)[^\s]*$/.test(t.raw)) open = false; });
+        const take = function (w) {
+          const n = L.normalize(w);
+          for (let j = 0; j < tokens.length; j++) if (!cue[j] && tokens[j].norm === n && idx.indexOf(j) === -1) return j;
+          return -1;
+        };
+        for (const w of ch.gapWords) {
+          const parts = String(w || '').trim().split(/\s+/).filter(Boolean);
+          const got = parts.map(take);
+          if (got.every(function (j) { return j !== -1; })) got.forEach(function (j) { idx.push(j); });
+          else if (parts.length === 1 && cue.some(Boolean)) {
+            // la risposta e' la forma dell'indizio (es. "zaino" per "(zaino) zaini"): lo spazio va sulla parola subito dopo
+            for (let j = 0; j < tokens.length - 1; j++) if (cue[j] && /\)/.test(tokens[j].raw) && tokens[j].norm === L.normalize(parts[0]) && !cue[j + 1] && idx.indexOf(j + 1) === -1) { idx.push(j + 1); break; }
+          }
+        }
       }
       if (!idx.length) {
         const content = tokens.map(function (t, i) { return { i: i, t: t }; }).filter(function (x) { return x.i > 0 && L.isContent(x.t.core, o.lang); });

@@ -875,59 +875,8 @@
     return r;
   }
 
-  /**
-   * Esercizi da una o piu' IMMAGINI (v70): pagina di libro, screenshot, slide o foto di una scena.
-   * Il modello legge l'immagine e scrive materiale GREZZO (domande mc, frasi per gap/extra/missing/wrong,
-   * coppie per il match): la costruzione vera dell'esercizio resta all'app (VLChal.buildItem / EX.buildExercise),
-   * cosi' buchi e parole da trovare li sceglie il motore, non il modello.
-   * params: { images:[{media_type,data}], n, kinds, lang, level, apiKey, model, fetchImpl }
-   * → { items:[{type, q,options,correct | sentence | pairs}], ai }
-   */
-  async function itemsFromImage(params) {
-    const lang = params.lang || 'Italian';
-    const level = params.level || 'B1';
-    const n = Math.max(1, Math.min(12, params.n || 5));
-    const kinds = (params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'scramble', 'extra', 'missing', 'wrong', 'match']);
-    const system = 'You are an experienced language-teaching materials author. You read images (textbook pages, screenshots, slides, photos) and write exercise material. Output ONLY a JSON object, no prose, no markdown fences.';
-    const spec = [];
-    const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong', 'scramble'].indexOf(k) !== -1; });
-    // v136: piu' argomenti scelti dall'insegnante (params.topics) oppure il vecchio campo libero (params.focus)
-    const topics = (Array.isArray(params.topics) ? params.topics : []).map(function (t) { return String(t || '').trim(); }).filter(Boolean).slice(0, 6);
-    const focus = topics.length ? topics.join('; ') : String(params.focus || '').trim();
-    // v136 (Edoardo: "in base a quello si creano diversi tipi di esercizi"): con un argomento di grammatica ogni tipo
-    // allena la forma scelta, non una parola a caso. gap/gapbank: lo spazio cade sulla forma (gaps); wrong: la forma
-    // giusta viene sostituita da un errore tipico (wrongWord → wrongReplacement); missing: manca proprio la forma
-    // (articolo, preposizione, pronome); extra: si aggiunge una parola che uno studente metterebbe per errore;
-    // scramble: frase corta con la struttura da allenare. Le parole le sceglie il modello, l'esercizio lo costruisce l'app.
-    if (kinds.indexOf('mc') !== -1) spec.push(focus
-      ? '{"type":"mc","q":"a sentence in ' + lang + ' with ___ where the topic form goes (or a short question about the topic)","options":["...","...","...","..."],"correct":0} — 4 forms of the same kind (e.g. lo/il/la/gli, lavora/lavori/lavorano/lavoro), exactly one correct'
-      : '{"type":"mc","q":"a comprehension or vocabulary question in ' + lang + '","options":["...","...","...","..."],"correct":0} — 4 plausible options, exactly one correct');
-    const gapKinds = sentKinds.filter(function (k) { return k === 'gap' || k === 'gapbank'; });
-    if (focus) {
-      if (gapKinds.length) spec.push('{"type":"' + gapKinds.join('|') + '","sentence":"a short, natural, CORRECT sentence of 5-14 words in ' + lang + ' that practises the topic","gaps":["the exact word(s) of the sentence the student must write: the forms that practise the topic"],"distractors":["for gapbank only: 2 wrong forms of the same kind"]} — when the student needs a cue to know which form to write (a verb to conjugate, a singular to put in the plural, a noun whose article is asked), put the cue in round brackets IMMEDIATELY BEFORE the gap word, e.g. "Francesca (lavorare) lavora al supermercato." with gaps ["lavora"], "Sul tavolo ci sono due (chiave) chiavi." with gaps ["chiavi"]; for articles no cue is needed: "Ecco lo zaino di Marco." with gaps ["lo"]');
-      if (sentKinds.indexOf('wrong') !== -1) spec.push('{"type":"wrong","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","wrongWord":"one word of the sentence that is a form of the topic","wrongReplacement":"the typical mistake a student makes for that word (e.g. lavori for lavora, il for lo, chiave for chiavi)"} — the student finds and corrects the wrong word');
-      if (sentKinds.indexOf('missing') !== -1) spec.push('{"type":"missing","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","missingWord":"the word of the sentence that will be removed: a short form of the topic (article, preposition, pronoun, auxiliary, ending word), not the first or last word"} — the student finds where the word is missing and writes it');
-      if (sentKinds.indexOf('extra') !== -1) spec.push('{"type":"extra","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","extraWord":"a word a student would wrongly add, linked to the topic (e.g. an article before a possessive with a family noun, a needless preposition)","extraAfter":"the word of the sentence after which the extra word is inserted"} — the student finds the word that must not be there');
-      if (sentKinds.indexOf('scramble') !== -1) spec.push('{"type":"scramble","sentence":"a short CORRECT sentence of 5-10 words, NO brackets, whose word order shows the topic"} — the student puts the words in order');
-    } else if (sentKinds.length) spec.push('{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
-    if (kinds.indexOf('match') !== -1) spec.push('{"type":"match","pairs":[{"a":"word or expression in ' + lang + '","b":"English translation or a short definition"}]} — 4 to 8 pairs');
-    if (kinds.indexOf('wheel') !== -1) spec.push('{"type":"wheel","items":["...","..."]} — 6 to 10 short prompts in ' + lang + ' (words to explain, or mini-questions) for a spinning-wheel speaking game');
-    const user = [
-      'Look carefully at the attached image' + (params.images.length > 1 ? 's' : '') + ' (a textbook page, a screenshot, a slide or a photo).',
-      'If it contains TEXT: base the exercises on that content (topic, vocabulary, facts), REWRITING everything at the target level — never copy sentences with mistakes and never quote page numbers or layout.',
-      'If it is a SCENE or picture: use what is visible (objects, actions, places).',
-      'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
-      topics.length > 1 ? 'The teacher chose SEVERAL topics: ' + topics.map(function (t, i) { return (i + 1) + ') ' + t; }).join(' ') + '. Split the items evenly across them and set "topic" on every item to the topic it practises, copied exactly from this list.' : '',
-      focus ? 'TOPIC' + (topics.length > 1 ? 'S' : '') + ' CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise ' + (topics.length > 1 ? 'one of these topics' : 'this topic') + ' (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
-      'Write exactly ' + n + ' items, mixing these shapes' + (spec.length > 1 ? ' (use as many DIFFERENT shapes as possible: never two of the same shape in a row, and every shape at least once when there are enough items)' : '') + ':',
-      topics.length ? 'Every item may also carry "topic": the topic it practises.' : '',
-      spec.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n'),
-      'SCHEMA: {"items":[ ... ]}'
-    ].join('\n');
-    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, images: params.images, maxTokens: 4000, fetchImpl: params.fetchImpl });
-    const j = extractJSON(res.text);
-    const okKinds = {}; kinds.forEach(function (k) { okKinds[k] = 1; });
-    const items = (Array.isArray(j.items) ? j.items : []).map(function (it) {
+  /** v138: un item grezzo del modello → item pulito (stesso formato per foto, Simile e Rigenera). */
+  function cleanRawItem(it, okKinds, focus) {
       if (!it || !okKinds[it.type]) return null;
       const topic = String(it.topic || '').trim().slice(0, 80);
       if (it.type === 'mc') {
@@ -955,8 +904,106 @@
       if (it.type !== 'gap' && it.type !== 'gapbank') out.sentence = s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim();   // l'indizio tra parentesi ha senso solo negli spazi
       if (topic) out.topic = topic;
       return out;
-    }).filter(Boolean);
+  }
+
+  /** v138: le forme JSON che il modello deve scrivere per ogni tipo (con un argomento: ogni tipo allena la forma). */
+  function rawSpec(kinds, lang, focus) {
+    const spec = [];
+    const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong', 'scramble'].indexOf(k) !== -1; });
+    // v136 (Edoardo: "in base a quello si creano diversi tipi di esercizi"): con un argomento di grammatica ogni tipo
+    // allena la forma scelta, non una parola a caso. gap/gapbank: lo spazio cade sulla forma (gaps); wrong: la forma
+    // giusta viene sostituita da un errore tipico (wrongWord → wrongReplacement); missing: manca proprio la forma
+    // (articolo, preposizione, pronome); extra: si aggiunge una parola che uno studente metterebbe per errore;
+    // scramble: frase corta con la struttura da allenare. Le parole le sceglie il modello, l'esercizio lo costruisce l'app.
+    if (kinds.indexOf('mc') !== -1) spec.push(focus
+      ? '{"type":"mc","q":"a sentence in ' + lang + ' with ___ where the topic form goes (or a short question about the topic)","options":["...","...","...","..."],"correct":0} — 4 forms of the same kind (e.g. lo/il/la/gli, lavora/lavori/lavorano/lavoro), exactly one correct'
+      : '{"type":"mc","q":"a comprehension or vocabulary question in ' + lang + '","options":["...","...","...","..."],"correct":0} — 4 plausible options, exactly one correct');
+    const gapKinds = sentKinds.filter(function (k) { return k === 'gap' || k === 'gapbank'; });
+    if (focus) {
+      if (gapKinds.length) spec.push('{"type":"' + gapKinds.join('|') + '","sentence":"a short, natural, CORRECT sentence of 5-14 words in ' + lang + ' that practises the topic","gaps":["the exact word(s) AS WRITTEN in the sentence that the student must write (the inflected form after the cue, e.g. zaini, never the cue zaino), one word per entry"],"distractors":["for gapbank only: 2 wrong forms of the same kind"]} — when the student needs a cue to know which form to write (a verb to conjugate, a singular to put in the plural, a noun whose article is asked), put the cue in round brackets IMMEDIATELY BEFORE the gap word, e.g. "Francesca (lavorare) lavora al supermercato." with gaps ["lavora"], "Sul tavolo ci sono due (chiave) chiavi." with gaps ["chiavi"]; for articles no cue is needed: "Ecco lo zaino di Marco." with gaps ["lo"]');
+      if (sentKinds.indexOf('wrong') !== -1) spec.push('{"type":"wrong","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","wrongWord":"one word of the sentence that is a form of the topic","wrongReplacement":"the typical mistake a student makes for that word (e.g. lavori for lavora, il for lo, chiave for chiavi)"} — the student finds and corrects the wrong word');
+      if (sentKinds.indexOf('missing') !== -1) spec.push('{"type":"missing","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","missingWord":"the word of the sentence that will be removed: a short form of the topic (article, preposition, pronoun, auxiliary, ending word), not the first or last word"} — the student finds where the word is missing and writes it');
+      if (sentKinds.indexOf('extra') !== -1) spec.push('{"type":"extra","sentence":"a short CORRECT sentence of 5-14 words, NO brackets","extraWord":"a word a student would wrongly add, linked to the topic (e.g. an article before a possessive with a family noun, a needless preposition)","extraAfter":"the word of the sentence after which the extra word is inserted"} — the student finds the word that must not be there');
+      if (sentKinds.indexOf('scramble') !== -1) spec.push('{"type":"scramble","sentence":"a short CORRECT sentence of 5-10 words, NO brackets, whose word order shows the topic"} — the student puts the words in order');
+    } else if (sentKinds.length) spec.push('{"type":"' + sentKinds.join('|') + '","sentence":"one complete, natural, CORRECT sentence of 12-25 words in ' + lang + '"} — the app builds the exercise from the sentence (it chooses the gaps or the word to find), so just write a good sentence');
+    if (kinds.indexOf('match') !== -1) spec.push('{"type":"match","pairs":[{"a":"word or expression in ' + lang + '","b":"English translation or a short definition"}]} — 4 to 8 pairs');
+    if (kinds.indexOf('wheel') !== -1) spec.push('{"type":"wheel","items":["...","..."]} — 6 to 10 short prompts in ' + lang + ' (words to explain, or mini-questions) for a spinning-wheel speaking game');
+    return spec;
+  }
+
+  /**
+   * Esercizi da una o piu' IMMAGINI (v70): pagina di libro, screenshot, slide o foto di una scena.
+   * Il modello legge l'immagine e scrive materiale GREZZO (domande mc, frasi per gap/extra/missing/wrong,
+   * coppie per il match): la costruzione vera dell'esercizio resta all'app (VLChal.buildItem / EX.buildExercise),
+   * cosi' buchi e parole da trovare li sceglie il motore, non il modello.
+   * params: { images:[{media_type,data}], n, kinds, lang, level, apiKey, model, fetchImpl }
+   * → { items:[{type, q,options,correct | sentence | pairs}], ai }
+   */
+  async function itemsFromImage(params) {
+    const lang = params.lang || 'Italian';
+    const level = params.level || 'B1';
+    const n = Math.max(1, Math.min(12, params.n || 5));
+    const kinds = (params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'scramble', 'extra', 'missing', 'wrong', 'match']);
+    const system = 'You are an experienced language-teaching materials author. You read images (textbook pages, screenshots, slides, photos) and write exercise material. Output ONLY a JSON object, no prose, no markdown fences.';
+    // v136: piu' argomenti scelti dall'insegnante (params.topics) oppure il vecchio campo libero (params.focus)
+    const topics = (Array.isArray(params.topics) ? params.topics : []).map(function (t) { return String(t || '').trim(); }).filter(Boolean).slice(0, 6);
+    const focus = topics.length ? topics.join('; ') : String(params.focus || '').trim();
+    const spec = rawSpec(kinds, lang, focus);
+    const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong', 'scramble'].indexOf(k) !== -1; });
+    const user = [
+      'Look carefully at the attached image' + (params.images.length > 1 ? 's' : '') + ' (a textbook page, a screenshot, a slide or a photo).',
+      'If it contains TEXT: base the exercises on that content (topic, vocabulary, facts), REWRITING everything at the target level — never copy sentences with mistakes and never quote page numbers or layout.',
+      'If it is a SCENE or picture: use what is visible (objects, actions, places).',
+      'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
+      topics.length > 1 ? 'The teacher chose SEVERAL topics: ' + topics.map(function (t, i) { return (i + 1) + ') ' + t; }).join(' ') + '. Split the items evenly across them and set "topic" on every item to the topic it practises, copied exactly from this list.' : '',
+      focus ? 'TOPIC' + (topics.length > 1 ? 'S' : '') + ' CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise ' + (topics.length > 1 ? 'one of these topics' : 'this topic') + ' (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
+      'Write exactly ' + n + ' items, mixing these shapes' + (spec.length > 1 ? ' (use as many DIFFERENT shapes as possible: never two of the same shape in a row, and every shape at least once when there are enough items)' : '') + ':',
+      topics.length ? 'Every item may also carry "topic": the topic it practises.' : '',
+      spec.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n'),
+      'SCHEMA: {"items":[ ... ]}'
+    ].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, images: params.images, maxTokens: 4000, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text);
+    const okKinds = {}; kinds.forEach(function (k) { okKinds[k] = 1; });
+    const items = (Array.isArray(j.items) ? j.items : []).map(function (it) { return cleanRawItem(it, okKinds, focus); }).filter(Boolean);
     return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
+  /** v138 (Edoardo: "per ogni tipo di esercizio voglio un pulsante tipo create similar che mi genera una frase con un
+   *  articolo diverso, e poi posso anche rigenerare la stessa se non mi piace"). Senza immagini: il modello vede l'esercizio
+   *  com'e' (tipo, frase, soluzione, argomento) e ne scrive UNO nuovo dello stesso tipo.
+   *  mode 'similar': stesso punto di grammatica ma un'ALTRA forma (un altro articolo, un'altra persona, singolare↔plurale)
+   *  e un altro contesto, per AGGIUNGERLO al set. mode 'regen': stesso punto e stessa forma allenata, frase del tutto
+   *  nuova, per SOSTITUIRLO. avoid = le frasi gia' nel set, da non ripetere.
+   *  params: { kind, sentence, solution, topic, mode, avoid, lang, level, apiKey, model, fetchImpl } → { item, ai } */
+  async function similarItem(params) {
+    const lang = params.lang || 'Italian';
+    const kind = params.kind;
+    const ok = {}; ok[kind] = 1;
+    const topic = String(params.topic || '').trim();
+    const spec = rawSpec([kind], lang, topic || 'the same language point as the original exercise');
+    const system = 'You are an experienced language-teaching materials author. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = [
+      'Here is an exercise of type "' + kind + '" for CEFR ' + (params.level || 'A2') + ' students of ' + lang + ':',
+      'EXERCISE: ' + String(params.sentence || '').slice(0, 600),
+      'SOLUTION: ' + String(params.solution || '').slice(0, 300),
+      topic ? 'TOPIC: ' + topic : 'First work out which grammar or vocabulary point it practises (e.g. definite articles, present tense of -are verbs).',
+      params.mode === 'regen'
+        ? 'Write ONE replacement exercise: the SAME point and the same kind of form being tested, but a completely NEW sentence with a different context and names. The teacher did not like the original, so do not reuse its words.'
+        : 'Write ONE SIMILAR exercise to add next to it: the SAME point, but practising a DIFFERENT form of it (e.g. another article: il → lo / gli / l\' ; another person of the verb; singular ↔ plural; masculine ↔ feminine) in a new sentence with a different context.',
+      'The sentence must be natural, correct and understandable on its own.',
+      (params.avoid || []).length ? 'Do NOT repeat any of these sentences already in the set: ' + params.avoid.slice(0, 40).map(function (x) { return '"' + String(x).slice(0, 120) + '"'; }).join(' ; ') : '',
+      'Shape to use:\n' + spec.join('\n'),
+      'SCHEMA: {"item": { ... }}'
+    ].filter(Boolean).join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 900, timeoutMs: 60000, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text) || {};
+    const raw = j.item || (Array.isArray(j.items) ? j.items[0] : j);
+    if (raw && !raw.type) raw.type = kind;
+    const item = cleanRawItem(raw, ok, true);
+    if (!item) throw new Error('l\'AI non ha scritto un esercizio utilizzabile: riprova');
+    if (topic && !item.topic) item.topic = topic;
+    return { item: item, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /** v136 (Edoardo: "faccio degli screenshot a degli esercizi e si capisca qual è l'argomento e le cose da ripassare,
@@ -1014,5 +1061,5 @@
       ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, askExercise: askExercise };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, askExercise: askExercise };
 });
