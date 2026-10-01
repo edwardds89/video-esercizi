@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-138">
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-139">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260919-138">
+<link rel="stylesheet" href="styles.css?v=20260919-139">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-138" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-138" alt="PauseLearn" width="178" height="22"></div>
+  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-139" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-139" alt="PauseLearn" width="178" height="22"></div>
   <button id="nav-toggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav" title="Menu">☰<span id="nav-toggle-dot" class="dot off" style="display:none"></span></button>
   <nav id="nav">
     <button data-view="home">Le tue lezioni</button>
@@ -754,6 +754,8 @@
     <option value="claude-haiku-4-5-20251001">claude-haiku-4-5 (più economico, meno preciso)</option>
     <option value="claude-opus-5">claude-opus-5 (più costoso)</option>
   </select>
+  <label style="margin-top:12px">Chiave Pexels <span class="hint">(facoltativa: foto più belle nella ricerca 🔎. Gratis su pexels.com/api; senza chiave si cerca su Openverse)</span></label>
+  <input id="set-pexels" type="password" placeholder="la chiave di Pexels" autocomplete="off">
   <div id="set-status" class="hint" style="margin-top:8px"></div>
   <div class="row" style="margin-top:14px">
     <button id="set-test">Prova la chiave</button>
@@ -899,19 +901,19 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260919-138"></script>
-<script src="exercises.js?v=20260919-138"></script>
-<script src="generator.js?v=20260919-138"></script>
-<script src="activities.js?v=20260919-138"></script>
-<script src="ai.js?v=20260919-138"></script>
-<script src="demo-data.js?v=20260919-138"></script>
-<script src="platforms.js?v=20260919-138"></script>
-<script src="bookmarklet.js?v=20260919-138"></script>
-<script src="sync.js?v=20260919-138"></script>
-<script src="qr.js?v=20260919-138"></script>
-<script src="challenge.js?v=20260919-138"></script>
-<script src="classroom.js?v=20260919-138"></script>
-<script src="app.js?v=20260919-138"></script>
+<script src="lang.js?v=20260919-139"></script>
+<script src="exercises.js?v=20260919-139"></script>
+<script src="generator.js?v=20260919-139"></script>
+<script src="activities.js?v=20260919-139"></script>
+<script src="ai.js?v=20260919-139"></script>
+<script src="demo-data.js?v=20260919-139"></script>
+<script src="platforms.js?v=20260919-139"></script>
+<script src="bookmarklet.js?v=20260919-139"></script>
+<script src="sync.js?v=20260919-139"></script>
+<script src="qr.js?v=20260919-139"></script>
+<script src="challenge.js?v=20260919-139"></script>
+<script src="classroom.js?v=20260919-139"></script>
+<script src="app.js?v=20260919-139"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 

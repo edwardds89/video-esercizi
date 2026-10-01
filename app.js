@@ -4268,12 +4268,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#btn-settings').addEventListener('click', function () {
     $('#set-key').value = S.settings.apiKey || '';
     $('#set-model').value = S.settings.model || AI.DEFAULT_MODEL;
+    $('#set-pexels').value = S.settings.pexelsKey || '';
     $('#set-status').textContent = '';
     $('#dlg-settings').showModal();
   });
   $('#set-close').addEventListener('click', function () { $('#dlg-settings').close(); });
   $('#set-save').addEventListener('click', function () {
-    S.settings.apiKey = $('#set-key').value.trim(); S.settings.model = $('#set-model').value; saveSettings();
+    S.settings.apiKey = $('#set-key').value.trim(); S.settings.model = $('#set-model').value; S.settings.pexelsKey = $('#set-pexels').value.trim(); saveSettings();
     $('#dlg-settings').close(); toast(S.settings.apiKey ? 'Chiave salvata in questo browser' : 'Chiave rimossa');
     if (S.view === 'new') { $('#f-ai').checked = !!S.settings.apiKey; $('#f-ai-status').textContent = S.settings.apiKey ? 'chiave salvata · modello ' + S.settings.model : 'nessuna chiave'; }
   });
@@ -6941,6 +6942,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         it.kind !== 'wheel' ? el('button', { class: 'small cs-ai', text: '✨ Simile', title: 'Crea un esercizio simile (stesso argomento, un\'altra forma: per esempio un altro articolo) e mettilo subito sotto', onclick: function (e) { chalAiItem(ls, i, 'similar', e.currentTarget); } }) : null,
         it.kind !== 'wheel' ? el('button', { class: 'small cs-ai', text: '↻', title: 'Rigenera: stessa cosa da allenare, frase nuova (sostituisce questa)', onclick: function (e) { chalAiItem(ls, i, 'regen', e.currentTarget); } }) : null,
         CS_UNDO[it.id] ? el('button', { class: 'small', text: '↶', title: 'Torna alla versione di prima', onclick: function () { items[i] = CS_UNDO[it.id]; delete CS_UNDO[it.id]; chalSetTouched(ls); toast('Versione di prima ripristinata'); } }) : null,
+        it.kind !== 'match' ? el('button', { class: 'small', text: '🖼', title: 'Cerca una foto adatta alla frase', onclick: function () { openChalAdd(i); setTimeout(function () { const b = $('#ca-photo-go'); if (b) b.click(); }, 50); } }) : null,
         el('button', { class: 'small', text: '✎', title: 'Modifica', onclick: function () { openChalAdd(i); } }),
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { const t = items[i - 1]; items[i - 1] = it; items[i] = t; chalSetTouched(ls); } }),
         el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === items.length - 1 ? 'disabled' : null, onclick: function () { const t = items[i + 1]; items[i + 1] = it; items[i] = t; chalSetTouched(ls); } }),
@@ -7031,12 +7033,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // "+ Esercizio" e "✎ Modifica": lo stesso dialog, con i campi che cambiano secondo il tipo.
   // editIx = indice dell'item nel set da modificare (null = nuovo); in modifica il tipo resta bloccato
   // e id/src vengono conservati, cosi' il dedup dell'import continua a funzionare.
-  let CA_EDIT = null, CA_IMG = null, CA_PAINT_IMG = null;
+  let CA_EDIT = null, CA_IMG = null, CA_PAINT_IMG = null, CA_IMG_CREDIT = '', CA_PHOTO = null;
   function openChalAdd(editIx) {
     const ls = current(); if (!ls || !ls.chal) return;
     CA_EDIT = (editIx == null ? null : editIx);
     const editing = CA_EDIT != null ? ls.chal.items[CA_EDIT] : null;
-    CA_IMG = editing && editing.image || null;
+    CA_IMG = editing && editing.image || null; CA_IMG_CREDIT = editing && editing.imageCredit || ''; CA_PHOTO = null;
     $('#ca-title').textContent = editing ? 'Modifica esercizio' : 'Nuovo esercizio del set';
     $('#ca-ok').textContent = editing ? 'Salva' : 'Aggiungi';
     $('#ca-img').style.display = editing ? 'none' : '';
@@ -7115,7 +7117,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           urlIn, el('button', { class: 'small', text: '🔗 Usa il link', onclick: useUrl })));
         imgWrap.appendChild(el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap;margin-top:6px' },
           el('label', { for: 'ca-imgfile', class: 'chip', style: 'margin:0', text: CA_IMG ? '🖼 Cambia con un file' : '🖼 Scegli un file' }), f,
-          CA_IMG ? el('button', { class: 'small', text: '✕ Togli l\'immagine', onclick: function () { CA_IMG = null; paintImg(); } }) : null));
+          CA_IMG ? el('button', { class: 'small', text: '✕ Togli l\'immagine', onclick: function () { CA_IMG = null; CA_IMG_CREDIT = ''; paintImg(); } }) : null,
+          el('button', { class: 'small primary', id: 'ca-photo-go', text: '🔎 Cerca una foto adatta', title: 'L\'AI legge la frase e cerca foto vere della situazione', onclick: function () { caPhotoSearch(imgWrap); } })));
+        if (CA_IMG && CA_IMG_CREDIT) imgWrap.appendChild(el('div', { class: 'hint', style: 'font-size:12px', text: '📷 ' + CA_IMG_CREDIT }));
+        if (CA_PHOTO) caPhotoPaint(imgWrap);
       };
       CA_PAINT_IMG = paintImg;
       paintImg();
@@ -7130,6 +7135,90 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     body.appendChild(fields);
     paint();
     $('#dlg-chal-add').showModal();
+  }
+  /** v139 (Edoardo: "la ricerca di foto vere per parola, però deve essere interpretata la frase: marcella lavora in un
+   *  negozio di scarpe → shoeshop shopping assistant woman"): AI.photoQueries trasforma la frase in 3-5 ricerche inglesi
+   *  corte (dalla piu' precisa alla piu' generica), poi si cerca su Pexels (se c'e' la chiave nelle Impostazioni: foto da
+   *  archivio, belle) e su Openverse (senza chiave, foto Creative Commons, soprattutto Flickr). Le ricerche restano
+   *  modificabili. Clic su una miniatura = immagine dell'esercizio, con l'autore in item.imageCredit. */
+  function caPhotoText() {
+    const t = ($('#ca-sent') && $('#ca-sent').value) || ($('#ca-q') && $('#ca-q').value) || '';
+    if (t.trim()) return t.trim();
+    const ed = CA_EDIT != null && current() && current().chal && current().chal.items[CA_EDIT];
+    return ed ? chalItemSummary(ed) : '';
+  }
+  function caPhotoSearch(wrap, queriesText) {
+    const text = caPhotoText();
+    CA_PHOTO = CA_PHOTO || { queries: [], results: [], busy: false, msg: '', scene: '' };
+    const P = CA_PHOTO;
+    const run = function (queries) {
+      P.queries = queries; P.busy = true; P.msg = 'Cerco: ' + queries.join(' · ') + '…'; P.results = [];
+      caPhotoPaint(wrap);
+      searchScenePhotos(queries).then(function (list) {
+        if (CA_PHOTO !== P) return;
+        P.busy = false; P.results = list;
+        P.msg = list.length ? list.length + ' foto · clicca quella giusta' + (S.settings.pexelsKey ? '' : ' (con una chiave Pexels nelle Impostazioni AI le foto sono più belle)') : 'Nessuna foto: cambia le parole qui sopra (in inglese, 1-3 parole) e cerca di nuovo.';
+        caPhotoPaint(wrap);
+      });
+    };
+    if (queriesText != null) return run(queriesText.split(/[,;\n]+/).map(function (q) { return q.trim(); }).filter(Boolean).slice(0, 5));
+    if (!text) { P.msg = 'Scrivi prima la frase dell\'esercizio (o le parole da cercare qui sotto, in inglese).'; caPhotoPaint(wrap); return; }
+    if (!S.settings.apiKey) { P.msg = 'Senza chiave AI non posso interpretare la frase: scrivi qui sotto le parole da cercare in inglese (es. shoe store, saleswoman).'; caPhotoPaint(wrap); return; }
+    P.busy = true; P.msg = 'Leggo la frase e scelgo cosa cercare…'; caPhotoPaint(wrap);
+    AI.photoQueries({ text: text, lang: 'Italian', apiKey: S.settings.apiKey, model: S.settings.model }).then(function (r) {
+      if (CA_PHOTO !== P) return;
+      P.scene = r.scene; run(r.queries);
+    }, function (e) { P.busy = false; P.msg = 'AI: ' + e.message + '. Scrivi tu le parole da cercare.'; caPhotoPaint(wrap); });
+  }
+  function caPhotoPaint(wrap) {
+    const P = CA_PHOTO; if (!P) return;
+    let box = wrap.querySelector('.ca-photo');
+    if (!box) { box = el('div', { class: 'ca-photo' }); wrap.appendChild(box); }
+    box.innerHTML = '';
+    const qIn = el('input', { type: 'text', value: P.queries.join(', '), placeholder: 'parole da cercare in inglese, separate da virgole', style: 'flex:1;min-width:200px' });
+    qIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); caPhotoSearch(wrap, qIn.value); } });
+    if (P.scene) box.appendChild(el('div', { class: 'hint', text: '🎬 ' + P.scene }));
+    box.appendChild(el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' }, qIn,
+      el('button', { class: 'small', text: '🔎 Cerca', onclick: function () { caPhotoSearch(wrap, qIn.value); } }),
+      el('button', { class: 'small', text: '✕', title: 'Chiudi la ricerca', onclick: function () { CA_PHOTO = null; box.remove(); } })));
+    const msg = el('div', { class: 'hint', style: 'margin:4px 0' });
+    if (P.busy) busyMsg(msg, P.msg); else msg.textContent = P.msg;
+    box.appendChild(msg);
+    const grid = el('div', { class: 'ca-photo-grid' });
+    P.results.forEach(function (ph) {
+      const b = el('button', { class: 'ca-photo-it' + (CA_IMG === ph.url ? ' on' : ''), title: ph.credit },
+        el('img', { src: ph.thumb, alt: ph.title || '', loading: 'lazy', referrerpolicy: 'no-referrer' }));
+      b.querySelector('img').addEventListener('error', function () { b.remove(); });
+      b.addEventListener('click', function () { CA_IMG = ph.url; CA_IMG_CREDIT = ph.credit; if (CA_PAINT_IMG) CA_PAINT_IMG(); });
+      grid.appendChild(b);
+    });
+    box.appendChild(grid);
+  }
+  /** Pexels (con chiave) + Openverse (senza): per ogni ricerca, finché ci sono almeno 18 foto. */
+  function searchScenePhotos(queries) {
+    const seen = new Set(), out = [];
+    const add = function (o) { if (o.url && !seen.has(o.url)) { seen.add(o.url); out.push(o); } };
+    const pexels = function (q) {
+      return fetch('https://api.pexels.com/v1/search?per_page=12&query=' + encodeURIComponent(q), { headers: { Authorization: S.settings.pexelsKey } })
+        .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+          ((j && j.photos) || []).forEach(function (p) { add({ thumb: p.src.medium, url: p.src.large, title: p.alt || q, credit: 'Foto di ' + p.photographer + ' su Pexels' }); });
+        }).catch(function () { /* ignora */ });
+    };
+    const openverse = function (q) {
+      return fetch('https://api.openverse.org/v1/images/?page_size=12&mature=false&q=' + encodeURIComponent(q))
+        .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+          ((j && j.results) || []).forEach(function (p) {
+            const lic = (p.license || '').toUpperCase() === 'CC0' ? 'CC0' : 'CC ' + String(p.license || '').toUpperCase() + (p.license_version ? ' ' + p.license_version : '');
+            add({ thumb: p.thumbnail || p.url, url: p.url, title: p.title || q, credit: (p.title ? '«' + p.title + '» ' : '') + (p.creator ? 'di ' + p.creator + ' ' : '') + '(' + lic + ', ' + (p.source || 'Openverse') + ')' });
+          });
+        }).catch(function () { /* ignora */ });
+    };
+    const steps = [];
+    queries.forEach(function (q) {
+      if (S.settings.pexelsKey) steps.push(function () { return out.length >= 18 ? null : pexels(q); });
+      steps.push(function () { return out.length >= 18 ? null : openverse(q); });
+    });
+    return steps.reduce(function (p, f) { return p.then(f); }, Promise.resolve()).then(function () { return out.slice(0, 24); });
   }
   $('#cs-add').addEventListener('click', function () { openChalAdd(null); });
   $('#ca-close').addEventListener('click', function () { CA_EDIT = null; $('#dlg-chal-add').close(); });
@@ -7212,7 +7301,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const exp = ($('#ca-explain') && $('#ca-explain').value || '').trim();
     if (exp) it.explain = exp.slice(0, 600);
     if ($('#ca-strict') && $('#ca-strict').checked) it.strict = true;
-    if (CA_IMG) it.image = CA_IMG;
+    if (CA_IMG) { it.image = CA_IMG; if (CA_IMG_CREDIT) it.imageCredit = CA_IMG_CREDIT; }
     if (CA_EDIT != null && ls.chal.items[CA_EDIT]) {
       const old = ls.chal.items[CA_EDIT];
       it.id = old.id; if (old.src) it.src = old.src;   // stessa identita': niente doppioni all'import
@@ -7575,6 +7664,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function chalScreenItem(item, pub) {
     const box = el('div', { class: 'chal-screen' });
     if (item.image) box.appendChild(el('img', { class: 'chal-img', src: item.image, alt: '' }));   // v127
+    if (item.image && item.imageCredit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + item.imageCredit }));   // v139
     box.appendChild(el('div', { class: 'instr', text: item.kind === 'gapbank' ? 'Completa gli spazi con le parole della lista (dal telefono).' : EX.INSTRUCTIONS[item.kind] || 'Rispondi dal telefono.' }));
     if (item.kind === 'mc') {
       box.appendChild(el('div', { class: 'chal-q', text: item.data.question }));
@@ -8898,6 +8988,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const pub = VLChal.pubItem(item, { showQ: true });
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
       if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
+      if (item.image && item.imageCredit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + item.imageCredit }));
       box.appendChild(el('div', { class: 'as-kind', text: T.both ? ((T.k[item.kind] || '').split('\n')[0] + ' · ' + (INSTR[item.kind] || '').split('\n')[0] + '\n' + (T.k[item.kind] || '').split('\n')[1] + ' · ' + (INSTR[item.kind] || '').split('\n')[1]) + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? '\n' + T.accents.trim() : '') : (T.k[item.kind] || VLChal.itemLabel(item.kind)) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? T.accents : '') }));
       const msg = el('div', { class: 'as-msg' });
       const hintBox = el('div', { class: 'as-hint', style: 'display:none' });

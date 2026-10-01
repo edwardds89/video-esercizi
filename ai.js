@@ -969,6 +969,30 @@
     return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
+  /** v139 (Edoardo: "la ricerca di foto vere per parola, però deve essere interpretata la frase: marcella lavora in un
+   *  negozio di scarpe → shoeshop shopping assistant woman"). Dalla frase dell'esercizio alle parole da cercare in un
+   *  archivio di foto (Pexels / Openverse, che rispondono bene a 1-3 parole inglesi): dalla piu' precisa alla piu' generica.
+   *  NON deve rivelare la soluzione (la foto si vede prima della risposta), quindi descrive la SCENA, non la parola mancante
+   *  se e' quella da indovinare... a meno che la parola sia un oggetto: la foto di un oggetto aiuta, e' voluto.
+   *  params: { text, lang, apiKey, model, fetchImpl } → { queries:[...], scene, ai } */
+  async function photoQueries(params) {
+    const system = 'You turn a sentence from a language exercise into search queries for a stock photo library. Output ONLY a JSON object, no prose, no markdown fences.';
+    const user = [
+      'SENTENCE (' + (params.lang || 'Italian') + '): ' + String(params.text || '').replace(/_+/g, '…').slice(0, 500),
+      'Imagine the photo that best illustrates the SITUATION of the sentence (who, where, doing what). Ignore grammar cues in brackets and blanks.',
+      'Write 4 English search queries for a stock photo site, from the most specific to the most generic, 1 to 3 words each (longer queries find nothing): e.g. for "Marcella lavora in un negozio di scarpe": ["shoe store saleswoman", "shoe shop", "shoe store", "shoes"].',
+      'Prefer concrete, photographable things (places, objects, people doing actions). No names of people, no abstract words.',
+      'scene: the photo you imagine, in Italian, max 8 words.',
+      'SCHEMA: {"queries":["...","...","...","..."],"scene":"..."}'
+    ].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 300, timeoutMs: 30000, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text) || {};
+    const queries = (Array.isArray(j.queries) ? j.queries : []).map(function (q) { return String(q || '').trim().toLowerCase().slice(0, 60); })
+      .filter(function (q, i, a) { return q && a.indexOf(q) === i; }).slice(0, 5);
+    if (!queries.length) throw new Error('nessuna parola da cercare');
+    return { queries: queries, scene: String(j.scene || '').trim().slice(0, 80), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
   /** v138 (Edoardo: "per ogni tipo di esercizio voglio un pulsante tipo create similar che mi genera una frase con un
    *  articolo diverso, e poi posso anche rigenerare la stessa se non mi piace"). Senza immagini: il modello vede l'esercizio
    *  com'e' (tipo, frase, soluzione, argomento) e ne scrive UNO nuovo dello stesso tipo.
@@ -1061,5 +1085,5 @@
       ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, askExercise: askExercise };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, photoQueries: photoQueries, askExercise: askExercise };
 });

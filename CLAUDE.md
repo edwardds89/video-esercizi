@@ -1,5 +1,14 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- 🔎 FOTO VERE PER LA FRASE (v139, 1/10). Edoardo: "la ricerca di foto vere per parola, però deve essere interpretata la
+  frase: marcella lavora in un negozio di scarpe → shoeshop shopping assistant woman". Nel dialogo ✎ dell'esercizio del set
+  (e col bottone 🖼 sulla riga, che apre il dialogo e lancia la ricerca) "🔎 Cerca una foto adatta": AI.photoQueries
+  trasforma la frase in 3-5 ricerche inglesi CORTE (1-3 parole: Openverse con frasi lunghe trova 0) dalla più precisa alla
+  più generica + "scene" in italiano; searchScenePhotos le prova in ordine su Pexels (solo con S.settings.pexelsKey, campo
+  nuovo in Impostazioni AI, header Authorization) e Openverse (senza chiave, CC, soprattutto Flickr; thumbnail = proxy
+  Openverse), fino a 18-24 foto. Ricerche modificabili a mano (anche senza chiave AI). Clic = CA_IMG + CA_IMG_CREDIT →
+  item.imageCredit, mostrato sotto l'immagine sullo schermo della sfida e nel compito (.img-credit: le licenze CC BY
+  chiedono l'attribuzione). CORS verificato dal vero da pauselearn.com per Openverse e Pexels. Test: e2e139.js.
 - ✨ SIMILE E ↻ RIGENERA NEL SET, E LO SPAZIO SULL'INDIZIO (v138, 1/10). Edoardo: "per ogni tipo di esercizio voglio un
   pulsante tipo create similar che mi genera una frase con un articolo diverso, e poter rigenerare la stessa se non mi
   piace". Ogni riga di renderChalSet (tranne wheel) ha ✨ Simile (AI.similarItem mode 'similar': stesso punto, ALTRA forma,
