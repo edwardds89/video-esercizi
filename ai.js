@@ -912,8 +912,17 @@
   }
 
   /** v138: le forme JSON che il modello deve scrivere per ogni tipo (con un argomento: ogni tipo allena la forma). */
-  function rawSpec(kinds, lang, focus, level) {
+  function rawSpec(kinds, lang, focus, level, format) {
     const spec = [];
+    // v144 (Edoardo: "ho messo uno screenshot con solo una parola ma l'esercizio proposto contiene frasi!"): formato PAROLE.
+    // Niente frasi: l'item è "parola → altra forma" (finestra → finestre), lo spazio è la seconda; come nel libro.
+    if (format === 'words') {
+      const wk = kinds.filter(function (k) { return k === 'gap' || k === 'gapbank'; });
+      if (wk.length) spec.push('{"type":"' + wk.join('|') + '","sentence":"GIVEN → ANSWER, e.g. \\"finestra → finestre\\", \\"gelati → gelato\\", \\"il treno → i treni\\" (with the article only if the image uses articles)","gaps":["ANSWER exactly as written after the arrow"],"distractors":["for gapbank only: 2 wrong forms of the same word, e.g. finestri, finestra"]} — ONLY the two forms and the arrow, NO sentence, NO other words');
+      if (kinds.indexOf('mc') !== -1) spec.push('{"type":"mc","q":"a very short question with the word in it, e.g. \\"Il plurale di libro?\\"","options":["...","...","...","..."],"correct":0} — 4 forms of the same word, exactly one correct');
+      if (kinds.indexOf('match') !== -1) spec.push('{"type":"match","pairs":[{"a":"singular form","b":"plural form"}]} — 4 to 8 pairs of the two forms');
+      return spec;
+    }
     // v143 (Edoardo, prima lezione A1: "perché mi vengono generate delle frasi così lunghe nonostante io abbia selezionato
     // livello A1?"): la lunghezza segue il livello. A1 = 3-6 parole, lessico di base, presente; il "5-14" valeva per tutti.
     const LEN = { A1: '3-6', A2: '4-8', B1: '5-12', B2: '6-14', C1: '6-16', C2: '6-16' };
@@ -952,12 +961,15 @@
     const lang = params.lang || 'Italian';
     const level = params.level || 'B1';
     const n = Math.max(1, Math.min(12, params.n || 5));
-    const kinds = (params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'scramble', 'extra', 'missing', 'wrong', 'match']);
+    let kinds = (params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'scramble', 'extra', 'missing', 'wrong', 'match']);
     const system = 'You are an experienced language-teaching materials author. You read images (textbook pages, screenshots, slides, photos) and write exercise material. Output ONLY a JSON object, no prose, no markdown fences.';
     // v136: piu' argomenti scelti dall'insegnante (params.topics) oppure il vecchio campo libero (params.focus)
     const topics = (Array.isArray(params.topics) ? params.topics : []).map(function (t) { return String(t || '').trim(); }).filter(Boolean).slice(0, 6);
     const focus = topics.length ? topics.join('; ') : String(params.focus || '').trim();
-    const spec = rawSpec(kinds, lang, focus, level);
+    const format = params.format === 'words' || params.format === 'sentences' ? params.format : 'auto';
+    if (format === 'words') kinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'mc', 'match'].indexOf(k) !== -1; });
+    if (!kinds.length) kinds = ['gap'];
+    const spec = rawSpec(kinds, lang, focus, level, format);
     const sentKinds = kinds.filter(function (k) { return ['gap', 'gapbank', 'extra', 'missing', 'wrong', 'scramble'].indexOf(k) !== -1; });
     const user = [
       'Look carefully at the attached image' + (params.images.length > 1 ? 's' : '') + ' (a textbook page, a screenshot, a slide or a photo).',
@@ -965,7 +977,7 @@
       'If it is a SCENE or picture: use what is visible (objects, actions, places).',
       'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
       LEVEL_RULES[String(level).toUpperCase()] || '',
-      'MATCH THE FORMAT OF THE IMAGE: if the exercise in the image works on SINGLE WORDS (e.g. write the singular or the plural, the article of a noun), keep the items that small: a minimal frame of 2-4 words around the word, e.g. "una finestra → due (finestra) finestre", "il treno → i (treno) treni", "Ecco una (borse) borsa." Never build a long sentence around a word exercise.',
+      format === 'words' ? 'FORMAT: SINGLE WORDS ONLY, like the exercise in the image. Every gap item is just "GIVEN → ANSWER" (e.g. "finestra → finestre"). Do NOT write any sentence.' : format === 'sentences' ? '' : 'MATCH THE FORMAT OF THE IMAGE: if the exercise in the image works on SINGLE WORDS (e.g. write the singular or the plural, the article of a noun), keep the items that small: a minimal frame of 2-4 words around the word, e.g. "una finestra → due (finestra) finestre", "il treno → i (treno) treni", "Ecco una (borse) borsa." Never build a long sentence around a word exercise.' ,
       'Multiple-choice questions must contain everything needed to answer: never write "this word", "this picture" or refer to the image; write the word itself in the question.',
       topics.length > 1 ? 'The teacher chose SEVERAL topics: ' + topics.map(function (t, i) { return (i + 1) + ') ' + t; }).join(' ') + '. Split the items evenly across them and set "topic" on every item to the topic it practises, copied exactly from this list.' : '',
       focus ? 'TOPIC' + (topics.length > 1 ? 'S' : '') + ' CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise ' + (topics.length > 1 ? 'one of these topics' : 'this topic') + ' (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
@@ -1017,7 +1029,8 @@
     const kind = params.kind;
     const ok = {}; ok[kind] = 1;
     const topic = String(params.topic || '').trim();
-    const spec = rawSpec([kind], lang, topic || 'the same language point as the original exercise', params.level);
+    const wordsFmt = /^\s*\S+(\s+\S+)?\s*→\s*\S+(\s+\S+)?\s*$/.test(String(params.sentence || '')) || (kind === 'match' && params.format === 'words');
+    const spec = rawSpec([kind], lang, topic || 'the same language point as the original exercise', params.level, wordsFmt ? 'words' : '');
     const system = 'You are an experienced language-teaching materials author. Output ONLY a JSON object, no prose, no markdown fences.';
     const user = [
       'Here is an exercise of type "' + kind + '" for CEFR ' + (params.level || 'A2') + ' students of ' + lang + ':',
@@ -1058,7 +1071,8 @@
       'Write the topic names in Italian (the teacher is Italian), short (2-7 words), without a final period.',
       'kind: "grammar", "vocabulary" or "function". example: 2-6 words copied from the image that show the topic.',
       'summary: one short sentence in Italian saying what the image is (e.g. "Esercizio del libro sul presente indicativo").',
-      'SCHEMA: {"summary":"...","topics":[{"name":"...","kind":"grammar","example":"..."}]}'
+      'format: "words" if the exercise works on SINGLE WORDS (lists of words to transform, label, put in the plural, add the article), "sentences" if it works on sentences or texts.',
+      'SCHEMA: {"summary":"...","format":"words","topics":[{"name":"...","kind":"grammar","example":"..."}]}'
     ].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, images: params.images, maxTokens: 900, timeoutMs: 60000, fetchImpl: params.fetchImpl });
     const j = extractJSON(res.text) || {};
@@ -1070,7 +1084,7 @@
       seen[k] = 1;
       return { name: name, kind: ['grammar', 'vocabulary', 'function'].indexOf(t.kind) !== -1 ? t.kind : 'grammar', example: String(t.example || '').trim().slice(0, 80) };
     }).filter(Boolean).slice(0, 6);
-    return { summary: String(j.summary || '').trim().slice(0, 200), topics: topics, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+    return { summary: String(j.summary || '').trim().slice(0, 200), format: j.format === 'words' ? 'words' : j.format === 'sentences' ? 'sentences' : '', topics: topics, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
   /** "Chiedi all'AI" dell'editor (v82): dalla richiesta dell'insegnante ("metti un esercizio sul fatto che il

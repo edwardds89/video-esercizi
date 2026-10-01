@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- FORMATO "SOLO PAROLE" (v144, 1/10). Edoardo, arrabbiato a ragione: con lo screenshot "Scrivete le parole al singolare o al
+  plurale" la v143 dava ancora frasi corte ("Sul tavolo c'è una (mele) ___"). Il motore costruiva SEMPRE da una frase e la
+  regola "match the format" era solo un consiglio al modello. Ora c'è un formato vero: select #ig-format (come l'immagine /
+  solo parole / frasi); AI.topicsFromImage restituisce anche format ('words'|'sentences') e se è 'words' il select passa da
+  solo a "solo parole". rawSpec(…, format='words'): gap/gapbank = "finestra → finestre" con gaps ["finestre"] (3 token,
+  EX.buildExercise li accetta: "finestra → _____"), mc corta con la parola dentro, match singolare↔plurale; i tipi
+  wrong/missing/extra/scramble vengono tolti (con una parola sola non hanno senso). similarItem riconosce "x → y" e resta
+  nel formato parole. Test: e2e144.js.
 - A1 VUOL DIRE FRASI CORTE, E IL FORMATO DELL'IMMAGINE (v143, 1/10). Edoardo, screenshot del libro "Scrivete le parole al
   singolare o al plurale" (finestra, pesce, gelato…) con livello A1: "perché mi vengono generate delle frasi così lunghe? è
   la prima lezione". Il prompt diceva 5-14 parole per tutti i livelli. Ora rawSpec(kinds, lang, focus, level) usa LEN per

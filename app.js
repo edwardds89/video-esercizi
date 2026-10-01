@@ -6558,6 +6558,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#ig-topic').value = opts.topic || '';
     if (S.settings.igLevel) $('#ig-level').value = S.settings.igLevel;   // v143: il livello scelto resta (A1 per le prime lezioni)
     $('#ig-topics').style.display = 'none'; $('#ig-topics').innerHTML = '';
+    $('#ig-format').value = 'auto';
     igRenderKinds();
     $('#ig-previews').innerHTML = ''; $('#ig-out').innerHTML = ''; $('#ig-msg').textContent = '';
     $('#ig-go').disabled = true; $('#ig-accept-row').style.display = 'none';
@@ -6610,7 +6611,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     }).then(function (r) {
       if (seq !== IMGGEN.seq) return;
       IMGGEN.topics = r.topics;
-      igRenderTopics(r.summary);
+      // v144: se l'esercizio dell'immagine è di parole singole, il formato passa a "solo parole" (si può cambiare)
+      if (r.format === 'words' && $('#ig-format').value === 'auto') $('#ig-format').value = 'words';
+      igRenderTopics(r.summary + (r.format === 'words' ? ' · formato: parole singole' : ''));
     }).catch(function (e) {
       if (seq !== IMGGEN.seq) return;
       box.innerHTML = '';
@@ -6697,7 +6700,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     busyMsg($('#ig-msg'), 'Scrivo gli esercizi' + (topics.length ? ' su: ' + topics.join(', ') : '') + '… (10-30 secondi)');
     AI.itemsFromImage({
       images: IMGGEN.imgs.map(function (i) { return { media_type: i.media_type, data: i.data }; }),
-      n: +$('#ig-n').value || 5, kinds: kinds, topics: topics,
+      n: +$('#ig-n').value || 5, kinds: kinds, topics: topics, format: $('#ig-format').value,
       lang: $('#ig-lang').value, level: $('#ig-level').value,
       apiKey: S.settings.apiKey, model: S.settings.model
     }).then(function (r) {
