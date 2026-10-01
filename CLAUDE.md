@@ -1,5 +1,9 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- 💡 AIUTO SULLA CASELLA SELEZIONATA (v141, 1/10). Edoardo: "se clicco su aiuto la lettera venga inserita in base al gap
+  selezionato, e non che parta per forza dal primo gap". giveHint degli spazi (gap, gapbank non semplificato) usa
+  `active` (la casella su cui lo studente ha cliccato o messo il cursore, già tracciata per la banca di parole): se non è
+  già giusta la lettera va lì, altrimenti alla prima casella ancora da fare. Il gapbank semplificato lo faceva già (v98).
 - UNSPLASH AL POSTO DI PEXELS (v140, 1/10). Pexels ha sospeso le chiavi API nuove (screenshot di Edoardo, 1/10/2026).
   searchScenePhotos prova per ogni ricerca: Unsplash (S.settings.unsplashKey, campo #set-unsplash, header
   "Authorization: Client-ID …", content_filter=high, urls.small/regular, attribuzione "Foto di X su Unsplash", e alla

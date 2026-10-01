@@ -5046,8 +5046,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         // semplificato: l'aiuto restringe la lista delle parole (v98); spazi da scrivere: una lettera alla volta
         if (gapbankHint) return gapbankHint();
         // uno spazio unito = una risposta di piu' parole (runs), non la k-esima parola singola
-        const k = inputs.findIndex(function (inp, i) { return !sameWord(inp.value, runs[i].answer); });
+        // v141 (Edoardo: "se clicco su aiuto la lettera venga inserita in base al gap selezionato, e non che parta per forza
+        // dal primo gap"): prima la casella su cui sta lavorando lo studente (active, segue focus e clic), se non è già giusta
+        const daFare = function (i) { return !sameWord(inputs[i].value, runs[i].answer); };
+        const cur = active ? inputs.indexOf(active) : -1;
+        const k = (cur !== -1 && daFare(cur)) ? cur : inputs.findIndex(function (inp, i) { return daFare(i); });
         if (k === -1) return false;
+        active = inputs[k];
         return revealLetter(inputs[k], runs[k].answer);
       };
       markResult = function (res) {
