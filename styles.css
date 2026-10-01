@@ -1656,3 +1656,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .ig-kinds { margin-top: 10px; }
 .ig-kinds .ig-klab { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
 .ig-row .topic { font-size: 12px; background: #eef2f7; border-radius: 999px; padding: 1px 8px; white-space: nowrap; color: #445; }
+
+/* v137: sfide salvate sotto la classe */
+.cls-chal-h { margin: 12px 0 4px; font-weight: 700; font-size: 14px; color: #445; }
+.cls-chal { border-left: 3px solid #f08c00; }

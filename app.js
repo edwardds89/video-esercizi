@@ -7203,8 +7203,54 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     }
     $('#ch-go').disabled = !sets.length;
     chTpOpts();
+    chFillClasses();
     $('#dlg-chal-new').showModal();
   }
+  /** v137 (Edoardo: "voglio anche poter mettere un label tipo Polimi lun/mer"): l'etichetta del report e' una CLASSE,
+   *  la stessa dei compiti (cosi' sfide e compiti di PoliMi Lun-Mer stanno insieme). Si ricorda l'ultima scelta.
+   *  Senza accesso il report resta solo su questo computer, come in v135. */
+  function chFillClasses(selectId) {
+    const sel = $('#ch-class'), hint = $('#ch-class-hint');
+    const be = classBackend();
+    $('#ch-class-new').style.display = 'none';
+    sel.innerHTML = '';
+    if (!be) {
+      $('#ch-class-row').style.display = 'none';
+      hint.textContent = '🔒 Accedi (in alto a destra) per salvare i report nel cloud con la classe. Senza accesso il report resta solo su questo computer.';
+      return;
+    }
+    $('#ch-class-row').style.display = '';
+    hint.textContent = '';
+    sel.appendChild(el('option', { value: '', text: 'Carico le classi…' }));
+    be.listClasses().then(function (cl) {
+      CLS.classes = cl || [];
+      sel.innerHTML = '';
+      sel.appendChild(el('option', { value: '', text: '— nessuna classe —' }));
+      CLS.classes.forEach(function (c) { sel.appendChild(el('option', { value: c.id, text: c.name })); });
+      sel.appendChild(el('option', { value: '__new', text: '+ Nuova classe…' }));
+      let last = selectId || ''; if (!last) { try { last = localStorage.getItem('pl-chal-class') || ''; } catch (e) { /* ignora */ } }
+      if (last && CLS.classes.some(function (c) { return c.id === last; })) sel.value = last;
+      hint.textContent = '☁️ Il report si salva nel tuo account: lo ritrovi da qualsiasi computer.';
+    }, function (e) { sel.innerHTML = ''; sel.appendChild(el('option', { value: '', text: '— nessuna classe —' })); hint.textContent = 'Classi non disponibili: ' + e.message; });
+  }
+  $('#ch-class').addEventListener('change', function () {
+    const v = this.value;
+    $('#ch-class-new').style.display = v === '__new' ? '' : 'none';
+    if (v === '__new') { $('#ch-class-name').value = ''; $('#ch-class-name').focus(); return; }
+    try { localStorage.setItem('pl-chal-class', v); } catch (e) { /* ignora */ }
+  });
+  function chAddClass() {
+    const be = classBackend(); const n = ($('#ch-class-name').value || '').trim();
+    if (!be) return; if (!n) { $('#ch-class-name').focus(); return toast('Scrivi il nome della classe'); }
+    $('#ch-class-add').disabled = true;
+    be.createClass(n).then(function (c) {
+      $('#ch-class-add').disabled = false;
+      try { localStorage.setItem('pl-chal-class', c.id); } catch (e) { /* ignora */ }
+      toast('Classe creata: ' + c.name); chFillClasses(c.id);
+    }, function (e) { $('#ch-class-add').disabled = false; toast('Non creata: ' + e.message, 6000); });
+  }
+  $('#ch-class-add').addEventListener('click', chAddClass);
+  $('#ch-class-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); chAddClass(); } });
   function chTpOpts() { const tp = (document.querySelector('#dlg-chal-new input[name=chplay]:checked') || {}).value !== 'sp'; $('#ch-tp-opts').style.display = tp ? '' : 'none'; }
   $$('#dlg-chal-new input[name=chplay]').forEach(function (r) { r.addEventListener('change', chTpOpts); });
   function chalMode() { const r = document.querySelector('#dlg-chal-new input[name=chmode]:checked'); return r ? r.value : 'streak'; }
@@ -7219,7 +7265,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       play: (document.querySelector('#dlg-chal-new input[name=chplay]:checked') || {}).value === 'sp' ? 'sp' : 'tp',
       mode: chalMode(),
       secs: +$('#ch-secs').value || 0,
-      showQ: $('#ch-showq').checked
+      showQ: $('#ch-showq').checked,
+      classId: classBackend() && $('#ch-class').value && $('#ch-class').value !== '__new' ? $('#ch-class').value : null
     });
   });
   $('#ch-close').addEventListener('click', function () { $('#dlg-chal-new').close(); });
@@ -7232,7 +7279,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     chalJoin(pin, function (conn) {
       overlay(false);
       CHAL = { pin: pin, setId: setLs.id, title: setLs.title || 'Sfida', play: cfg.play, items: items, mode: cfg.mode, secs: cfg.secs, showQ: cfg.showQ,
-        conn: conn, state: cfg.play === 'tp' ? VLChal.tpNew() : VLChal.newState(), pub: null, ended: false, boardAt: 0, boardTimer: null, clock: null, log: {} };
+        conn: conn, state: cfg.play === 'tp' ? VLChal.tpNew() : VLChal.newState(), pub: null, ended: false, boardAt: 0, boardTimer: null, clock: null, log: {},
+        repId: VLClass.uuid(), classId: cfg.classId || null, cloud: { timer: null, ok: false, err: '', warned: false } };
       chalSaveReport();
       conn.on('hello', function (p) {
         if (!p || !p.id) return;
@@ -7290,19 +7338,53 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const snap = { pin: CHAL.pin, title: CHAL.title, at: Date.now(), ended: CHAL.ended, items: chalReviewList(CHAL.items),
       players: VLChal.leaderboard(CHAL.state).map(function (r) { return { id: r.id, nick: r.nick, score: r.score, right: r.right }; }), log: CHAL.log };
     try { localStorage.setItem('pl-chalrep', JSON.stringify(snap)); } catch (e) { /* pieno: pazienza */ }
+    chalCloudSave(snap);
+  }
+  /** v137: istantanea anche nel cloud (tabella chal_reports, solo il docente la legge). Durante la partita al massimo
+   *  una scrittura ogni 5 secondi; a fine sfida subito. Niente righe per sfide senza giocatori. Se fallisce (per esempio
+   *  la tabella non c'e' ancora) lo dice UNA volta e il report resta comunque su questo computer. */
+  function chalCloudSave(snap) {
+    const C = CHAL; if (!C) return;
+    const be = classBackend(); if (!be || !be.saveChalReport) return;
+    if (!snap.players.length) return;
+    const go = function () {
+      C.cloud.timer = null;
+      be.saveChalReport({ id: C.repId, class_id: C.classId, title: C.title, pin: C.pin, play: C.play, players: snap.players.length, ended: snap.ended, report: snap })
+        .then(function () { C.cloud.ok = true; C.cloud.err = ''; chalCloudMsg(); },
+          function (e) {
+            C.cloud.err = e.message; chalCloudMsg();
+            if (!C.cloud.warned) { C.cloud.warned = true; toast('Report non salvato nel cloud (' + e.message + '): resta su questo computer', 7000); }
+          });
+    };
+    clearTimeout(C.cloud.timer);
+    if (snap.ended) go(); else C.cloud.timer = setTimeout(go, 5000);
+  }
+  function chalCloudMsg() {
+    const p = $('#chal-cloud'); if (!p || !CHAL) return;
+    const cls = CHAL.classId && (CLS.classes || []).find(function (c) { return c.id === CHAL.classId; });
+    p.textContent = CHAL.cloud.err ? '⚠️ Report non salvato nel cloud: ' + CHAL.cloud.err
+      : CHAL.cloud.ok ? '☁️ Report salvato' + (cls ? ' in «' + cls.name + '»' : '') + ': lo ritrovi in 📋 Classi e compiti.' : '';
   }
   function chalOpenReport() { window.open(location.pathname + location.search + '#chalrep', 'pl-chalrep'); }
   /** Scheda del report (#chalrep): studenti × domande, clic su una casella = cosa ha risposto. */
-  function renderChalReport() {
+  function renderChalReport(saved) {
     show('report');
     $('#view-report').classList.add('rep-big');
     const root = $('#rep-root');
     const paint = function () {
-      let R = null; try { R = JSON.parse(localStorage.getItem('pl-chalrep') || 'null'); } catch (e) { /* ignora */ }
+      let R = null;
+      if (saved) R = saved.report;
+      else { try { R = JSON.parse(localStorage.getItem('pl-chalrep') || 'null'); } catch (e) { /* ignora */ } }
       root.innerHTML = '';
       if (!R) { root.appendChild(el('p', { class: 'muted', text: 'Nessuna sfida in corso su questo computer.' })); return; }
+      if (saved) {
+        const cls = saved.class_id && (CLS.classes || []).find(function (c) { return c.id === saved.class_id; });
+        root.appendChild(el('div', { class: 'row', style: 'gap:8px;align-items:center;margin-bottom:6px' },
+          el('button', { class: 'small', text: '◀ Classi e compiti', onclick: function () { renderClasses(); } }),
+          el('span', { class: 'muted', text: (cls ? cls.name + ' · ' : '') + fmtDate(saved.created_at) })));
+      }
       root.appendChild(el('h2', { style: 'margin-top:0', text: '📊 ' + R.title + ' · PIN ' + R.pin + (R.ended ? ' · chiusa' : ' · in corso') }));
-      root.appendChild(el('p', { class: 'hint', text: 'Solo per te: si aggiorna da sola. Clicca una casella per vedere la risposta.' }));
+      root.appendChild(el('p', { class: 'hint', text: saved ? 'Report salvato nel tuo account. Clicca una casella per vedere la risposta.' : 'Solo per te: si aggiorna da sola. Clicca una casella per vedere la risposta.' }));
       const det = el('div', { class: 'rep-detail' });
       const tb = el('table', { class: 'rep-table' });
       const hr = el('tr', {}, el('th', { class: 'rep-name', text: 'Studente' }), el('th', { text: 'Punti' }));
@@ -7333,7 +7415,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       }
     };
     paint();
-    window.addEventListener('storage', function (e) { if (e.key === 'pl-chalrep' && S.view === 'report') paint(); });
+    if (!saved) window.addEventListener('storage', function (e) { if (e.key === 'pl-chalrep' && S.view === 'report') paint(); });
+  }
+  /** v137: un report salvato (#chalrep=ID): serve l'accesso, si aspetta il cloud come per #rep=. */
+  function openSavedChalReport(id) {
+    const be = classBackend();
+    if (!be) { show('report'); const root = $('#rep-root'); root.innerHTML = ''; needLogin(root, function () { openSavedChalReport(id); }); return; }
+    Promise.all([be.getChalReport(id), CLS.classes ? CLS.classes : be.listClasses()]).then(function (r) {
+      CLS.classes = r[1] || [];
+      if (!r[0]) return toast('Report non trovato');
+      renderChalReport(r[0]);
+    }, function (e) { toast('Report non disponibile: ' + e.message, 6000); });
   }
   /** v135 REVISIONE sullo schermo a fine sfida: tutte le frasi, soluzione nascosta che si apre con un clic. */
   function chalReview(list, host) {
@@ -7438,6 +7530,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#chal-stagebox').style.display = 'none';
     $('#chal-live').style.display = 'none';
     $('#chal-after').style.display = '';
+    $('#chal-cloud').textContent = classBackend() ? '☁️ Salvo il report…' : '🔒 Senza accesso il report resta solo su questo computer.';
     renderChalBoard();
   }
   /** Il rendering GRANDE della domanda per lo schermo proiettato. */
@@ -8068,8 +8161,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     root.appendChild(el('p', { class: 'hint', text: 'Per dare un compito: nelle tue lezioni clicca "📋 Assegna" e scegli la classe. Gli studenti aprono il link, scrivono nome e cognome e fanno la lezione; qui vedi chi l\'ha fatta e cosa ha sbagliato.' }));
     const list = el('div', { class: 'cls-list' }, el('p', { class: 'hint', text: 'Carico…' }));
     root.appendChild(list);
-    Promise.all([be.listClasses(), be.listAssignments()]).then(function (r) {
-      CLS.classes = r[0] || []; CLS.assignments = r[1] || [];
+    Promise.all([be.listClasses(), be.listAssignments(), be.listChalReports ? be.listChalReports().catch(function () { return []; }) : []]).then(function (r) {
+      CLS.classes = r[0] || []; CLS.assignments = r[1] || []; CLS.chals = r[2] || [];
       const ids = CLS.assignments.map(function (a) { return a.id; });
       return ids.length ? be.countResults(ids) : [];
     }).then(function (rows) {
@@ -8102,7 +8195,37 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           twoStep('Elimina classe', function () { be.deleteClass(c.id).then(function () { toast('Classe eliminata'); renderClasses(); }, function (e) { toast('Non eliminata: ' + e.message, 6000); }); })));
       if (!as.length) card.appendChild(el('p', { class: 'hint', text: 'Nessun compito: dalle tue lezioni, "📋 Assegna".' }));
       as.forEach(function (a) { card.appendChild(assignmentRow(be, a)); });
+      chalReportsBlock(be, card, (CLS.chals || []).filter(function (r) { return r.class_id === c.id; }));
       list.appendChild(card);
+    });
+    const loose = (CLS.chals || []).filter(function (r) { return !r.class_id || !CLS.classes.some(function (c) { return c.id === r.class_id; }); });
+    if (loose.length) {
+      const card = el('div', { class: 'card cls-card' }, el('h3', { style: 'margin:0', text: 'Sfide senza classe' }));
+      chalReportsBlock(be, card, loose);
+      list.appendChild(card);
+    }
+  }
+  /** v137: le Sfide in classe salvate, sotto la loro classe. Report in una nuova scheda, classe cambiabile, elimina. */
+  function chalReportsBlock(be, card, rows) {
+    if (!rows.length) return;
+    card.appendChild(el('div', { class: 'cls-chal-h', text: '📱 Sfide in classe (' + rows.length + ')' }));
+    rows.forEach(function (r) {
+      const mv = el('select', { class: 'small', title: 'Cambia la classe di questa sfida' });
+      mv.appendChild(el('option', { value: '', text: '— nessuna classe —' }));
+      (CLS.classes || []).forEach(function (c) { mv.appendChild(el('option', { value: c.id, text: c.name })); });
+      mv.value = r.class_id && CLS.classes.some(function (c) { return c.id === r.class_id; }) ? r.class_id : '';
+      mv.addEventListener('change', function () {
+        mv.disabled = true;
+        be.updateChalReport(r.id, { class_id: mv.value || null }).then(function () { toast('Sfida spostata'); renderClasses(); }, function (e) { mv.disabled = false; toast(e.message, 6000); });
+      });
+      card.appendChild(el('div', { class: 'cls-asg cls-chal' },
+        el('div', { class: 'row', style: 'gap:8px;align-items:center;flex-wrap:wrap' },
+          el('b', { text: r.title || 'Sfida' }),
+          el('span', { class: 'muted', text: fmtDate(r.created_at) + ' · ' + r.players + (r.players === 1 ? ' studente' : ' studenti') + (r.ended ? '' : ' · non chiusa') }),
+          el('span', { style: 'flex:1' }),
+          el('button', { class: 'small primary', text: '📊 Report', onclick: function () { window.open(location.pathname + location.search + '#chalrep=' + r.id, '_blank'); } }),
+          mv,
+          twoStep('Elimina', function () { be.deleteChalReport(r.id).then(function () { toast('Report eliminato'); renderClasses(); }, function (e) { toast(e.message, 6000); }); }))));
     });
   }
   function assignmentRow(be, a) {
@@ -8914,6 +9037,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       toast('PIN della sfida non valido');
     }
     if (h === '#chalrep') { history.replaceState(null, '', location.pathname + location.search); return renderChalReport(); }   // v135
+    if (h.indexOf('#chalrep=') === 0) {   // v137: report di una sfida salvata nel cloud
+      const rid = h.slice(9);
+      history.replaceState(null, '', location.pathname + location.search);
+      let tries = 0;
+      const wait = function () { if (classBackend() || tries++ > 20) return openSavedChalReport(rid); setTimeout(wait, 400); };
+      renderHome();
+      return setTimeout(wait, 300);
+    }
     if (h.indexOf('#rep=') === 0) {   // v131: schermo docente in un'altra finestra (serve l'accesso: si aspetta il cloud)
       const pr = new URLSearchParams(h.slice(1));
       const rid = pr.get('rep'), rm = pr.get('m') || 'table';

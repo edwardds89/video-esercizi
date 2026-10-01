@@ -185,6 +185,12 @@
       listResults: function (assignmentIds) { return q(client.from('results').select('id,assignment_id,student_name,detail,score,total,finished,started_at,updated_at').in('assignment_id', assignmentIds)); },
       countResults: function (assignmentIds) { return q(client.from('results').select('assignment_id,student_name,finished').in('assignment_id', assignmentIds)); },
       deleteResults: function (ids) { return q(client.from('results').delete().in('id', ids)); },
+      // v137: report delle Sfide in classe (solo il docente)
+      listChalReports: function () { return q(client.from('chal_reports').select('id,class_id,title,pin,play,players,ended,created_at,updated_at').order('created_at', { ascending: false }).limit(300)); },
+      getChalReport: function (id) { return q(client.from('chal_reports').select('*').eq('id', id).single()); },
+      saveChalReport: function (r) { return q(client.from('chal_reports').upsert({ id: r.id, class_id: r.class_id || null, title: r.title || '', pin: r.pin || '', play: r.play || 'tp', players: r.players | 0, ended: !!r.ended, report: r.report, updated_at: new Date().toISOString() })); },
+      updateChalReport: function (id, patch) { return q(client.from('chal_reports').update(patch).eq('id', id)); },
+      deleteChalReport: function (id) { return q(client.from('chal_reports').delete().eq('id', id)); },
       // studente (anonimo)
       getAssignment: function (code) { return q(client.rpc('get_assignment', { p_code: code })); },
       getLive: function (code) { return q(client.rpc('get_live', { p_code: code })); },   // v131: stato della sessione dal vivo
@@ -216,6 +222,7 @@
         d.classes = d.classes.filter(function (c) { return c.id !== id; });
         d.assignments = d.assignments.filter(function (a) { return a.class_id !== id; });
         d.results = d.results.filter(function (r) { return aIds.indexOf(r.assignment_id) === -1; });
+        (d.chal_reports || []).forEach(function (r) { if (r.class_id === id) r.class_id = null; });   // come on delete set null
         save(d); return P(null);
       },
       listAssignments: function () { return P(db().assignments.map(pick).reverse()); },
@@ -230,6 +237,18 @@
       listResults: function (ids) { return P(db().results.filter(function (r) { return ids.indexOf(r.assignment_id) >= 0; })); },
       countResults: function (ids) { return P(db().results.filter(function (r) { return ids.indexOf(r.assignment_id) >= 0; }).map(function (r) { return { assignment_id: r.assignment_id, student_name: r.student_name, finished: r.finished }; })); },
       deleteResults: function (ids) { const d = db(); d.results = d.results.filter(function (r) { return ids.indexOf(r.id) === -1; }); save(d); return P(null); },
+      listChalReports: function () { return P((db().chal_reports || []).map(function (r) { const o = Object.assign({}, r); delete o.report; return o; }).sort(function (x, y) { return String(y.created_at).localeCompare(String(x.created_at)); })); },
+      getChalReport: function (id) { return P((db().chal_reports || []).find(function (r) { return r.id === id; })); },
+      saveChalReport: function (r) {
+        const d = db(); d.chal_reports = d.chal_reports || [];
+        const ex = d.chal_reports.find(function (x) { return x.id === r.id; });
+        const row = ex || { id: r.id, created_at: now() };
+        Object.assign(row, { class_id: r.class_id || null, title: r.title || '', pin: r.pin || '', play: r.play || 'tp', players: r.players | 0, ended: !!r.ended, report: r.report, updated_at: now() });
+        if (!ex) d.chal_reports.push(row);
+        save(d); return P(null);
+      },
+      updateChalReport: function (id, patch) { const d = db(); (d.chal_reports || []).forEach(function (r) { if (r.id === id) Object.assign(r, patch); }); save(d); return P(null); },
+      deleteChalReport: function (id) { const d = db(); d.chal_reports = (d.chal_reports || []).filter(function (r) { return r.id !== id; }); save(d); return P(null); },
       getAssignment: function (code) {
         const d = db(); const a = d.assignments.find(function (x) { return x.code === String(code || '').trim().toUpperCase(); });
         if (!a) return P(null);

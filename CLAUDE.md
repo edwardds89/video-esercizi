@@ -1,5 +1,14 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- REPORT DELLE SFIDE NEL CLOUD CON LA CLASSE (v137, 1/10). Edoardo: "perché non c'è un database dietro ai report?" e
+  "voglio anche poter mettere un label tipo Polimi lun/mer". Tabella chal_reports (sql/2026-10-01-report-sfide.sql: id
+  dal client, owner, class_id → classes on delete set null, report jsonb = la stessa istantanea di 'pl-chalrep', RLS sul
+  proprietario). L'etichetta è una CLASSE (le stesse dei compiti): select #ch-class nel dialog di avvio con "+ Nuova
+  classe…" (crea al volo), ultima scelta in localStorage 'pl-chal-class'. chalCloudSave: upsert al massimo ogni 5 s in
+  partita, subito a fine sfida, mai senza giocatori; se fallisce lo dice una volta (#chal-cloud e toast) e il report resta
+  locale. In 📋 Classi e compiti: chalReportsBlock sotto ogni classe (📊 Report in nuova scheda #chalrep=ID, cambia
+  classe, Elimina) e card "Sfide senza classe". #chalrep (senza id) resta il report live locale della v135.
+  Test: e2e137.js.
 - ARGOMENTI LETTI DALLO SCREENSHOT E TIPI DIVERSI (v136, 1/10). Edoardo: "faccio degli screenshot a degli esercizi e si
   capisca qual è l'argomento e le cose da ripassare, se ci sono più argomenti mi viene chiesto su che cosa focalizzarsi
   ... e in base a quello si creano diversi tipi di esercizi". Nel dialog #dlg-imggen, appena arriva un'immagine (incollata,

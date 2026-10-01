@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-136">
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-137">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260919-136">
+<link rel="stylesheet" href="styles.css?v=20260919-137">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-136" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-136" alt="PauseLearn" width="178" height="22"></div>
+  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-137" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-137" alt="PauseLearn" width="178" height="22"></div>
   <button id="nav-toggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav" title="Menu">☰<span id="nav-toggle-dot" class="dot off" style="display:none"></span></button>
   <nav id="nav">
     <button data-view="home">Le tue lezioni</button>
@@ -426,6 +426,7 @@
       <div class="card chal-join" id="chal-after" style="display:none">
         <h2 style="margin-top:0">🏁 Sfida chiusa</h2>
         <p class="hint">La classifica finale è anche sui telefoni degli studenti, con la revisione di tutte le frasi.</p>
+        <p id="chal-cloud" class="hint" style="margin-top:0"></p>
         <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center">
           <button id="chal-review" class="primary">📖 Revisione</button>
           <button id="chal-report2">📊 Report (nuova scheda)</button>
@@ -584,6 +585,10 @@
   <div id="ch-form">
     <label for="ch-set">Quale set giochiamo?</label>
     <div class="row"><select id="ch-set" class="grow"></select><button id="ch-edit-set" class="small" title="Apri l'editor del set">✎</button><button id="ch-new-set2" class="small" title="Nuovo set">+ Nuovo</button></div>
+    <label for="ch-class" style="margin-top:10px;display:block">Classe <span class="hint">(etichetta del report: lo ritrovi in 📋 Classi e compiti)</span></label>
+    <div class="row" id="ch-class-row"><select id="ch-class" class="grow"></select></div>
+    <div class="row" id="ch-class-new" style="display:none;gap:6px"><input id="ch-class-name" type="text" class="grow" maxlength="80" placeholder="Es. PoliMi Lun-Mer"><button id="ch-class-add" class="small primary">Crea</button></div>
+    <p id="ch-class-hint" class="hint" style="margin:4px 0 0"></p>
     <p class="hint" style="margin-top:12px">Come si gioca:</p>
     <div class="chal-modes">
       <label class="chal-mode"><input type="radio" name="chplay" value="tp" checked>
@@ -894,19 +899,19 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260919-136"></script>
-<script src="exercises.js?v=20260919-136"></script>
-<script src="generator.js?v=20260919-136"></script>
-<script src="activities.js?v=20260919-136"></script>
-<script src="ai.js?v=20260919-136"></script>
-<script src="demo-data.js?v=20260919-136"></script>
-<script src="platforms.js?v=20260919-136"></script>
-<script src="bookmarklet.js?v=20260919-136"></script>
-<script src="sync.js?v=20260919-136"></script>
-<script src="qr.js?v=20260919-136"></script>
-<script src="challenge.js?v=20260919-136"></script>
-<script src="classroom.js?v=20260919-136"></script>
-<script src="app.js?v=20260919-136"></script>
+<script src="lang.js?v=20260919-137"></script>
+<script src="exercises.js?v=20260919-137"></script>
+<script src="generator.js?v=20260919-137"></script>
+<script src="activities.js?v=20260919-137"></script>
+<script src="ai.js?v=20260919-137"></script>
+<script src="demo-data.js?v=20260919-137"></script>
+<script src="platforms.js?v=20260919-137"></script>
+<script src="bookmarklet.js?v=20260919-137"></script>
+<script src="sync.js?v=20260919-137"></script>
+<script src="qr.js?v=20260919-137"></script>
+<script src="challenge.js?v=20260919-137"></script>
+<script src="classroom.js?v=20260919-137"></script>
+<script src="app.js?v=20260919-137"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 
