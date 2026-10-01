@@ -1671,3 +1671,11 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .ca-photo-it img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ca-photo-it.on, .ca-photo-it:hover { border-color: var(--accent, #2f6ff0); }
 .img-credit { font-size: 11px; color: #889; text-align: center; margin-top: 2px; }
+
+/* v142: barra a pezzi nella classifica della sfida */
+.chal-row .bar.segs { display: flex; gap: 2px; background: transparent; border-radius: 0; overflow: visible; }
+.chal-row .bar.segs .seg { flex: 1; height: 100%; border-radius: 3px; background: var(--chip, #e3e8ef); transition: background .3s; width: auto; }
+.chal-row .bar.segs .seg.ok { background: var(--accent, #1f6feb); }
+.chal-row .bar.segs .seg.half { background: #f08c00; }
+.chal-row .bar.segs .seg.ko { background: #e03131; }
+.chal-row:not(.final) { grid-template-columns: 2.4em minmax(5.5em, 1fr) minmax(50px, 140px) auto auto; }

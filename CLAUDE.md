@@ -1,5 +1,9 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- BARRA COLORATA NELLA CLASSIFICA DELLA SFIDA (v142, 1/10). Edoardo: "la barra di avanzamento è solo blu ma vorrei
+  anche l'arancione o rosso per quelle sbagliate". chalBar: un pezzo per domanda (fino a 60, oltre torna la barra unica)
+  colorato da CHAL.log[i][id]: .ok colore --accent (verde in quella vista), .half arancione #f08c00 (frac > 0), .ko rosso
+  #e03131, grigio = non ancora. Allargata la colonna del nickname (prima "A…" con il pannello stretto). Test: e2e142.js.
 - 💡 AIUTO SULLA CASELLA SELEZIONATA (v141, 1/10). Edoardo: "se clicco su aiuto la lettera venga inserita in base al gap
   selezionato, e non che parta per forza dal primo gap". giveHint degli spazi (gap, gapbank non semplificato) usa
   `active` (la casella su cui lo studente ha cliccato o messo il cursore, già tracciata per la banca di parole): se non è

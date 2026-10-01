@@ -7715,6 +7715,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     }
     return box;
   }
+  /** v142 (Edoardo: "la barra di avanzamento è solo blu ma vorrei anche l'arancione o rosso per quelle sbagliate"):
+   *  un pezzo per domanda, colorato con CHAL.log (riempito in tutte e due le modalità dalla v135): blu = giusta,
+   *  arancione = mezza giusta (frac > 0, es. abbina con qualche coppia), rosso = sbagliata, grigio = non ancora. */
+  function chalBar(r, tot, pct) {
+    if (!tot || tot > 60) return el('span', { class: 'bar' }, el('i', { style: 'width:' + pct + '%' }));
+    const bar = el('span', { class: 'bar segs', title: r.right + ' giuste su ' + tot });
+    for (let k = 0; k < tot; k++) {
+      const c = CHAL.log[k] && CHAL.log[k][r.id];
+      const st = !c ? 'none' : c.ok ? 'ok' : c.frac > 0 ? 'half' : 'ko';
+      bar.appendChild(el('i', { class: 'seg ' + st }));
+    }
+    return bar;
+  }
   function renderChalBoard() {
     if (!CHAL) return;
     const rows = VLChal.leaderboard(CHAL.state);
@@ -7753,7 +7766,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(el('div', { class: 'chal-row' + (r.done ? ' done' : '') },
         el('span', { class: 'rk', text: r.rank + '°' }),
         el('span', { class: 'nick', text: r.nick }),
-        el('span', { class: 'bar' }, el('i', { style: 'width:' + pct + '%' })),
+        chalBar(r, tot, pct),
         el('span', { class: 'pts', text: r.score + ' pt' + (r.done ? ' ✓' : '') }),
         kb));
     });
