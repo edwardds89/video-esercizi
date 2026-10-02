@@ -1,5 +1,8 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- COPERTINA DELLE ESERCITAZIONI (v167, 2/10). Edoardo: "non mi piace che siano tutte uguali, non si può prendere una delle
+  foto e metterla qui?". chalCoverThumb: la card usa la foto scelta con "🖼 Copertina" su un esercizio (ls.chal.cover =
+  id), altrimenti la prima foto del set; senza foto, sfumatura di colore ricavata dal titolo + iniziali. Test: e2e167.js.
 - TRADUZIONI PER GLI STUDENTI (v166, 2/10). Edoardo: "voglio anche che lo studente possa tradurre l'esercizio, se non
   capisce sceglie quale lingua usare"; lingue confermate: en, es, fr, de, zh, ja, ar, fa, tr (STU_LANGS in app.js; NB
   TR_LANGS e trLang esistevano già per le video-lezioni: nomi diversi apposta). Le prepara l'insegnante: "🌐 Traduzioni n/tot"

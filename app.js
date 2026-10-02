@@ -1349,7 +1349,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const nIt = (ls.chal.items || []).length;
         const openS = function () { openChalSet(ls.id); };
         const cardS = el('div', { class: 'lesson-card' },
-          el('div', { class: 'thumb act-thumb chal-thumb', onclick: openS, title: 'Apri l\'esercitazione' }, '📝'),
+          chalCoverThumb(ls, openS),
           el('div', { class: 'body' },
             el('div', { class: 'title', text: ls.title || '(set senza titolo)', onclick: openS }),
             el('div', { class: 'meta', text: (ls.folder ? '📁 ' + ls.folder + ' · ' : '') + 'Esercitazione · ' + nIt + (nIt === 1 ? ' esercizio' : ' esercizi') + (ls.importedFrom ? ' · da ' + platformName(ls.importedFrom.site) : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
@@ -7032,6 +7032,28 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
   }
   let CS_DRAG = -1;
+  /** v167 (Edoardo: "non mi piace che siano tutte uguali, non si può prendere una delle foto e metterla qui?"):
+   *  copertina della card = la foto scelta con "🖼 Copertina" (ls.chal.cover = id dell'esercizio), altrimenti la prima
+   *  foto del set; senza foto, un colore diverso per ogni set (dal titolo) con le iniziali. */
+  function chalCoverItem(ls) {
+    const items = (ls.chal && ls.chal.items) || [];
+    return items.find(function (it) { return it && it.image && it.id === ls.chal.cover; }) || items.find(function (it) { return it && it.image; }) || null;
+  }
+  function chalCoverThumb(ls, open) {
+    const it = chalCoverItem(ls);
+    if (it) {
+      const d = el('div', { class: 'thumb chal-thumb has-cover', onclick: open, title: 'Apri l\'esercitazione' });
+      d.style.backgroundImage = 'url("' + String(it.image).replace(/["\\\n]/g, '') + '")';
+      return d;
+    }
+    const t = String(ls.title || 'Esercitazione');
+    let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 360;
+    const ini = t.split(/[^A-Za-zÀ-ÿ0-9]+/).filter(Boolean).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+    const d = el('div', { class: 'thumb act-thumb chal-thumb no-cover', onclick: open, title: 'Apri l\'esercitazione' }, el('span', { class: 'ini', text: ini || '📝' }));
+    d.style.background = 'linear-gradient(135deg, hsl(' + h + ' 70% 86%), hsl(' + ((h + 40) % 360) + ' 70% 74%))';
+    d.style.color = 'hsl(' + h + ' 45% 30%)';
+    return d;
+  }
   function renderChalSet(ls) {
     trSetLabel(ls);
     $('#cs-title').value = ls.title || '';
@@ -7046,6 +7068,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         it.image ? el('img', { class: 'cs-thumb', src: it.image, alt: '' }) : null,
         el('span', { class: 'txt grow' }, el('span', { text: chalItemSummary(it) }), el('span', { class: 'cs-sol', text: '  → ' + VLChal.solutionText(it) }),
           it.explain ? el('span', { class: 'cs-exp', title: it.explain, text: ' 💬' }) : null),
+        it.image ? el('button', { class: 'small' + (chalCoverItem(ls) === it ? ' primary' : ''), text: chalCoverItem(ls) === it ? '🖼 Copertina ✓' : '🖼 Copertina', title: 'Usa questa foto come copertina dell\'esercitazione nella pagina delle lezioni', onclick: function () { ls.chal.cover = it.id; chalSetTouched(ls); toast('Copertina scelta'); } }) : null,
         it.kind !== 'wheel' ? el('button', { class: 'small cs-ai', text: '✨ Simile', title: 'Crea un esercizio simile (stesso argomento, un\'altra forma: per esempio un altro articolo) e mettilo subito sotto', onclick: function (e) { chalAiItem(ls, i, 'similar', e.currentTarget); } }) : null,
         it.kind !== 'wheel' ? el('button', { class: 'small cs-ai', text: '↻', title: 'Rigenera: stessa cosa da allenare, frase nuova (sostituisce questa)', onclick: function (e) { chalAiItem(ls, i, 'regen', e.currentTarget); } }) : null,
         CS_UNDO[it.id] ? el('button', { class: 'small', text: '↶', title: 'Torna alla versione di prima', onclick: function () { items[i] = CS_UNDO[it.id]; delete CS_UNDO[it.id]; chalSetTouched(ls); toast('Versione di prima ripristinata'); } }) : null,
