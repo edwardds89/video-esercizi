@@ -1,5 +1,9 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- TRASCINARE GLI ESERCIZI DEL SET (v151, 2/10). Edoardo: "voglio poter trascinare le domande senza dover premere la
+  freccia su o giù più volte". Le righe .cs-item sono draggable (drag & drop nativo, CS_DRAG = indice di partenza): una
+  linea blu (.drop-before / .drop-after, metà riga) mostra dove cade, drop = splice e chalSetTouched. Le miniature hanno
+  draggable=false. Sul telefono il drag nativo non esiste: restano le frecce ↑ ↓. Test: e2e151.js.
 - PIÙ FOTO DA SCORRERE NELLA MODIFICA CON IA (v150, 2/10). Edoardo: "mi propone solo 3 foto, voglio poter scorrere e
   trovare quella più adatta". Per ogni esercizio searchScenePhotos(queries, 12) → fino a 24 foto in una striscia che
   scorre di lato (.setai-photos, scroll conservato al ridisegno), credito della foto scelta sotto, e un campo con le

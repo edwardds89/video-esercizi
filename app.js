@@ -7031,6 +7031,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(card);
     });
   }
+  let CS_DRAG = -1;
   function renderChalSet(ls) {
     $('#cs-title').value = ls.title || '';
     $('#cs-import').disabled = !chalImportGroups().length;
@@ -7052,6 +7053,34 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('button', { class: 'small', text: '↑', title: 'Sposta su', disabled: i === 0 ? 'disabled' : null, onclick: function () { const t = items[i - 1]; items[i - 1] = it; items[i] = t; chalSetTouched(ls); } }),
         el('button', { class: 'small', text: '↓', title: 'Sposta giù', disabled: i === items.length - 1 ? 'disabled' : null, onclick: function () { const t = items[i + 1]; items[i + 1] = it; items[i] = t; chalSetTouched(ls); } }),
         el('button', { class: 'small danger', text: '✕', onclick: function () { items.splice(i, 1); chalSetTouched(ls); toast('Esercizio tolto dal set'); } }));
+      // v151 (Edoardo: "voglio poter trascinare le domande senza dover premere la freccia su o giù più volte"): la riga si
+      // trascina (drag & drop nativo); una linea blu mostra dove cade. Le frecce restano (telefono, tastiera).
+      row.setAttribute('draggable', 'true');
+      row.title = 'Trascina per spostare';
+      $$('img', row).forEach(function (im) { im.draggable = false; });   // la miniatura non deve partire per conto suo
+      row.addEventListener('dragstart', function (e) {
+        if (e.target !== row) return;
+        CS_DRAG = i; row.classList.add('dragging');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); } catch (err) { /* ignora */ }
+      });
+      row.addEventListener('dragend', function () { CS_DRAG = -1; $$('.cs-item', box).forEach(function (r) { r.classList.remove('dragging', 'drop-before', 'drop-after'); }); });
+      row.addEventListener('dragover', function (e) {
+        if (CS_DRAG === -1 || CS_DRAG === i) return;
+        e.preventDefault();
+        const r = row.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+        row.classList.toggle('drop-before', !after); row.classList.toggle('drop-after', after);
+      });
+      row.addEventListener('dragleave', function () { row.classList.remove('drop-before', 'drop-after'); });
+      row.addEventListener('drop', function (e) {
+        if (CS_DRAG === -1 || CS_DRAG === i) return;
+        e.preventDefault();
+        const r = row.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+        const from = CS_DRAG; CS_DRAG = -1;
+        const moved = items.splice(from, 1)[0];
+        let to = i + (after ? 1 : 0); if (from < to) to--;
+        items.splice(to, 0, moved);
+        chalSetTouched(ls);
+      });
       box.appendChild(row);
     });
   }

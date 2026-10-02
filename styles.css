@@ -1713,3 +1713,10 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .setai-photos .ca-photo-it { width: 120px; scroll-snap-align: start; }
 .setai-qrow { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
 .setai-q { flex: 1; min-width: 120px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+
+/* v151: trascinare gli esercizi del set */
+.cs-item[draggable=true] { cursor: grab; }
+.cs-item[draggable=true] .badge::before { content: '⠿ '; color: #aab; }
+.cs-item.dragging { opacity: .45; }
+.cs-item.drop-before { box-shadow: 0 -3px 0 0 var(--accent, #2f6ff0); }
+.cs-item.drop-after { box-shadow: 0 3px 0 0 var(--accent, #2f6ff0); }
