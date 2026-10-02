@@ -1693,3 +1693,12 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .ca-imgprev img { display: block; }
 .ca-imgx { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid #fff; background: #e03131; color: #fff; font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 .ca-imgx:hover { background: #c92a2a; }
+
+/* v148: modifica di tutto il set con l'AI */
+#dlg-set-ai { width: min(760px, 94vw); }
+.setai-out { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+.setai-row { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; margin: 0; }
+.setai-row input { margin-top: 4px; }
+.setai-diff { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.setai-old { color: #99a; text-decoration: line-through; }
+.setai-new { color: #1a7f37; font-weight: 600; }

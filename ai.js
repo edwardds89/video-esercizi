@@ -993,6 +993,51 @@
     return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
+  /** v148 (Edoardo: "voglio che con IA posso dire di rendere tutte le domande dello stile della prima e non doverle fare
+   *  una ad una"). Un'istruzione dell'insegnante applicata a TUTTO il set: il modello vede gli esercizi numerati e
+   *  restituisce solo quelli che cambiano, nello stesso formato grezzo delle foto (cleanRawItem li ripulisce).
+   *  Non inventa esercizi nuovi e non ne toglie: stesso numero, stessa cosa da allenare, cambia la forma.
+   *  params: { items:[{n,type,text,solution,...}], instruction, kinds, lang, level, apiKey, model } → { changes:[{n,item}], note, ai } */
+  async function editSet(params) {
+    const lang = params.lang || 'Italian';
+    const kinds = params.kinds && params.kinds.length ? params.kinds : ['mc', 'gap', 'gapbank', 'scramble', 'extra', 'missing', 'wrong', 'match'];
+    const ok = {}; kinds.forEach(function (k) { ok[k] = 1; });
+    const system = 'You are an experienced language-teaching materials author editing a set of exercises for a teacher. Output ONLY a JSON object, no prose, no markdown fences.';
+    const list = (params.items || []).slice(0, 60).map(function (it) {
+      return it.n + '. [' + it.type + '] ' + String(it.text || '').slice(0, 400) + '  => ANSWER: ' + String(it.solution || '').slice(0, 200);
+    }).join('\n');
+    const user = [
+      'EXERCISES (' + lang + ', CEFR ' + (params.level || 'A2') + '):',
+      list,
+      'TEACHER\'S INSTRUCTION: "' + String(params.instruction || '').slice(0, 600) + '"',
+      'Apply the instruction to the exercises it concerns (all of them unless the teacher says otherwise). Keep what each exercise practises and its answer unless the instruction asks to change them. Do not add or remove exercises. Return ONLY the exercises you changed, each with "n" = its number.',
+      'When the teacher says "like the first one" (or like number N), copy the WORDING PATTERN of that exercise and adapt it to each item: e.g. if number 1 is "Qual è il plurale di casa? → case", then "gatto nero → gatti neri" becomes "Qual è il plurale di gatto nero? → gatti neri", and "studente → studentessa" becomes "Qual è il femminile di studente? → studentessa" (say singolare / plurale / femminile / maschile according to what that item asks).',
+      'Shapes (use the same type as the original unless the instruction asks for another type):',
+      '- gap | gapbank: {"n":1,"type":"gap","sentence":"the full text WITH the answer inside, e.g. \\"Qual è il plurale di casa? → case\\"","gaps":["the answer words exactly as written in the sentence"],"distractors":["gapbank only: 2 wrong forms"]}',
+      '- mc: {"n":1,"type":"mc","q":"...","options":["...","...","...","..."],"correct":0}',
+      '- match: {"n":1,"type":"match","pairs":[{"a":"...","b":"..."}]}',
+      '- wrong: {"n":1,"type":"wrong","sentence":"correct sentence","wrongWord":"word of the sentence","wrongReplacement":"typical mistake"}',
+      '- missing: {"n":1,"type":"missing","sentence":"correct sentence","missingWord":"word to remove"}',
+      '- extra: {"n":1,"type":"extra","sentence":"correct sentence","extraWord":"word to add","extraAfter":"word after which it goes"}',
+      '- scramble: {"n":1,"type":"scramble","sentence":"correct sentence"}',
+      'Allowed types: ' + kinds.join(', ') + '.',
+      'note: one short sentence in Italian saying what you changed (or why you changed nothing).',
+      'SCHEMA: {"items":[ ... ],"note":"..."}'
+    ].join('\n');
+    const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 8000, timeoutMs: 120000, fetchImpl: params.fetchImpl });
+    const j = extractJSON(res.text) || {};
+    const seen = {};
+    const changes = (Array.isArray(j.items) ? j.items : []).map(function (raw) {
+      const n = parseInt(raw && raw.n, 10);
+      if (!(n >= 1) || seen[n]) return null;
+      const item = cleanRawItem(raw, ok, true);
+      if (!item) return null;
+      seen[n] = 1;
+      return { n: n, item: item };
+    }).filter(Boolean);
+    return { changes: changes, note: String(j.note || '').trim().slice(0, 300), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+  }
+
   /** v139 (Edoardo: "la ricerca di foto vere per parola, però deve essere interpretata la frase: marcella lavora in un
    *  negozio di scarpe → shoeshop shopping assistant woman"). Dalla frase dell'esercizio alle parole da cercare in un
    *  archivio di foto (Pexels / Openverse, che rispondono bene a 1-3 parole inglesi): dalla piu' precisa alla piu' generica.
@@ -1113,5 +1158,5 @@
       ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, photoQueries: photoQueries, askExercise: askExercise };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, photoQueries: photoQueries, editSet: editSet, askExercise: askExercise };
 });

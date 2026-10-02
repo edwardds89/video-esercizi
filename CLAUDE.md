@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- ✨ MODIFICA CON IA SU TUTTO IL SET (v148, 2/10). Edoardo: "voglio che con IA posso dire di rendere tutte le domande dello
+  stile della prima e non doverle fare una ad una ... una chat con IA?". Bottone #cs-ai nell'editor del set → dialog
+  #dlg-set-ai (creato da JS): un'istruzione libera + chip pronti ("Rendi tutte le domande come la prima", …);
+  AI.editSet manda gli esercizi numerati ([tipo] testo => ANSWER) e riceve SOLO quelli cambiati ({n, …} nel formato
+  grezzo di cleanRawItem; "like the first one" = copia lo schema di frase, plurale/singolare/femminile secondo l'item).
+  Anteprima prima → dopo con spunta per esercizio; "Applica" sostituisce tenendo id, src, immagine, credito, spiegazione,
+  topic; toastUndo rimette il set com'era. Non aggiunge né toglie esercizi. Si ripete con un'altra istruzione (è la
+  "chat"). Test: e2e148.js.
 - ✕ SULL'IMMAGINE DELL'ESERCIZIO (v147, 2/10). Edoardo: "ho incollato per sbaglio un'immagine ma non c'è la x per
   eliminarla". Il bottone "✕ Togli l'immagine" c'era ma in fondo, dopo riquadro incolla e link: non si vedeva. Ora
   l'anteprima è .ca-imgprev con un bottone tondo rosso .ca-imgx nell'angolo dell'immagine (azzera CA_IMG e CA_IMG_CREDIT).

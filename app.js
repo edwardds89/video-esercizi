@@ -7337,6 +7337,88 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
     return steps.reduce(function (p, f) { return p.then(f); }, Promise.resolve()).then(function () { return out.slice(0, 24); });
   }
+  /** v148 (Edoardo: "voglio che con IA posso dire di rendere tutte le domande dello stile della prima e non doverle fare
+   *  una ad una ... una chat con IA?"). Non una chat libera: un campo dove si scrive UN'istruzione per tutto il set
+   *  ("rendi tutte le domande come la prima"), l'AI propone le modifiche (AI.editSet), si vede prima → dopo esercizio per
+   *  esercizio con la spunta, e solo "Applica" tocca il set. Immagine, spiegazione, argomento e id restano quelli di prima.
+   *  Dopo: toast con Annulla (rimette il set com'era). Si può ripetere con un'altra istruzione: è la "conversazione". */
+  function setAiText(it) {
+    if (it.kind === 'mc') return it.data.question + '  Options: ' + (it.data.options || []).filter(Boolean).join(' / ');
+    if (it.kind === 'match') return it.pairs.map(function (p) { return p.a + ' = ' + p.b; }).join('; ');
+    return it.sentence || chalItemSummary(it);
+  }
+  function openSetAi() {
+    const ls = current(); if (!ls || !ls.chal) return;
+    if (!S.settings.apiKey) return toast('Serve la chiave AI: Impostazioni AI in alto', 6000);
+    if (!(ls.chal.items || []).length) return toast('Il set è vuoto');
+    let dlg = $('#dlg-set-ai');
+    if (!dlg) {
+      dlg = el('dialog', { id: 'dlg-set-ai' });
+      document.body.appendChild(dlg);
+    }
+    dlg.innerHTML = '';
+    const ta = el('textarea', { rows: '3', style: 'width:100%', placeholder: 'Es. Rendi tutte le domande come la prima · Trasforma tutto in scelta multipla · Togli "Qual è" e lascia solo parola → parola · Metti tutto al plurale' });
+    const out = el('div', { class: 'setai-out' });
+    const msg = el('div', { class: 'hint', style: 'margin:8px 0' });
+    const go = el('button', { class: 'primary', text: '✨ Proponi le modifiche' });
+    const apply = el('button', { class: 'primary', text: 'Applica', style: 'display:none' });
+    const chips = el('div', { class: 'chips', style: 'margin:6px 0' });
+    ['Rendi tutte le domande come la prima', 'Lascia solo parola → parola, senza domanda', 'Trasforma tutti in scelta multipla', 'Trasforma tutti in completa con le parole (banca)'].forEach(function (t) {
+      chips.appendChild(el('button', { class: 'small', type: 'button', text: t, onclick: function () { ta.value = t; ta.focus(); } }));
+    });
+    let proposals = [];
+    const run = function () {
+      const instr = ta.value.trim(); if (!instr) { ta.focus(); return; }
+      go.disabled = true; apply.style.display = 'none'; out.innerHTML = '';
+      busyMsg(msg, 'L\'AI legge i ' + ls.chal.items.length + ' esercizi e prepara le modifiche… (10-40 secondi)');
+      const items = ls.chal.items;
+      AI.editSet({
+        items: items.map(function (it, i) { return { n: i + 1, type: it.kind, text: setAiText(it), solution: VLChal.solutionText(it) }; }),
+        instruction: instr, lang: String(ls.lang || 'it').slice(0, 2) === 'en' ? 'English' : 'Italian', level: S.settings.igLevel || 'A2',
+        apiKey: S.settings.apiKey, model: S.settings.model
+      }).then(function (r) {
+        go.disabled = false;
+        proposals = r.changes.map(function (c) {
+          const old = items[c.n - 1]; if (!old) return null;
+          const built = chalBuildRaw(c.item, ls, old.strict || (c.item.type !== 'mc' && c.item.type !== 'match'), old.topic || '');
+          if (!built) return null;
+          built.id = old.id; if (old.src) built.src = old.src;
+          if (old.image) { built.image = old.image; if (old.imageCredit) built.imageCredit = old.imageCredit; }
+          if (old.explain) built.explain = old.explain;
+          if (chalItemSummary(built) === chalItemSummary(old) && built.kind === old.kind && VLChal.solutionText(built) === VLChal.solutionText(old)) return null;
+          return { i: c.n - 1, old: old, built: built };
+        }).filter(Boolean);
+        msg.textContent = (r.note ? r.note + ' · ' : '') + (proposals.length ? proposals.length + (proposals.length === 1 ? ' esercizio cambia' : ' esercizi cambiano') + ': togli la spunta a quelli che vuoi lasciare come sono.' : 'Nessuna modifica proposta: prova a scrivere l\'istruzione in un altro modo.') + (r.ai && r.ai.cost ? ' (' + (r.ai.cost * 100).toFixed(1) + ' cent)' : '');
+        proposals.forEach(function (p, k) {
+          out.appendChild(el('label', { class: 'setai-row' },
+            el('input', { type: 'checkbox', checked: 'checked', 'data-k': String(k) }),
+            el('span', { class: 'badge', text: String(p.i + 1) }),
+            el('span', { class: 'setai-diff' },
+              el('span', { class: 'setai-old', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.old.kind) + ': ' : '') + chalItemSummary(p.old) + '  → ' + VLChal.solutionText(p.old) }),
+              el('span', { class: 'setai-new', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.built.kind) + ': ' : '') + chalItemSummary(p.built) + '  → ' + VLChal.solutionText(p.built) }))));
+        });
+        apply.style.display = proposals.length ? '' : 'none';
+      }, function (e) { go.disabled = false; msg.textContent = 'AI: ' + e.message; });
+    };
+    go.addEventListener('click', run);
+    ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run(); });
+    apply.addEventListener('click', function () {
+      const before = ls.chal.items.slice();
+      let n = 0;
+      $$('input[data-k]', out).forEach(function (cb) { if (!cb.checked) return; const p = proposals[+cb.getAttribute('data-k')]; if (p && ls.chal.items[p.i] === p.old) { ls.chal.items[p.i] = p.built; n++; } });
+      dlg.close();
+      if (!n) return;
+      chalSetTouched(ls);
+      toastUndo(n + (n === 1 ? ' esercizio modificato' : ' esercizi modificati') + ' dall\'AI', function () { ls.chal.items = before; chalSetTouched(ls); }, 12000);
+    });
+    dlg.appendChild(el('h2', { style: 'margin-top:0', text: '✨ Modifica con IA' }));
+    dlg.appendChild(el('p', { class: 'hint', text: 'Scrivi cosa cambiare in tutti gli esercizi (o "solo dal 7 al 12"). L\'AI propone, tu controlli e confermi: finché non premi Applica non cambia niente. Immagini e spiegazioni restano.' }));
+    dlg.appendChild(ta); dlg.appendChild(chips);
+    dlg.appendChild(el('div', { class: 'row', style: 'gap:8px' }, go, apply, el('button', { text: 'Chiudi', onclick: function () { dlg.close(); } })));
+    dlg.appendChild(msg); dlg.appendChild(out);
+    dlg.showModal(); ta.focus();
+  }
+  $('#cs-ai').addEventListener('click', openSetAi);
   $('#cs-add').addEventListener('click', function () { openChalAdd(null); });
   $('#ca-close').addEventListener('click', function () { CA_EDIT = null; $('#dlg-chal-add').close(); });
   // v70: esercizi del set generati da una foto o screenshot
