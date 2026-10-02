@@ -7403,7 +7403,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       busyMsg(msg, 'L\'AI legge i ' + ls.chal.items.length + ' esercizi e prepara le modifiche… (10-40 secondi)');
       const items = ls.chal.items;
       AI.editSet({
-        items: items.map(function (it, i) { return { n: i + 1, type: it.kind, text: setAiText(it), solution: VLChal.solutionText(it), photo: !!it.image }; }),
+        items: items.map(function (it, i) { return { n: i + 1, type: it.kind, text: setAiText(it), solution: VLChal.solutionText(it), photo: !!it.image, explain: it.explain || '' }; }),
         instruction: instr, lang: String(ls.lang || 'it').slice(0, 2) === 'en' ? 'English' : 'Italian', level: S.settings.igLevel || 'A2',
         apiKey: S.settings.apiKey, model: S.settings.model
       }).then(function (r) {
@@ -7419,10 +7419,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           built.id = old.id; if (old.src) built.src = old.src;
           if (old.image) { built.image = old.image; if (old.imageCredit) built.imageCredit = old.imageCredit; }
           if (old.explain) built.explain = old.explain;
+          const newExplain = typeof c.explain === 'string' && c.explain !== (old.explain || '') ? c.explain : null;
+          if (newExplain != null) { if (newExplain) built.explain = newExplain; else delete built.explain; }
           const removePhoto = c.photo === false && !!old.image;
           const queries = Array.isArray(c.photo) ? c.photo : null;
-          if (!textChanged && !removePhoto && !queries) return null;
-          return { i: c.n - 1, old: old, built: built, textChanged: textChanged, removePhoto: removePhoto, queries: queries, photos: [], pick: 0 };
+          if (!textChanged && !removePhoto && !queries && newExplain == null) return null;
+          return { i: c.n - 1, old: old, built: built, textChanged: textChanged, removePhoto: removePhoto, queries: queries, photos: [], pick: 0, newExplain: newExplain };
         }).filter(Boolean);
         // v149 (Edoardo: "metti le foto alle domande dalla 7 alla 12" → l'AI diceva di averlo fatto senza poterlo fare):
         // le foto le cerca l'APP con le parole date dall'AI (3 candidate per esercizio, la prima è scelta, clic per cambiarla)
@@ -7437,6 +7439,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               diff.appendChild(el('span', { class: 'setai-new', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.built.kind) + ': ' : '') + chalItemSummary(p.built) + '  → ' + VLChal.solutionText(p.built) }));
             } else diff.appendChild(el('span', { text: chalItemSummary(p.old) + '  → ' + VLChal.solutionText(p.old) }));
             if (p.removePhoto) diff.appendChild(el('span', { class: 'setai-new', text: '🖼 la foto viene tolta' }));
+            if (p.newExplain != null) diff.appendChild(el('span', { class: 'setai-new', text: p.newExplain ? '💬 Spiegazione (dopo la risposta): ' + p.newExplain : '💬 la spiegazione viene tolta' }));
             if (p.queries) {
               if (p.searching) { const w = el('span', { class: 'hint' }); busyMsg(w, 'Cerco la foto: ' + p.queries.join(' · ') + '…'); diff.appendChild(w); }
               else if (!p.photos.length) diff.appendChild(el('span', { class: 'hint', text: '🖼 Nessuna foto trovata per: ' + p.queries.join(' · ') + ' (usa 🖼 sulla riga per cercarla a mano)' }));
@@ -7493,7 +7496,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       proposals.forEach(function (p) {
         if (p.on === false || ls.chal.items[p.i] !== p.old) return;
         const ph = p.queries && p.photos[p.pick];
-        if (p.queries && !ph && !p.textChanged && !p.removePhoto) return;   // foto non trovata e nient'altro da cambiare
+        if (p.queries && !ph && !p.textChanged && !p.removePhoto && p.newExplain == null) return;   // foto non trovata e nient'altro da cambiare
         if (p.removePhoto) { delete p.built.image; delete p.built.imageCredit; }
         if (ph) {
           p.built.image = ph.url; p.built.imageCredit = ph.credit;
@@ -7712,7 +7715,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           if (CHAL.state.phase === 'question') conn.send('q', chalQPayload());   // chi arriva a domanda aperta la riceve
         } else {
           VLChal.reduce(CHAL.state, 'hello', p);
-          conn.send('set', { items: CHAL.items, mode: CHAL.mode });
+          conn.send('set', { items: chalWireItems(CHAL.items), mode: CHAL.mode });
         }
         renderChalBoard(); chalBoardOut();
       });
@@ -7750,15 +7753,18 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     (CHAL.log[i] = CHAL.log[i] || {})[id] = { nick: nick, a: String(a || '').slice(0, 300), ok: !!ok, frac: frac || 0 };
     chalSaveReport();
   }
-  function chalReviewList(items) {
+  /** light = per il canale e per il report salvato: le immagini incollate (data:, pesanti) restano fuori, i link sì. */
+  function chalReviewList(items, light) {
     return items.map(function (it) {
       const e = { type: it.kind, data: it.data || {}, pairs: it.pairs, sentence: it.sentence };
-      return { k: VLChal.itemLabel(it.kind), p: VLClass.promptOf(e), s: VLChal.solutionText(it), x: it.explain || '' };
+      const o = { k: VLChal.itemLabel(it.kind), p: VLClass.promptOf(e), s: VLChal.solutionText(it), x: it.explain || '' };
+      if (it.image && (!light || !/^data:/.test(it.image))) { o.img = it.image; if (it.imageCredit) o.c = it.imageCredit; }
+      return o;
     });
   }
   function chalSaveReport() {
     if (!CHAL) return;
-    const snap = { pin: CHAL.pin, title: CHAL.title, at: Date.now(), ended: CHAL.ended, items: chalReviewList(CHAL.items),
+    const snap = { pin: CHAL.pin, title: CHAL.title, at: Date.now(), ended: CHAL.ended, items: chalReviewList(CHAL.items, true),
       players: VLChal.leaderboard(CHAL.state).map(function (r) { return { id: r.id, nick: r.nick, score: r.score, right: r.right }; }), log: CHAL.log };
     try { localStorage.setItem('pl-chalrep', JSON.stringify(snap)); } catch (e) { /* pieno: pazienza */ }
     chalCloudSave(snap);
@@ -7850,22 +7856,75 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       renderChalReport(r[0]);
     }, function (e) { toast('Report non disponibile: ' + e.message, 6000); });
   }
-  /** v135 REVISIONE sullo schermo a fine sfida: tutte le frasi, soluzione nascosta che si apre con un clic. */
+  /** v135 REVISIONE a fine sfida; v153 (Edoardo: "se clicco su mostra tutte poi è irreversibile... voglio anche vedere frase
+   *  per frase, scegliere se una alla volta o tutte insieme, e vedere la foto"): due viste (📋 Tutte insieme / 1️⃣ Una alla
+   *  volta con ◀ ▶ e frecce della tastiera), "Mostra tutte" ↔ "Nascondi tutte", ogni soluzione si apre e si richiude,
+   *  e la foto dell'esercizio accanto alla frase. Lo stato (aperte/chiuse) resta passando da una vista all'altra. */
   function chalReview(list, host) {
     const box = el('div', { class: 'chal-review' });
-    box.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;gap:8px' },
-      el('h2', { style: 'margin:0', text: '📖 Revisione' }),
-      el('button', { class: 'small', text: '👁 Mostra tutte', onclick: function () { $$('.rv-sol', box).forEach(function (x) { x.classList.add('open'); }); } })));
-    list.forEach(function (it, i) {
-      const sol = el('button', { class: 'rv-sol', title: 'Clicca per vedere la soluzione' }, el('span', { class: 'rv-hid', text: '👁 Soluzione' }), el('span', { class: 'rv-txt', text: it.s + (it.x ? '  ·  ' + it.x : '') }));
-      sol.addEventListener('click', function () { sol.classList.toggle('open'); });
-      box.appendChild(el('div', { class: 'rv-item' }, el('div', { class: 'rv-q', text: (i + 1) + '. ' + it.p }), sol));
+    const st = { mode: 'all', i: 0, open: list.map(function () { return false; }) };
+    const item = function (it, i, big) {
+      const sol = el('button', { class: 'rv-sol' + (st.open[i] ? ' open' : ''), title: 'Clicca per vedere o nascondere la soluzione' }, el('span', { class: 'rv-hid', text: '👁 Soluzione' }), el('span', { class: 'rv-txt', text: it.s + (it.x ? '  ·  ' + it.x : '') }));
+      sol.addEventListener('click', function () { st.open[i] = !st.open[i]; sol.classList.toggle('open', st.open[i]); head(); });
+      const txt = el('div', { class: 'rv-body' }, el('div', { class: 'rv-q', text: (i + 1) + '. ' + it.p }), sol);
+      const row = el('div', { class: 'rv-item' + (big ? ' big' : '') });
+      if (it.img) {
+        const im = el('img', { class: 'rv-img', src: it.img, alt: '', title: it.c || '', referrerpolicy: 'no-referrer' });
+        im.addEventListener('error', function () { im.remove(); });
+        row.appendChild(im);
+      }
+      row.appendChild(txt);
+      return row;
+    };
+    const headBox = el('div', { class: 'row rv-head' }), body = el('div', { class: 'rv-list' });
+    const head = function () {
+      headBox.innerHTML = '';
+      const allOpen = st.open.length && st.open.every(Boolean);
+      headBox.appendChild(el('h2', { style: 'margin:0', text: '📖 Revisione' }));
+      headBox.appendChild(el('span', { style: 'flex:1' }));
+      headBox.appendChild(el('button', { class: 'small' + (st.mode === 'all' ? ' primary' : ''), text: '📋 Tutte insieme', onclick: function () { st.mode = 'all'; paint(); } }));
+      headBox.appendChild(el('button', { class: 'small' + (st.mode === 'one' ? ' primary' : ''), text: '1️⃣ Una alla volta', onclick: function () { st.mode = 'one'; paint(); } }));
+      headBox.appendChild(el('button', { class: 'small rv-all', text: allOpen ? '🙈 Nascondi tutte' : '👁 Mostra tutte', onclick: function () { const v = !allOpen; st.open = st.open.map(function () { return v; }); paint(); } }));
+    };
+    const go = function (d) { st.i = Math.max(0, Math.min(list.length - 1, st.i + d)); paint(); };
+    const paint = function () {
+      head(); body.innerHTML = '';
+      if (st.mode === 'all') { list.forEach(function (it, i) { body.appendChild(item(it, i, false)); }); return; }
+      if (!list.length) return;
+      body.appendChild(item(list[st.i], st.i, true));
+      body.appendChild(el('div', { class: 'row rv-nav' },
+        el('button', { class: 'rv-prev', text: '◀ Indietro', disabled: st.i === 0 ? 'disabled' : null, onclick: function () { go(-1); } }),
+        el('span', { class: 'rv-count', text: (st.i + 1) + ' di ' + list.length }),
+        el('button', { class: 'primary rv-next', text: 'Avanti ▶', disabled: st.i === list.length - 1 ? 'disabled' : null, onclick: function () { go(1); } })));
+    };
+    box.tabIndex = 0;
+    box.addEventListener('keydown', function (e) {
+      if (st.mode !== 'one') return;
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(1); box.focus(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); box.focus(); }
+      else if (e.key === ' ' || e.key === 'Enter') { if (e.target === box) { e.preventDefault(); st.open[st.i] = !st.open[st.i]; paint(); box.focus(); } }
     });
+    box.appendChild(headBox); box.appendChild(body);
+    paint();
     host.innerHTML = ''; host.appendChild(box);
     return box;
   }
+  /** v152: il canale Realtime ha un tetto per messaggio. Le foto con LINK (Unsplash, Openverse) pesano niente; quelle
+   *  INCOLLATE sono dentro l'esercizio (data:…) e dodici insieme possono superarlo: allora ai telefoni il set arriverebbe
+   *  mai. Se il set supera ~180 KB le immagini incollate restano solo sullo schermo del prof (e lo si dice una volta). */
+  function chalWireItems(items) {
+    let json = JSON.stringify(items);
+    if (json.length < 180000) return items;
+    const slim = items.map(function (it) { if (it.image && /^data:/.test(it.image)) { const c = Object.assign({}, it); delete c.image; return c; } return it; });
+    if (!CHAL._slimWarned) { CHAL._slimWarned = true; toast('Le immagini incollate sono troppo pesanti per i telefoni: lì non si vedono (quelle scelte con 🔎 sì)', 7000); }
+    return slim;
+  }
   function chalQPayload() {
-    return { i: CHAL.state.i, total: CHAL.items.length, pub: VLChal.wire(CHAL.pub), showQ: !!CHAL.showQ, secs: CHAL.secs || 0 };
+    const it = CHAL.items[CHAL.state.i] || {};
+    const pay = { i: CHAL.state.i, total: CHAL.items.length, pub: VLChal.wire(CHAL.pub), showQ: !!CHAL.showQ, secs: CHAL.secs || 0 };
+    // v152: con "mostra la domanda anche sui telefoni" viaggia anche l'immagine (se è incollata e pesante, no: resta sullo schermo)
+    if (CHAL.showQ && it.image && it.image.length < 120000) { pay.image = it.image; if (it.imageCredit) pay.credit = it.imageCredit; }
+    return pay;
   }
   /** La classifica ai telefoni (student-paced): al massimo una ogni 700 ms. */
   function chalBoardOut() {
@@ -7948,7 +8007,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!CHAL || CHAL.ended) return;
     CHAL.ended = true;
     clearInterval(CHAL.clock); clearTimeout(CHAL.boardTimer);
-    CHAL.conn.send('end', { rows: VLChal.leaderboard(CHAL.state), review: chalReviewList(CHAL.items) });   // v135: la revisione va anche ai telefoni
+    CHAL.conn.send('end', { rows: VLChal.leaderboard(CHAL.state), review: chalReviewList(CHAL.items, true) });   // v135: la revisione va anche ai telefoni
     chalSaveReport();
     $('#chal-stagebox').style.display = 'none';
     $('#chal-live').style.display = 'none';
@@ -8295,10 +8354,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     return box;
   }
   /** Insieme sullo schermo: arriva una domanda alla volta, si risponde e si aspetta la rivelazione. */
+  function chpImage(src, credit) {
+    const box = el('div', { class: 'chp-imgbox' });
+    const im = el('img', { class: 'chp-img', src: src, alt: '', referrerpolicy: 'no-referrer' });
+    im.addEventListener('error', function () { box.remove(); });
+    box.appendChild(im);
+    if (credit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + credit }));
+    return box;
+  }
   function chpQuestion(me, p) {
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
     const t0 = Date.now();
     wrap.appendChild(el('div', { class: 'chp-status', text: 'Domanda ' + (p.i + 1) + ' di ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo!') }));
+    if (p.image) wrap.appendChild(chpImage(p.image, p.credit));
     const done = el('div', { class: 'chp-status', style: 'display:none' });
     const inputBox = chpItemInput(p.pub, { onSubmit: function (v) {
       me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, value: v, ms: Date.now() - t0 });
@@ -8350,6 +8418,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const t0 = Date.now();
       stage.appendChild(el('div', { class: 'chp-status', text: (i + 1) + ' di ' + items.length + ' · ' + VLChal.itemLabel(item.kind) }));
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
+      // v152 (Edoardo, screenshot dal telefono: "perché lo studente non vede l'immagine?"): l'immagine dell'esercizio c'era
+      // solo sullo schermo del prof e nei compiti; ora anche sul telefono, sopra la domanda
+      if (item.image) { stage.appendChild(chpImage(item.image, item.imageCredit)); }
       stage.appendChild(chpItemInput(pub, { onSubmit: function (v) {
         const res = VLChal.checkItem(item, v, pub);
         last = { i: i, a: chalAnswerText(item, v, pub).slice(0, 300), ok: !!res.correct, frac: res.frac };   // v135: per il report del prof
@@ -8360,9 +8431,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         sendScore(false);
         const fb = el('div', { class: 'chp-reveal ' + (res.correct ? 'ok' : 'no') },
           el('div', { class: 'big', text: res.correct ? '✓ Giusto!' : (res.frac > 0 ? 'Quasi: ' + Math.round(res.frac * 100) + '%' : '✗ Sbagliata') }),
-          res.correct ? null : el('div', { class: 'sol', text: 'Risposta: ' + VLChal.solutionText(item) }));
+          res.correct ? null : el('div', { class: 'sol', text: 'Risposta: ' + VLChal.solutionText(item) }),
+          item.explain ? el('div', { class: 'chp-explain', text: '💬 ' + item.explain }) : null);
         stage.innerHTML = '';
         stage.appendChild(fb);
+        if (item.explain) { fb.appendChild(el('button', { class: 'primary chp-next', text: 'Avanti ▶', onclick: step })); return; }   // con la spiegazione si va avanti a mano: serve il tempo di leggerla
         setTimeout(step, res.correct ? 900 : 2200);
       } }));
     };

@@ -1004,7 +1004,7 @@
     const ok = {}; kinds.forEach(function (k) { ok[k] = 1; });
     const system = 'You are an experienced language-teaching materials author editing a set of exercises for a teacher. Output ONLY a JSON object, no prose, no markdown fences.';
     const list = (params.items || []).slice(0, 60).map(function (it) {
-      return it.n + '. [' + it.type + '] ' + String(it.text || '').slice(0, 400) + '  => ANSWER: ' + String(it.solution || '').slice(0, 200) + '  (photo: ' + (it.photo ? 'yes' : 'no') + ')';
+      return it.n + '. [' + it.type + '] ' + String(it.text || '').slice(0, 400) + '  => ANSWER: ' + String(it.solution || '').slice(0, 200) + '  (photo: ' + (it.photo ? 'yes' : 'no') + (it.explain ? '; explain: "' + String(it.explain).slice(0, 200) + '"' : '') + ')';
     }).join('\n');
     const user = [
       'EXERCISES (' + lang + ', CEFR ' + (params.level || 'A2') + '):',
@@ -1022,6 +1022,7 @@
       '- scramble: {"n":1,"type":"scramble","sentence":"correct sentence"}',
       'Allowed types: ' + kinds.join(', ') + '.',
       'PHOTOS: you cannot see, create or attach images yourself. If the teacher asks to add or change the photo of some exercises, return for each of them {"n":7,"photo":["2 or 3 English search queries for a stock photo site, 1-3 words each, from specific to generic, e.g. black cat, cat"]}: the app searches and attaches the photo. The photo must illustrate the word or situation without showing the written answer. To remove a photo return {"n":7,"photo":false}. An entry can carry only "photo" (text unchanged) or text fields plus "photo".',
+      'EXPLANATIONS: an exercise can carry "explain": a short note the student sees AFTER answering (a rule, a translation, e.g. "casa = house, case = houses"). If the teacher asks for explanations, translations or notes, put them in "explain" (an entry can carry only "n" and "explain"; "explain":"" removes it). NEVER write explanations, translations or the answer inside "sentence" or "q": the student reads those BEFORE answering. If an existing exercise has such text in brackets inside its sentence, move it to "explain" and clean the sentence.',
       'note: one short sentence in Italian saying what you changed (or why you changed nothing). NEVER say you did something that is not in "items": if you returned nothing for an exercise, you did not change it.',
       'SCHEMA: {"items":[ ... ],"note":"..."}'
     ].join('\n');
@@ -1039,9 +1040,10 @@
         photo = (Array.isArray(raw.photo) ? raw.photo : [raw.photo]).map(function (q) { return String(q || '').trim().toLowerCase().slice(0, 60); }).filter(Boolean).slice(0, 4);
         if (!photo.length) photo = undefined;
       }
-      if (!item && photo === undefined) return null;
+      const explain = typeof raw.explain === 'string' ? raw.explain.trim().slice(0, 600) : undefined;
+      if (!item && photo === undefined && explain === undefined) return null;
       seen[n] = 1;
-      return { n: n, item: item, photo: photo };
+      return { n: n, item: item, photo: photo, explain: explain };
     }).filter(Boolean);
     return { changes: changes, note: String(j.note || '').trim().slice(0, 300), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }

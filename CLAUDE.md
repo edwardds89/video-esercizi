@@ -1,5 +1,21 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- REVISIONE: MOSTRA/NASCONDI, UNA ALLA VOLTA, FOTO (v153, 2/10). Edoardo: "se clicco su mostra tutte poi è irreversibile…
+  voglio anche vedere frase per frase, scegliere se una alla volta o tutte insieme, e vedere la foto". chalReview riscritta
+  con stato {mode:'all'|'one', i, open[]}: "👁 Mostra tutte" ↔ "🙈 Nascondi tutte", ogni soluzione si richiude; vista
+  "1️⃣ Una alla volta" grande con ◀ Indietro / Avanti ▶ e frecce della tastiera (spazio = soluzione); la foto (.rv-img) accanto
+  alla frase, grande nella vista singola. chalReviewList(items, light): con light (canale 'end' e report salvato) le
+  immagini incollate data: restano fuori, i link viaggiano; lo schermo del prof usa la lista piena. Test: e2e153.js.
+- IMMAGINE E SPIEGAZIONE SUL TELEFONO NELLA SFIDA (v152, 2/10). Edoardo (screenshot iPhone, modalità al proprio ritmo):
+  "perché lo studente non vede l'immagine?". item.image si vedeva solo sullo schermo del prof (chalScreenItem) e nei
+  compiti. Ora chpImage(src, credit): in chpPlaySelf sopra la domanda; in modalità insieme viaggia in chalQPayload solo con
+  "mostra la domanda anche sui telefoni" e se < 120 KB. chalWireItems: se il set serializzato supera ~180 KB le immagini
+  INCOLLATE (data:) non vanno ai telefoni (tetto del messaggio Realtime; quelle con link sì) e il prof viene avvisato.
+  Sul telefono, dopo la risposta, item.explain compare (.chp-explain) e si va avanti con "Avanti ▶" invece del timer.
+  Nello stesso screenshot la domanda conteneva "(spiegazione: plurale di 'casa' = house; 'case' = houses)": l'AI l'aveva
+  scritta DENTRO la frase, rivelando la risposta. AI.editSet ora ha il campo "explain" (anche da solo, "" lo toglie), vede
+  l'explain esistente, e ha la regola: mai spiegazioni/traduzioni/risposta in sentence o q; se ci sono, spostarle.
+  Test: e2e152.js.
 - TRASCINARE GLI ESERCIZI DEL SET (v151, 2/10). Edoardo: "voglio poter trascinare le domande senza dover premere la
   freccia su o giù più volte". Le righe .cs-item sono draggable (drag & drop nativo, CS_DRAG = indice di partenza): una
   linea blu (.drop-before / .drop-after, metà riga) mostra dove cade, drop = splice e chalSetTouched. Le miniature hanno
