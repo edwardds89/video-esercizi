@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- LA MODIFICA CON IA NON MENTE PIÙ, E METTE LE FOTO (v149, 2/10). Edoardo: "metti le foto alle domande dalla 7 alla 12" →
+  la nota diceva "Ho aggiunto un'immagine descrittiva…" e sotto "Nessuna modifica proposta". Il modello non può attaccare
+  immagini ma lo dichiarava. Ora: (1) il prompt di AI.editSet dice che non può e che la nota non deve mai dichiarare
+  cose assenti da "items"; se non ci sono proposte la nota del modello NON si mostra; (2) le foto si possono chiedere
+  davvero: il modello restituisce {n, photo:[ricerche inglesi]} (o photo:false per toglierla), l'app cerca con
+  searchScenePhotos(queries, 3) una alla volta e mostra 3 candidate per esercizio (.setai-photos, la prima scelta, clic
+  per cambiare); Applica mette image + imageCredit (e il ping di Unsplash). Ogni esercizio arriva al modello con
+  "(photo: yes/no)" così "a quelli che non ce l'hanno" funziona. Test: e2e149.js.
 - ✨ MODIFICA CON IA SU TUTTO IL SET (v148, 2/10). Edoardo: "voglio che con IA posso dire di rendere tutte le domande dello
   stile della prima e non doverle fare una ad una ... una chat con IA?". Bottone #cs-ai nell'editor del set → dialog
   #dlg-set-ai (creato da JS): un'istruzione libera + chip pronti ("Rendi tutte le domande come la prima", …);

@@ -7303,7 +7303,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     box.appendChild(grid);
   }
   /** Pexels (con chiave) + Openverse (senza): per ogni ricerca, finché ci sono almeno 18 foto. */
-  function searchScenePhotos(queries) {
+  function searchScenePhotos(queries, want) {
+    want = want || 18;
     const seen = new Set(), out = [];
     const add = function (o) { if (o.url && !seen.has(o.url)) { seen.add(o.url); out.push(o); } };
     const pexels = function (q) {
@@ -7331,9 +7332,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     };
     const steps = [];
     queries.forEach(function (q) {
-      if (S.settings.unsplashKey) steps.push(function () { return out.length >= 18 ? null : unsplash(q); });
-      if (S.settings.pexelsKey) steps.push(function () { return out.length >= 18 ? null : pexels(q); });
-      steps.push(function () { return out.length >= 18 ? null : openverse(q); });
+      if (S.settings.unsplashKey) steps.push(function () { return out.length >= want ? null : unsplash(q); });
+      if (S.settings.pexelsKey) steps.push(function () { return out.length >= want ? null : pexels(q); });
+      steps.push(function () { return out.length >= want ? null : openverse(q); });
     });
     return steps.reduce(function (p, f) { return p.then(f); }, Promise.resolve()).then(function () { return out.slice(0, 24); });
   }
@@ -7357,13 +7358,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       document.body.appendChild(dlg);
     }
     dlg.innerHTML = '';
-    const ta = el('textarea', { rows: '3', style: 'width:100%', placeholder: 'Es. Rendi tutte le domande come la prima · Trasforma tutto in scelta multipla · Togli "Qual è" e lascia solo parola → parola · Metti tutto al plurale' });
+    const ta = el('textarea', { rows: '3', style: 'width:100%', placeholder: 'Es. Rendi tutte le domande come la prima · Metti le foto alle domande dalla 7 alla 12 · Trasforma tutto in scelta multipla · Lascia solo parola → parola' });
     const out = el('div', { class: 'setai-out' });
     const msg = el('div', { class: 'hint', style: 'margin:8px 0' });
     const go = el('button', { class: 'primary', text: '✨ Proponi le modifiche' });
     const apply = el('button', { class: 'primary', text: 'Applica', style: 'display:none' });
     const chips = el('div', { class: 'chips', style: 'margin:6px 0' });
-    ['Rendi tutte le domande come la prima', 'Lascia solo parola → parola, senza domanda', 'Trasforma tutti in scelta multipla', 'Trasforma tutti in completa con le parole (banca)'].forEach(function (t) {
+    ['Rendi tutte le domande come la prima', 'Metti una foto a tutti gli esercizi che non ce l\'hanno', 'Lascia solo parola → parola, senza domanda', 'Trasforma tutti in scelta multipla', 'Trasforma tutti in completa con le parole (banca)'].forEach(function (t) {
       chips.appendChild(el('button', { class: 'small', type: 'button', text: t, onclick: function () { ta.value = t; ta.focus(); } }));
     });
     let proposals = [];
@@ -7373,30 +7374,66 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       busyMsg(msg, 'L\'AI legge i ' + ls.chal.items.length + ' esercizi e prepara le modifiche… (10-40 secondi)');
       const items = ls.chal.items;
       AI.editSet({
-        items: items.map(function (it, i) { return { n: i + 1, type: it.kind, text: setAiText(it), solution: VLChal.solutionText(it) }; }),
+        items: items.map(function (it, i) { return { n: i + 1, type: it.kind, text: setAiText(it), solution: VLChal.solutionText(it), photo: !!it.image }; }),
         instruction: instr, lang: String(ls.lang || 'it').slice(0, 2) === 'en' ? 'English' : 'Italian', level: S.settings.igLevel || 'A2',
         apiKey: S.settings.apiKey, model: S.settings.model
       }).then(function (r) {
         go.disabled = false;
         proposals = r.changes.map(function (c) {
           const old = items[c.n - 1]; if (!old) return null;
-          const built = chalBuildRaw(c.item, ls, old.strict || (c.item.type !== 'mc' && c.item.type !== 'match'), old.topic || '');
-          if (!built) return null;
+          let built = null, textChanged = false;
+          if (c.item) {
+            built = chalBuildRaw(c.item, ls, old.strict || (c.item.type !== 'mc' && c.item.type !== 'match'), old.topic || '');
+            if (built) textChanged = !(chalItemSummary(built) === chalItemSummary(old) && built.kind === old.kind && VLChal.solutionText(built) === VLChal.solutionText(old));
+          }
+          if (!built || !textChanged) { built = JSON.parse(JSON.stringify(old)); textChanged = false; }
           built.id = old.id; if (old.src) built.src = old.src;
           if (old.image) { built.image = old.image; if (old.imageCredit) built.imageCredit = old.imageCredit; }
           if (old.explain) built.explain = old.explain;
-          if (chalItemSummary(built) === chalItemSummary(old) && built.kind === old.kind && VLChal.solutionText(built) === VLChal.solutionText(old)) return null;
-          return { i: c.n - 1, old: old, built: built };
+          const removePhoto = c.photo === false && !!old.image;
+          const queries = Array.isArray(c.photo) ? c.photo : null;
+          if (!textChanged && !removePhoto && !queries) return null;
+          return { i: c.n - 1, old: old, built: built, textChanged: textChanged, removePhoto: removePhoto, queries: queries, photos: [], pick: 0 };
         }).filter(Boolean);
-        msg.textContent = (r.note ? r.note + ' · ' : '') + (proposals.length ? proposals.length + (proposals.length === 1 ? ' esercizio cambia' : ' esercizi cambiano') + ': togli la spunta a quelli che vuoi lasciare come sono.' : 'Nessuna modifica proposta: prova a scrivere l\'istruzione in un altro modo.') + (r.ai && r.ai.cost ? ' (' + (r.ai.cost * 100).toFixed(1) + ' cent)' : '');
-        proposals.forEach(function (p, k) {
-          out.appendChild(el('label', { class: 'setai-row' },
-            el('input', { type: 'checkbox', checked: 'checked', 'data-k': String(k) }),
-            el('span', { class: 'badge', text: String(p.i + 1) }),
-            el('span', { class: 'setai-diff' },
-              el('span', { class: 'setai-old', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.old.kind) + ': ' : '') + chalItemSummary(p.old) + '  → ' + VLChal.solutionText(p.old) }),
-              el('span', { class: 'setai-new', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.built.kind) + ': ' : '') + chalItemSummary(p.built) + '  → ' + VLChal.solutionText(p.built) }))));
-        });
+        // v149 (Edoardo: "metti le foto alle domande dalla 7 alla 12" → l'AI diceva di averlo fatto senza poterlo fare):
+        // le foto le cerca l'APP con le parole date dall'AI (3 candidate per esercizio, la prima è scelta, clic per cambiarla)
+        const paint = function () {
+          out.innerHTML = '';
+          proposals.forEach(function (p, k) {
+            const diff = el('span', { class: 'setai-diff' });
+            if (p.textChanged) {
+              diff.appendChild(el('span', { class: 'setai-old', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.old.kind) + ': ' : '') + chalItemSummary(p.old) + '  → ' + VLChal.solutionText(p.old) }));
+              diff.appendChild(el('span', { class: 'setai-new', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.built.kind) + ': ' : '') + chalItemSummary(p.built) + '  → ' + VLChal.solutionText(p.built) }));
+            } else diff.appendChild(el('span', { text: chalItemSummary(p.old) + '  → ' + VLChal.solutionText(p.old) }));
+            if (p.removePhoto) diff.appendChild(el('span', { class: 'setai-new', text: '🖼 la foto viene tolta' }));
+            if (p.queries) {
+              if (p.searching) { const w = el('span', { class: 'hint' }); busyMsg(w, 'Cerco la foto: ' + p.queries.join(' · ') + '…'); diff.appendChild(w); }
+              else if (!p.photos.length) diff.appendChild(el('span', { class: 'hint', text: '🖼 Nessuna foto trovata per: ' + p.queries.join(' · ') + ' (usa 🖼 sulla riga per cercarla a mano)' }));
+              else {
+                const strip = el('span', { class: 'setai-photos' });
+                p.photos.forEach(function (ph, j) {
+                  const bt = el('button', { type: 'button', class: 'ca-photo-it' + (p.pick === j ? ' on' : ''), title: ph.credit }, el('img', { src: ph.thumb, alt: '', referrerpolicy: 'no-referrer' }));
+                  bt.addEventListener('click', function (e) { e.preventDefault(); p.pick = j; paint(); });
+                  strip.appendChild(bt);
+                });
+                diff.appendChild(strip);
+              }
+            }
+            const cb = el('input', { type: 'checkbox', 'data-k': String(k) }); cb.checked = p.on !== false;
+            cb.addEventListener('change', function () { p.on = cb.checked; });
+            out.appendChild(el('label', { class: 'setai-row' }, cb, el('span', { class: 'badge', text: String(p.i + 1) }), diff));
+          });
+        };
+        const nPhoto = proposals.filter(function (p) { return p.queries; }).length;
+        msg.textContent = proposals.length
+          ? (r.note ? r.note + ' · ' : '') + proposals.length + (proposals.length === 1 ? ' esercizio cambia' : ' esercizi cambiano') + ': togli la spunta a quelli che vuoi lasciare come sono.' + (nPhoto ? ' Per le foto clicca quella che preferisci.' : '') + (r.ai && r.ai.cost ? ' (' + (r.ai.cost * 100).toFixed(1) + ' cent)' : '')
+          : 'Nessuna modifica proposta: l\'AI non ha cambiato niente. Prova a scrivere l\'istruzione in un altro modo.' + (r.ai && r.ai.cost ? ' (' + (r.ai.cost * 100).toFixed(1) + ' cent)' : '');
+        proposals.forEach(function (p) { if (p.queries) p.searching = true; });
+        paint();
+        // una ricerca alla volta (Unsplash in demo: 50 richieste all'ora)
+        proposals.filter(function (p) { return p.queries; }).reduce(function (chain, p) {
+          return chain.then(function () { return searchScenePhotos(p.queries, 3); }).then(function (list) { p.photos = list.slice(0, 3); p.searching = false; if (dlg.open) paint(); });
+        }, Promise.resolve());
         apply.style.display = proposals.length ? '' : 'none';
       }, function (e) { go.disabled = false; msg.textContent = 'AI: ' + e.message; });
     };
@@ -7405,7 +7442,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     apply.addEventListener('click', function () {
       const before = ls.chal.items.slice();
       let n = 0;
-      $$('input[data-k]', out).forEach(function (cb) { if (!cb.checked) return; const p = proposals[+cb.getAttribute('data-k')]; if (p && ls.chal.items[p.i] === p.old) { ls.chal.items[p.i] = p.built; n++; } });
+      proposals.forEach(function (p) {
+        if (p.on === false || ls.chal.items[p.i] !== p.old) return;
+        const ph = p.queries && p.photos[p.pick];
+        if (p.queries && !ph && !p.textChanged && !p.removePhoto) return;   // foto non trovata e nient'altro da cambiare
+        if (p.removePhoto) { delete p.built.image; delete p.built.imageCredit; }
+        if (ph) {
+          p.built.image = ph.url; p.built.imageCredit = ph.credit;
+          if (ph.ping && S.settings.unsplashKey) fetch(ph.ping, { headers: { Authorization: 'Client-ID ' + S.settings.unsplashKey } }).catch(function () {});
+        }
+        ls.chal.items[p.i] = p.built; n++;
+      });
       dlg.close();
       if (!n) return;
       chalSetTouched(ls);

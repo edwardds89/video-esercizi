@@ -1702,3 +1702,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .setai-diff { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
 .setai-old { color: #99a; text-decoration: line-through; }
 .setai-new { color: #1a7f37; font-weight: 600; }
+
+/* v149: foto proposte nella Modifica con IA */
+.setai-photos { display: flex; gap: 6px; margin-top: 4px; }
+.setai-photos .ca-photo-it { width: 96px; flex: none; }

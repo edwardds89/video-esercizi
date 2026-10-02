@@ -1004,7 +1004,7 @@
     const ok = {}; kinds.forEach(function (k) { ok[k] = 1; });
     const system = 'You are an experienced language-teaching materials author editing a set of exercises for a teacher. Output ONLY a JSON object, no prose, no markdown fences.';
     const list = (params.items || []).slice(0, 60).map(function (it) {
-      return it.n + '. [' + it.type + '] ' + String(it.text || '').slice(0, 400) + '  => ANSWER: ' + String(it.solution || '').slice(0, 200);
+      return it.n + '. [' + it.type + '] ' + String(it.text || '').slice(0, 400) + '  => ANSWER: ' + String(it.solution || '').slice(0, 200) + '  (photo: ' + (it.photo ? 'yes' : 'no') + ')';
     }).join('\n');
     const user = [
       'EXERCISES (' + lang + ', CEFR ' + (params.level || 'A2') + '):',
@@ -1021,7 +1021,8 @@
       '- extra: {"n":1,"type":"extra","sentence":"correct sentence","extraWord":"word to add","extraAfter":"word after which it goes"}',
       '- scramble: {"n":1,"type":"scramble","sentence":"correct sentence"}',
       'Allowed types: ' + kinds.join(', ') + '.',
-      'note: one short sentence in Italian saying what you changed (or why you changed nothing).',
+      'PHOTOS: you cannot see, create or attach images yourself. If the teacher asks to add or change the photo of some exercises, return for each of them {"n":7,"photo":["2 or 3 English search queries for a stock photo site, 1-3 words each, from specific to generic, e.g. black cat, cat"]}: the app searches and attaches the photo. The photo must illustrate the word or situation without showing the written answer. To remove a photo return {"n":7,"photo":false}. An entry can carry only "photo" (text unchanged) or text fields plus "photo".',
+      'note: one short sentence in Italian saying what you changed (or why you changed nothing). NEVER say you did something that is not in "items": if you returned nothing for an exercise, you did not change it.',
       'SCHEMA: {"items":[ ... ],"note":"..."}'
     ].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 8000, timeoutMs: 120000, fetchImpl: params.fetchImpl });
@@ -1030,10 +1031,17 @@
     const changes = (Array.isArray(j.items) ? j.items : []).map(function (raw) {
       const n = parseInt(raw && raw.n, 10);
       if (!(n >= 1) || seen[n]) return null;
-      const item = cleanRawItem(raw, ok, true);
-      if (!item) return null;
+      const item = raw.type || raw.sentence || raw.q || raw.pairs ? cleanRawItem(raw, ok, true) : null;
+      // v149: foto chieste dall'insegnante = parole da cercare (le attacca l'app), false = togli la foto
+      let photo;
+      if (raw.photo === false) photo = false;
+      else if (Array.isArray(raw.photo) || typeof raw.photo === 'string') {
+        photo = (Array.isArray(raw.photo) ? raw.photo : [raw.photo]).map(function (q) { return String(q || '').trim().toLowerCase().slice(0, 60); }).filter(Boolean).slice(0, 4);
+        if (!photo.length) photo = undefined;
+      }
+      if (!item && photo === undefined) return null;
       seen[n] = 1;
-      return { n: n, item: item };
+      return { n: n, item: item, photo: photo };
     }).filter(Boolean);
     return { changes: changes, note: String(j.note || '').trim().slice(0, 300), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
