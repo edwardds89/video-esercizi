@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- TELEFONO DELLA SFIDA BILINGUE (v173, 2/10). Gli studenti PoliMi non parlano italiano e il telefono della sfida era tutto
+  in italiano ("Completa gli spazi", "spazio 1", "Invia", "Rispondi al tuo ritmo…"); Edoardo ha detto sì alla proposta.
+  Tutte le scritte del lato studente (ingresso, risposta, esito, attesa, classifica finale) ora sono "italiano · English";
+  contatore "1 / 12" senza il nome italiano del tipo. I default di chpItemInput valgono solo per la sfida: i compiti
+  passano le loro scritte (ASG_T). ATTENZIONE test vecchi: il pulsante d'ingresso ora è "Entra · Join ▶".
 - IL VIDEO RIPARTIVA DA CAPO ALLA FINE (v172, 2/10). Edoardo, video-lezione con l'ultimo esercizio proprio alla fine
   (13 a 10:30 su 10:30): il video finiva con l'esercizio aperto, onEnded veniva ignorato (st.blocked) e poi continueVideo
   chiamava play() su un video FINITO: YouTube lo riavvia dall'inizio. Ora onEnded ricorda st.endPending, e continueVideo,

@@ -8482,22 +8482,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
     let nick = '';
     try { nick = sessionStorage.getItem('vle.chalnick') || ''; } catch (e) { /* ignora */ }
-    const inp = el('input', { type: 'text', id: 'chp-nick', maxlength: '20', placeholder: 'Il tuo nome o nickname', value: nick, autocomplete: 'off' });
-    const go = el('button', { class: 'primary big', text: 'Entra nella sfida ▶' });
+    const inp = el('input', { type: 'text', id: 'chp-nick', maxlength: '20', placeholder: 'Il tuo nome · Your name', value: nick, autocomplete: 'off' });
+    const go = el('button', { class: 'primary big', text: 'Entra · Join ▶' });
     const msg = el('div', { class: 'hint', style: 'margin-top:10px' });
     wrap.appendChild(el('div', { class: 'chp-join' },
       el('div', { class: 'chp-logo', text: 'PauseLearn' }),
-      el('h2', { text: 'Sfida in classe' }),
+      el('h2', { text: 'Sfida in classe · Class challenge' }),
       el('div', { class: 'hint', text: 'PIN ' + pin }),
       inp, go, msg));
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go.click(); });
     inp.focus();
     go.addEventListener('click', function () {
       const nk = inp.value.trim().slice(0, 20);
-      if (!nk) { msg.textContent = 'Scrivi prima il tuo nome.'; inp.focus(); return; }
+      if (!nk) { msg.textContent = 'Scrivi prima il tuo nome · Write your name first'; inp.focus(); return; }
       try { sessionStorage.setItem('vle.chalnick', nk); } catch (e) { /* ignora */ }
       go.disabled = true;
-      busyMsg(msg, 'Mi collego alla sfida…');
+      busyMsg(msg, 'Mi collego… · Connecting…');
       let id = '';
       try { id = sessionStorage.getItem('vle.chalid.' + pin) || ''; } catch (e) { /* ignora */ }
       if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem('vle.chalid.' + pin, id); } catch (e) { /* ignora */ } }
@@ -8522,8 +8522,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           const w = $('#chp-wrap');
           w.innerHTML = '';
           w.appendChild(el('div', { class: 'card chp-card' },
-            el('h2', { text: 'Il docente ti ha tolto dalla sfida' }),
-            el('p', { class: 'hint', text: 'Chiedi al docente se puoi rientrare.' })));
+            el('h2', { text: 'Il docente ti ha tolto dalla sfida · The teacher removed you from the challenge' }),
+            el('p', { class: 'hint', text: 'Chiedi al docente se puoi rientrare · Ask the teacher if you can join again' })));
           try { conn.close(); } catch (e) { /* ignora */ }
         });
         conn.on('end', function (p) {
@@ -8579,7 +8579,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         });
         box.appendChild(q);
       } else (pub.runs || []).forEach(function (r, i) {
-        const inp = el('input', { type: 'text', class: 'chp-gap', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', placeholder: 'spazio ' + (i + 1) + (r.words > 1 ? ' (' + r.words + ' parole)' : '') });
+        const inp = el('input', { type: 'text', class: 'chp-gap', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', placeholder: ((pub.runs || []).length > 1 ? (i + 1) + '. ' : '') + 'scrivi qui · write here' + (r.words > 1 ? ' (' + r.words + ' parole · words)' : '') });
         inputs.push(inp);
         box.appendChild(inp);
       });
@@ -8603,7 +8603,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(chips);
       let corr = null;
       if (kind === 'wrong') {
-        corr = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.wrongPh || 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', style: 'display:none' });
+        corr = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.wrongPh || 'La parola giusta · The right word', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', style: 'display:none' });
         box.appendChild(corr);
       }
       getVal = function () {
@@ -8614,7 +8614,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       let sel = -1;
       const line = el('div', { class: 'chp-missline' });
       const mkSlot = function (k) {
-        const b = el('button', { class: 'chp-slot', text: '＋', title: 'Manca qui?' });
+        const b = el('button', { class: 'chp-slot', text: '＋', title: 'Manca qui? · Missing here?' });
         b.addEventListener('click', function () { sel = k; $$('.chp-slot', line).forEach(function (x, j) { x.classList.toggle('sel', j === k); }); });
         return b;
       };
@@ -8624,7 +8624,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       line.appendChild(mkSlot((pub.tokens || []).length));
       box.appendChild(line);
-      const word = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.missPh || 'La parola che manca', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off' });
+      const word = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.missPh || 'La parola che manca · The missing word', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off' });
       box.appendChild(word);
       getVal = function () { return sel === -1 || !word.value.trim() ? null : { index: sel, word: word.value }; };
     } else if (kind === 'scramble') {
@@ -8634,7 +8634,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const bank = el('div', { class: 'chp-scrbank' });
       const paint = function () {
         ans.innerHTML = '';
-        if (!picked.length) ans.appendChild(el('span', { class: 'chp-scrhint', text: opts.scrHint || 'Tocca le parole qui sotto nell’ordine giusto' }));
+        if (!picked.length) ans.appendChild(el('span', { class: 'chp-scrhint', text: opts.scrHint || 'Tocca le parole nell’ordine giusto · Tap the words in the right order' }));
         picked.forEach(function (ix, k) {
           ans.appendChild(el('button', { class: 'chp-tile inans', text: words[ix], title: 'Togli', onclick: function () { picked.splice(k, 1); paint(); } }));
         });
@@ -8676,7 +8676,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       cur = 0; paint();
       getVal = function () { return chosen.some(function (v) { return v !== -1; }) ? chosen.slice() : null; };
     }
-    const send = el('button', { class: 'primary big chp-send', text: opts.sendLabel || 'Invia ▶' });
+    const send = el('button', { class: 'primary big chp-send', text: opts.sendLabel || 'Invia · Send ▶' });
     // v164 (Edoardo, iPhone: 'se scrivo "maestra " con uno spazio dopo, non mi fa cliccare su check'): con la parola ancora
     // sottolineata dal correttore, iOS usa il primo tocco per confermarla e il clic sul bottone non arriva. Due rimedi:
     // autocorrect="off" sulle caselle (il correttore inglese cambiava anche le parole italiane) e il bottone che parte
@@ -8684,7 +8684,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     send.addEventListener('touchend', function (e) { if (send.disabled) return; e.preventDefault(); send.click(); });
     send.addEventListener('click', function () {
       const v = getVal();
-      if (v == null) return toast(opts.answerFirst || 'Prima rispondi');
+      if (v == null) return toast(opts.answerFirst || 'Prima rispondi · Answer first');
       send.disabled = true;
       $$('button, input', box).forEach(function (x) { if (x !== send) x.disabled = true; });
       opts.onSubmit(v);
@@ -8743,7 +8743,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function chpQuestion(me, p, tStart) {
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
     const t0 = tStart || Date.now();
-    wrap.appendChild(el('div', { class: 'chp-status', text: 'Domanda ' + (p.i + 1) + ' di ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo!') }));
+    wrap.appendChild(el('div', { class: 'chp-status', text: (p.i + 1) + ' / ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo · look at the screen!') }));
     // v170 (Edoardo: "lo studente non può vedere sul suo telefono il timer... devono vederlo sia sullo schermo del pc che
     // sul loro telefono"): conto alla rovescia anche qui, calcolato dai secondi rimasti mandati dal prof
     clearInterval(me.clock);
@@ -8765,9 +8765,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, value: v, ms: Date.now() - t0 });
       me.lastMine = { i: p.i, text: chpMine(p.pub, v) };
       done.innerHTML = '';
-      done.appendChild(el('div', { text: 'Risposta inviata: aspetta la rivelazione…' }));
+      done.appendChild(el('div', { text: 'Risposta inviata: aspetta… · Answer sent: wait…' }));
       // v157: finché il prof non mostra la risposta si può annullare e riscrivere (il tempo continua a contare dall'inizio)
-      done.appendChild(el('button', { class: 'chp-undo', type: 'button', text: '↶ Annulla e riscrivi', onclick: function () {
+      done.appendChild(el('button', { class: 'chp-undo', type: 'button', text: '↶ Annulla · Undo', onclick: function () {
         me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, undo: true });
         chpQuestion(me, p, t0);
       } }));
@@ -8780,13 +8780,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (!rev || rev.i !== p.i) return;
       const mine = rev.per && rev.per[me.id];
       const boxr = el('div', { class: 'chp-reveal ' + (mine && mine.ok ? 'ok' : 'no') },
-        el('div', { class: 'big', text: mine ? (mine.ok ? '✓ Giusto! +' + mine.pts : (mine.pts ? 'Quasi: +' + mine.pts : '✗ Sbagliata')) : 'Tempo scaduto' }),
+        el('div', { class: 'big', text: mine ? (mine.ok ? '✓ Giusto · Correct! +' + mine.pts : (mine.pts ? 'Quasi · Almost: +' + mine.pts : '✗ Sbagliata · Wrong')) : 'Tempo scaduto · Time is up' }),
         rev.sol ? chpSol(rev.sol, mine && !mine.ok && me.lastMine && me.lastMine.i === p.i ? me.lastMine.text : '') : null);
       const meRow = (rev.top || []).find(function (r) { return r.id === me.id; });
-      if (meRow) boxr.appendChild(el('div', { class: 'pos', text: 'Sei ' + meRow.rank + '° con ' + meRow.score + ' punti' }));
+      if (meRow) boxr.appendChild(el('div', { class: 'pos', text: '🏅 ' + meRow.rank + '° · ' + meRow.score + ' pt' }));
       wrap.innerHTML = '';
       wrap.appendChild(boxr);
-      wrap.appendChild(el('div', { class: 'chp-status', text: 'Aspetta la prossima domanda…' }));
+      wrap.appendChild(el('div', { class: 'chp-status', text: 'Aspetta la prossima domanda… · Wait for the next question…' }));
     };
   }
   /** Ognuno al suo ritmo: il set intero sul telefono, correzione locale, punteggio come nel v68. */
@@ -8796,11 +8796,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (shuffle) { orig = VLChal.shuffleArr(orig, Math.random); items = orig.map(function (k) { return items[k]; }); }
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
     const stage = el('div', { class: 'chp-stage2' });
-    const status = el('div', { class: 'chp-status', text: 'Rispondi al tuo ritmo: la classifica è dal prof' });
+    const status = el('div', { class: 'chp-status', text: 'Rispondi al tuo ritmo · Answer at your own pace' });
     wrap.appendChild(stage); wrap.appendChild(status);
     me.conn.on('board', function (p) {
       const mr = (p && p.rows || []).find(function (r) { return r.id === me.id; });
-      if (mr) status.textContent = 'Sei ' + mr.rank + '° con ' + mr.score + ' punti';
+      if (mr) status.textContent = '🏅 ' + mr.rank + '° · ' + mr.score + ' pt';
     });
     let i = 0, score = 0, right = 0, streak = 0;
     const pts = VLChal.pointsFor(mode);
@@ -8812,15 +8812,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       stage.innerHTML = '';
       if (i >= items.length) {
         stage.appendChild(el('div', { class: 'chp-reveal ok' },
-          el('div', { class: 'big', text: '🏁 Finito: ' + right + ' su ' + items.length }),
-          el('div', { class: 'pos', text: score + ' punti · aspetta la classifica del prof' })));
+          el('div', { class: 'big', text: '🏁 Finito · Finished: ' + right + ' / ' + items.length }),
+          el('div', { class: 'pos', text: score + ' pt · aspetta la classifica · wait for the ranking' })));
         sendScore(true);
         return;
       }
       const item = items[i];
       const pub = VLChal.pubItem(item, { showQ: true });
       const t0 = Date.now();
-      stage.appendChild(el('div', { class: 'chp-status', text: (i + 1) + ' di ' + items.length + ' · ' + VLChal.itemLabel(item.kind) }));
+      stage.appendChild(el('div', { class: 'chp-status', text: (i + 1) + ' / ' + items.length }));
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
       // v152 (Edoardo, screenshot dal telefono: "perché lo studente non vede l'immagine?"): l'immagine dell'esercizio c'era
       // solo sullo schermo del prof e nei compiti; ora anche sul telefono, sopra la domanda
@@ -8835,12 +8835,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         i++;
         sendScore(false);
         const fb = el('div', { class: 'chp-reveal ' + (res.correct ? 'ok' : 'no') },
-          el('div', { class: 'big', text: res.correct ? '✓ Giusto!' : (res.frac > 0 ? 'Quasi: ' + Math.round(res.frac * 100) + '%' : '✗ Sbagliata') }),
+          el('div', { class: 'big', text: res.correct ? '✓ Giusto · Correct!' : (res.frac > 0 ? 'Quasi · Almost: ' + Math.round(res.frac * 100) + '%' : '✗ Sbagliata · Wrong') }),
           res.correct ? null : chpSol(VLChal.solutionText(item), chpMine(pub, v)),
           item.explain ? el('div', { class: 'chp-explain', text: '💬 ' + item.explain }) : null);
         stage.innerHTML = '';
         stage.appendChild(fb);
-        if (item.explain) { fb.appendChild(el('button', { class: 'primary chp-next', text: 'Avanti ▶', onclick: step })); return; }   // con la spiegazione si va avanti a mano: serve il tempo di leggerla
+        if (item.explain) { fb.appendChild(el('button', { class: 'primary chp-next', text: 'Avanti · Next ▶', onclick: step })); return; }   // con la spiegazione si va avanti a mano: serve il tempo di leggerla
         setTimeout(step, res.correct ? 900 : 2200);
       } }));
     };
@@ -8850,15 +8850,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     wrap.innerHTML = '';
     rows = rows || [];
     const medals = ['🥇', '🥈', '🥉'];
-    const box = el('div', { class: 'chp-final' }, el('h2', { text: 'Classifica finale' }));
+    const box = el('div', { class: 'chp-final' }, el('h2', { text: 'Classifica finale · Final ranking' }));
     rows.forEach(function (r) {
       box.appendChild(el('div', { class: 'chal-row final' + (r.id === myId ? ' me' : '') },
         el('span', { class: 'rk', text: r.rank <= 3 ? medals[r.rank - 1] : r.rank + '°' }),
-        el('span', { class: 'nick', text: r.nick + (r.id === myId ? ' (tu)' : '') }),
+        el('span', { class: 'nick', text: r.nick + (r.id === myId ? ' (tu · you)' : '') }),
         el('span', { class: 'pts', text: r.score + ' pt' })));
     });
     const me = rows.find(function (r) { return r.id === myId; });
-    if (me) box.appendChild(el('p', { class: 'chp-me', text: me.rank === 1 ? 'Hai vinto! 🏆' : 'Sei arrivato ' + me.rank + '°: bravo!' }));
+    if (me) box.appendChild(el('p', { class: 'chp-me', text: me.rank === 1 ? 'Hai vinto · You won! 🏆' : me.rank + '°: bravo · well done!' }));
     wrap.appendChild(box);
   }
 
