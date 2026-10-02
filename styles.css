@@ -1771,3 +1771,18 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v163: la risposta sbagliata dello studente sopra quella giusta */
 .chp-mine { margin-bottom: 10px; }
 .chp-mine-val { font-size: 22px; font-weight: 700; color: #c92a2a; text-decoration: line-through; text-decoration-thickness: 2px; overflow-wrap: anywhere; }
+
+/* v165: al secondo errore la risposta da ricopiare */
+.as-hint.as-copy { background: #eef9f1; border-color: #bfe3c8; text-align: center; }
+.as-copy-sol { font-size: clamp(24px, 7vw, 34px); font-weight: 800; color: #1a7f37; overflow-wrap: anywhere; }
+.as-copy-do { font-size: 15px; color: #445; margin-top: 4px; font-weight: 600; }
+
+/* v165: compiti a casa e sfide in classe ben distinti nella pagina Classi */
+.cls-sec-h{margin:14px 0 6px;padding:5px 10px;border-radius:8px;font-weight:700;font-size:14px}
+.cls-sec-h.home{background:#e8f0ff;color:#1d4ed8}
+.cls-sec-h.chal{background:#fff1e0;color:#b45309}
+.cls-tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;vertical-align:middle}
+.cls-tag.home{background:#e8f0ff;color:#1d4ed8}
+.cls-tag.chal{background:#fff1e0;color:#b45309}
+.cls-asg.cls-chal{border-left:4px solid #f59e0b}
+.cls-asg:not(.cls-chal){border-left:4px solid #3b82f6}

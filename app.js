@@ -7222,6 +7222,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         }
       }
       // v127: per tutti i tipi, spiegazione, accenti e immagine
+      fields.appendChild(el('label', { text: 'Aiuto al primo errore (facoltativo: la regola, SENZA la risposta)' }));
+      fields.appendChild(el('textarea', { id: 'ca-hint', rows: '2', style: 'width:100%', placeholder: 'Es. Nouns ending in -a: the plural ends in -e (casa → case).' }));
       fields.appendChild(el('label', { text: 'Spiegazione (facoltativa, lo studente la vede dopo aver risposto)' }));
       fields.appendChild(el('textarea', { id: 'ca-explain', rows: '2', style: 'width:100%', placeholder: 'Es. Finire prende -isc-: io finisco, lui finisce…' }));
       if (k !== 'match' && k !== 'mc') fields.appendChild(el('label', { class: 'chip', style: 'margin-top:8px;display:inline-flex' }, el('input', { id: 'ca-strict', type: 'checkbox' }), ' Gli accenti contano (è ≠ e)'));
@@ -7263,6 +7265,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       paintImg();
       if (editing) {
         $('#ca-explain').value = editing.explain || '';
+        if ($('#ca-hint')) $('#ca-hint').value = editing.hint || '';
         if ($('#ca-strict')) $('#ca-strict').checked = !!editing.strict;
       } else if ($('#ca-strict')) $('#ca-strict').checked = true;
     };
@@ -7393,7 +7396,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const go = el('button', { class: 'primary', text: '✨ Proponi le modifiche' });
     const apply = el('button', { class: 'primary', text: 'Applica', style: 'display:none' });
     const chips = el('div', { class: 'chips', style: 'margin:6px 0' });
-    ['Rendi tutte le domande come la prima', 'Metti una foto a tutti gli esercizi che non ce l\'hanno', 'Lascia solo parola → parola, senza domanda', 'Trasforma tutti in scelta multipla', 'Trasforma tutti in completa con le parole (banca)'].forEach(function (t) {
+    ['Rendi tutte le domande come la prima', 'Aggiungi a ogni esercizio un aiuto con la regola (in inglese, senza la risposta)', 'Metti una foto a tutti gli esercizi che non ce l\'hanno', 'Lascia solo parola → parola, senza domanda', 'Trasforma tutti in scelta multipla', 'Trasforma tutti in completa con le parole (banca)'].forEach(function (t) {
       chips.appendChild(el('button', { class: 'small', type: 'button', text: t, onclick: function () { ta.value = t; ta.focus(); } }));
     });
     let proposals = [];
@@ -7403,7 +7406,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       busyMsg(msg, 'L\'AI legge i ' + ls.chal.items.length + ' esercizi e prepara le modifiche… (10-40 secondi)');
       const items = ls.chal.items;
       AI.editSet({
-        items: items.map(function (it, i) { return { n: i + 1, type: it.kind, text: setAiText(it), solution: VLChal.solutionText(it), photo: !!it.image, explain: it.explain || '' }; }),
+        items: items.map(function (it, i) { return { n: i + 1, type: it.kind, text: setAiText(it), solution: VLChal.solutionText(it), photo: !!it.image, explain: it.explain || '', hint: it.hint || '' }; }),
         instruction: instr, lang: String(ls.lang || 'it').slice(0, 2) === 'en' ? 'English' : 'Italian', level: S.settings.igLevel || 'A2',
         apiKey: S.settings.apiKey, model: S.settings.model
       }).then(function (r) {
@@ -7420,11 +7423,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           if (old.image) { built.image = old.image; if (old.imageCredit) built.imageCredit = old.imageCredit; }
           if (old.explain) built.explain = old.explain;
           const newExplain = typeof c.explain === 'string' && c.explain !== (old.explain || '') ? c.explain : null;
+          if (old.hint && !built.hint) built.hint = old.hint;
+          const newHint = typeof c.hint === 'string' && c.hint !== (old.hint || '') ? c.hint : null;
+          if (newHint != null) { if (newHint) built.hint = newHint; else delete built.hint; }
           if (newExplain != null) { if (newExplain) built.explain = newExplain; else delete built.explain; }
           const removePhoto = c.photo === false && !!old.image;
           const queries = Array.isArray(c.photo) ? c.photo : null;
-          if (!textChanged && !removePhoto && !queries && newExplain == null) return null;
-          return { i: c.n - 1, old: old, built: built, textChanged: textChanged, removePhoto: removePhoto, queries: queries, photos: [], pick: 0, newExplain: newExplain };
+          if (!textChanged && !removePhoto && !queries && newExplain == null && newHint == null) return null;
+          return { i: c.n - 1, old: old, built: built, textChanged: textChanged, removePhoto: removePhoto, queries: queries, photos: [], pick: 0, newExplain: newExplain, newHint: newHint };
         }).filter(Boolean);
         // v149 (Edoardo: "metti le foto alle domande dalla 7 alla 12" → l'AI diceva di averlo fatto senza poterlo fare):
         // le foto le cerca l'APP con le parole date dall'AI (3 candidate per esercizio, la prima è scelta, clic per cambiarla)
@@ -7439,6 +7445,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               diff.appendChild(el('span', { class: 'setai-new', text: (p.old.kind !== p.built.kind ? VLChal.itemLabel(p.built.kind) + ': ' : '') + chalItemSummary(p.built) + '  → ' + VLChal.solutionText(p.built) }));
             } else diff.appendChild(el('span', { text: chalItemSummary(p.old) + '  → ' + VLChal.solutionText(p.old) }));
             if (p.removePhoto) diff.appendChild(el('span', { class: 'setai-new', text: '🖼 la foto viene tolta' }));
+            if (p.newHint != null) diff.appendChild(el('span', { class: 'setai-new', text: p.newHint ? '💡 Aiuto (al primo errore): ' + p.newHint : '💡 l\'aiuto viene tolto' }));
             if (p.newExplain != null) diff.appendChild(el('span', { class: 'setai-new', text: p.newExplain ? '💬 Spiegazione (dopo la risposta): ' + p.newExplain : '💬 la spiegazione viene tolta' }));
             if (p.queries) {
               if (p.searching) { const w = el('span', { class: 'hint' }); busyMsg(w, 'Cerco la foto: ' + p.queries.join(' · ') + '…'); diff.appendChild(w); }
@@ -7496,7 +7503,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       proposals.forEach(function (p) {
         if (p.on === false || ls.chal.items[p.i] !== p.old) return;
         const ph = p.queries && p.photos[p.pick];
-        if (p.queries && !ph && !p.textChanged && !p.removePhoto && p.newExplain == null) return;   // foto non trovata e nient'altro da cambiare
+        if (p.queries && !ph && !p.textChanged && !p.removePhoto && p.newExplain == null && p.newHint == null) return;   // foto non trovata e nient'altro da cambiare
         if (p.removePhoto) { delete p.built.image; delete p.built.imageCredit; }
         if (ph) {
           p.built.image = ph.url; p.built.imageCredit = ph.credit;
@@ -7544,6 +7551,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // v126: esercizi di grammatica = gli accenti contano (è/e, perché/perche)
     if (strict && built.kind !== 'match' && built.kind !== 'mc') built.strict = true;
     if (it.topic || topic) built.topic = it.topic || topic;
+    if (it.hint) built.hint = it.hint;   // v165: la regola che aiuta, senza la risposta
     return built;
   }
   /** v136: le parole scelte dal modello per l'argomento (spazio, parola sbagliata, mancante, in più) */
@@ -7599,6 +7607,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // v127: spiegazione, accenti, immagine
     const exp = ($('#ca-explain') && $('#ca-explain').value || '').trim();
     if (exp) it.explain = exp.slice(0, 600);
+    const hnt = ($('#ca-hint') && $('#ca-hint').value || '').trim();
+    if (hnt) it.hint = hnt.slice(0, 400);
     if ($('#ca-strict') && $('#ca-strict').checked) it.strict = true;
     if (CA_IMG) { it.image = CA_IMG; if (CA_IMG_CREDIT) it.imageCredit = CA_IMG_CREDIT; }
     if (CA_EDIT != null && ls.chal.items[CA_EDIT]) {
@@ -8874,13 +8884,18 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         title.replaceWith(el('div', { class: 'row', style: 'gap:6px' }, inp, ok)); renameBtn.remove(); inp.focus();
       });
       const as = CLS.assignments.filter(function (a) { return a.class_id === c.id; });
+      const chs = (CLS.chals || []).filter(function (r) { return r.class_id === c.id; });
       const card = el('div', { class: 'card cls-card' },
-        el('div', { class: 'row', style: 'gap:8px;align-items:center;flex-wrap:wrap' }, title, el('span', { class: 'muted', text: as.length + (as.length === 1 ? ' compito' : ' compiti') }),
+        el('div', { class: 'row', style: 'gap:8px;align-items:center;flex-wrap:wrap' }, title, el('span', { class: 'muted', text: as.length + (as.length === 1 ? ' compito a casa' : ' compiti a casa') + ' · ' + chs.length + (chs.length === 1 ? ' sfida in classe' : ' sfide in classe') }),
           el('span', { style: 'flex:1' }), renameBtn,
           twoStep('Elimina classe', function () { be.deleteClass(c.id).then(function () { toast('Classe eliminata'); renderClasses(); }, function (e) { toast('Non eliminata: ' + e.message, 6000); }); })));
+      // v165 (Edoardo: "non capisco la differenza tra quelli fatti in classe e quelli assegnati come compito a casa"): due sezioni con titolo ed etichetta su ogni riga
+      card.appendChild(el('div', { class: 'cls-sec-h home', text: '🏠 Compiti a casa (' + as.length + ')' }));
       if (!as.length) card.appendChild(el('p', { class: 'hint', text: 'Nessun compito: dalle tue lezioni, "📋 Assegna".' }));
       as.forEach(function (a) { card.appendChild(assignmentRow(be, a)); });
-      chalReportsBlock(be, card, (CLS.chals || []).filter(function (r) { return r.class_id === c.id; }));
+      card.appendChild(el('div', { class: 'cls-sec-h chal', text: '📱 Sfide in classe (' + chs.length + ')' }));
+      if (!chs.length) card.appendChild(el('p', { class: 'hint', text: 'Nessuna sfida salvata per questa classe: quando lanci una sfida scegli la classe in alto.' }));
+      chalReportsBlock(be, card, chs, true);
       list.appendChild(card);
     });
     const loose = (CLS.chals || []).filter(function (r) { return !r.class_id || !CLS.classes.some(function (c) { return c.id === r.class_id; }); });
@@ -8891,9 +8906,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     }
   }
   /** v137: le Sfide in classe salvate, sotto la loro classe. Report in una nuova scheda, classe cambiabile, elimina. */
-  function chalReportsBlock(be, card, rows) {
+  function chalReportsBlock(be, card, rows, noHead) {
     if (!rows.length) return;
-    card.appendChild(el('div', { class: 'cls-chal-h', text: '📱 Sfide in classe (' + rows.length + ')' }));
+    if (!noHead) card.appendChild(el('div', { class: 'cls-sec-h chal', text: '📱 Sfide in classe (' + rows.length + ')' }));
     rows.forEach(function (r) {
       const mv = el('select', { class: 'small', title: 'Cambia la classe di questa sfida' });
       mv.appendChild(el('option', { value: '', text: '— nessuna classe —' }));
@@ -8905,7 +8920,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       card.appendChild(el('div', { class: 'cls-asg cls-chal' },
         el('div', { class: 'row', style: 'gap:8px;align-items:center;flex-wrap:wrap' },
-          el('b', { text: r.title || 'Sfida' }),
+          el('span', { class: 'cls-tag chal', text: '📱 In classe' }), el('b', { text: r.title || 'Sfida' }),
           el('span', { class: 'muted', text: fmtDate(r.created_at) + ' · ' + r.players + (r.players === 1 ? ' studente' : ' studenti') + (r.ended ? '' : ' · non chiusa') }),
           el('span', { style: 'flex:1' }),
           el('button', { class: 'small primary', text: '📊 Report', onclick: function () { window.open(location.pathname + location.search + '#chalrep=' + r.id, '_blank'); } }),
@@ -8939,6 +8954,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
     return el('div', { class: 'cls-asg' + (a.open ? '' : ' closed') },
       el('div', { class: 'cls-asg-main' },
+        el('span', { class: 'cls-tag home', text: a.kind === 'live' ? '🔴 Dal vivo' : '🏠 A casa' }), ' ',
         el('a', { class: 'cls-asg-title', href: location.pathname + location.search + '#rep=' + a.id + '&m=table', target: '_blank', text: a.title || '(senza titolo)' }),
         el('div', { class: 'meta', text: fmtDate(a.created_at) + ' · codice ' + a.code + ' · ' + (nS ? nS + (nS === 1 ? ' studente' : ' studenti') + ', ' + nF + ' ' + (nF === 1 ? 'ha consegnato' : 'hanno consegnato') : 'nessuno ancora') })),
       el('div', { class: 'actions' },
@@ -8959,7 +8975,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     it: { name: 'Il tuo nome e cognome', namePh: 'Nome e cognome', privacy: 'Il tuo nome e le tue risposte li vede solo il docente. Non serve un account.', start: 'Inizia ▶', exercises: 'esercizi', needName: 'Scrivi nome e cognome',
       check: 'Controlla', retry: '✗ Non è giusto: riprova.', almost: '✗ Quasi ({p}% giusto): riprova.', ok: '✓ Giusto!', okLate: '✓ Giusto al secondo tentativo', wrong: '✗ Sbagliato', solution: 'Soluzione: ', next: 'Avanti ▶', result: 'Vedi il risultato ▶',
       review: 'Da ripassare', youWrote: 'Hai scritto: ', correct: 'Giusto: ', again: '↻ Rifai da capo', accents: ' Attenzione agli accenti (è ≠ e).', answerFirst: 'Prima rispondi', wrongPh: 'Scrivi la parola giusta', missPh: 'La parola che manca', scrHint: 'Tocca le parole qui sotto nell’ordine giusto',
-      hint: '💡 Aiuto', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
+      hint: '💡 Aiuto', typeIt: '✗ Non ancora. La risposta giusta è:', typeIt2: 'Scrivila qui sotto per andare avanti.', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
       hExtraA: 'La parola in più è nella prima metà della frase', hExtraB: 'La parola in più è nella seconda metà della frase', hScr: 'La frase comincia con «{w}»', hMatch: 'Una coppia giusta: {w}', hMc: 'Ho tolto {n} risposte sbagliate', okHelp: '✓ Giusto, con l\'aiuto', koHelp: '✗ Sbagliato anche con l\'aiuto',
       me: '📚 I miei compiti', meSub: 'Entra con la tua email: ritrovi i compiti fatti e gli errori da ripassare, dal telefono o dal PC.', meOpt: '👤 Entra per ritrovare i tuoi compiti (facoltativo)', signedAs: 'Collegato come {e}', logout: 'Esci', email: 'La tua email', sendCode: 'Inviami il codice', codeSent: 'Ti ho mandato un codice a {e}: scrivilo qui (guarda anche nello spam).', code: 'Codice', enter: 'Entra', badCode: 'Codice sbagliato o scaduto', none: 'Non hai ancora compiti collegati al tuo profilo.', review2: 'Rivedi', redo: 'Rifai', done2: 'consegnato', inProgress: 'in corso', yourName: 'Nome e cognome', backList: '← I miei compiti', linked: '{n} compiti fatti su questo dispositivo collegati al tuo profilo',
       waitTitle: 'Sei dentro! ✓', waitMsg: 'Aspetta: il quiz parte quando lo dice il docente…', ended: 'La sessione è finita: il docente ha chiuso il quiz.', timeUp: '⏰ Tempo scaduto!', stopped: '⏹ Il docente ha fermato il quiz.',
@@ -8969,7 +8985,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. You don\'t need an account.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
       check: 'Check', retry: '✗ Not quite: try again.', almost: '✗ Almost ({p}% right): try again.', ok: '✓ Correct!', okLate: '✓ Correct on the second try', wrong: '✗ Wrong', solution: 'Answer: ', next: 'Next ▶', result: 'See your result ▶',
       review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
-      hint: '💡 Hint', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
+      hint: '💡 Hint', typeIt: '✗ Not yet. The right answer is:', typeIt2: 'Write it below to continue.', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
       hExtraA: 'The extra word is in the first half of the sentence', hExtraB: 'The extra word is in the second half of the sentence', hScr: 'The sentence starts with «{w}»', hMatch: 'One right pair: {w}', hMc: 'I removed {n} wrong answers', okHelp: '✓ Correct, with the hint', koHelp: '✗ Wrong, even with the hint',
       me: '📚 My assignments', meSub: 'Sign in with your email: find the assignments you did and the mistakes to review, on your phone or computer.', meOpt: '👤 Sign in to keep your assignments (optional)', signedAs: 'Signed in as {e}', logout: 'Sign out', email: 'Your email', sendCode: 'Send me the code', codeSent: 'We sent a code to {e}: type it here (check your spam folder too).', code: 'Code', enter: 'Sign in', badCode: 'Wrong or expired code', none: 'No assignments linked to your profile yet.', review2: 'Review', redo: 'Do it again', done2: 'submitted', inProgress: 'in progress', yourName: 'First and last name', backList: '← My assignments', linked: '{n} assignments done on this device linked to your profile',
       waitTitle: 'You\'re in! ✓', waitMsg: 'Wait: the quiz starts when your teacher says so…', ended: 'The session is over: your teacher closed the quiz.', timeUp: '⏰ Time\'s up!', stopped: '⏹ Your teacher stopped the quiz.',
@@ -9495,7 +9511,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       else if (item.kind === 'extra') out.text.push(d.extraIndex < (d.shown || []).length / 2 ? T.hExtraA : T.hExtraB);
       else if (item.kind === 'scramble') out.text.push(fill(T.hScr, { w: (d.words || [])[0] || '' }));
       else if (item.kind === 'match') { const p0 = (item.pairs || [])[0]; if (p0) out.text.push(fill(T.hMatch, { w: p0.a + ' ↔ ' + p0.b })); }
-      if (item.explain) out.text.push(item.explain);
+      // v165 (Edoardo: 'non ha senso questo hint che dice "inizia con ragazz" e dopo dai la soluzione'): la spiegazione
+      // (item.explain) contiene la risposta e si vede solo DOPO; qui va l'aiuto vero, item.hint = la regola senza la
+      // risposta ("i nomi in -a al plurale finiscono in -e"). Se c'è, sostituisce l'aiuto generico "comincia con…".
+      if (item.hint) out.text = [item.hint];
       return out;
     };
     const answerOf = function (item, v, pub) {
@@ -9570,7 +9589,23 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             return;
           }
           cell.ok = false; cell.how = 'revealed';
-          done(false);
+          // v165: secondo errore = si mostra la risposta e, dove si scrive, lo studente la ricopia per andare avanti
+          // (resta "sbagliato" nel report: ricopiare non dà punti, serve a fissare la forma giusta)
+          if (['gap', 'gapbank', 'wrong', 'missing'].indexOf(item.kind) === -1) return done(false);
+          clearTimeout(S.assign.timer); S.assign.timer = setTimeout(function () { assignSend(false); }, 400);
+          msg.className = 'as-msg no'; msg.textContent = T.typeIt;
+          hintBox.className = 'as-hint as-copy'; hintBox.innerHTML = '';
+          hintBox.appendChild(el('div', { class: 'as-copy-sol', text: VLChal.solutionText(item) }));
+          hintBox.appendChild(el('div', { class: 'as-copy-do', text: T.typeIt2 }));
+          hintBox.style.display = '';
+          const copy = function () {
+            const cb = chpItemInput(pub, { inline: true, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, onSubmit: function (v2) {
+              if (VLChal.checkItem(item, v2, pub).correct) return done(false);
+              cb.replaceWith(copy());
+            } });
+            return cb;
+          };
+          inputBox.replaceWith(copy());
         } });
         return inputBox;
       };

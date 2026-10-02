@@ -880,6 +880,14 @@
     A1: 'LEVEL A1 (absolute beginners, first lessons): very short items, only the most common everyday words (casa, famiglia, cibo, scuola, colori, numeri), present tense only, no subordinate clauses, no rare words like spolpatrice or acquario.',
     A2: 'LEVEL A2: short simple sentences, everyday vocabulary, present and passato prossimo at most, one clause.'
   };
+  /** v165: l'aiuto (regola senza risposta) passa dal grezzo all'item pulito. */
+  function withHint(item, raw) {
+    if (!item || !raw) return item;
+    const h = typeof raw.hint === 'string' ? raw.hint.trim().slice(0, 400) : '';
+    if (h) item.hint = h;
+    return item;
+  }
+  const HINT_RULE = 'Every item should also carry "hint": ONE short sentence in simple English with the rule that helps a student who got it wrong, WITHOUT giving the answer and without the answer word in it (e.g. for casa → case: "Nouns ending in -a: the plural ends in -e."; for lavorare → lavora: "Verbs in -are: with lui/lei the ending is -a.").';
   /** v138: un item grezzo del modello → item pulito (stesso formato per foto, Simile e Rigenera). */
   function cleanRawItem(it, okKinds, focus) {
       if (!it || !okKinds[it.type]) return null;
@@ -978,6 +986,7 @@
       'TARGET: material in ' + lang + ' for CEFR ' + level + ' students. Every sentence must be understandable WITHOUT seeing the image.',
       LEVEL_RULES[String(level).toUpperCase()] || '',
       format === 'words' ? 'FORMAT: SINGLE WORDS ONLY, like the exercise in the image. Every gap item is just "GIVEN → ANSWER" (e.g. "finestra → finestre"). Do NOT write any sentence.' : format === 'sentences' ? '' : 'MATCH THE FORMAT OF THE IMAGE: if the exercise in the image works on SINGLE WORDS (e.g. write the singular or the plural, the article of a noun), keep the items that small: a minimal frame of 2-4 words around the word, e.g. "una finestra → due (finestra) finestre", "il treno → i (treno) treni", "Ecco una (borse) borsa." Never build a long sentence around a word exercise.' ,
+      HINT_RULE,
       'Multiple-choice questions must contain everything needed to answer: never write "this word", "this picture" or refer to the image; write the word itself in the question.',
       topics.length > 1 ? 'The teacher chose SEVERAL topics: ' + topics.map(function (t, i) { return (i + 1) + ') ' + t; }).join(' ') + '. Split the items evenly across them and set "topic" on every item to the topic it practises, copied exactly from this list.' : '',
       focus ? 'TOPIC' + (topics.length > 1 ? 'S' : '') + ' CHOSEN BY THE TEACHER: ' + focus + '. EVERY item must practise ' + (topics.length > 1 ? 'one of these topics' : 'this topic') + ' (grammar or vocabulary) as it appears in the image. Write NEW sentences with new names and contexts: never copy the sentences, examples or exercises printed in the image (the students already have that book). Vary the forms (e.g. all persons of the verb, masculine and feminine, singular and plural).' : '',
@@ -989,7 +998,7 @@
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, images: params.images, maxTokens: 4000, fetchImpl: params.fetchImpl });
     const j = extractJSON(res.text);
     const okKinds = {}; kinds.forEach(function (k) { okKinds[k] = 1; });
-    const items = (Array.isArray(j.items) ? j.items : []).map(function (it) { return cleanRawItem(it, okKinds, focus); }).filter(Boolean);
+    const items = (Array.isArray(j.items) ? j.items : []).map(function (it) { return withHint(cleanRawItem(it, okKinds, focus), it); }).filter(Boolean);
     return { items: items, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
@@ -1004,7 +1013,7 @@
     const ok = {}; kinds.forEach(function (k) { ok[k] = 1; });
     const system = 'You are an experienced language-teaching materials author editing a set of exercises for a teacher. Output ONLY a JSON object, no prose, no markdown fences.';
     const list = (params.items || []).slice(0, 60).map(function (it) {
-      return it.n + '. [' + it.type + '] ' + String(it.text || '').slice(0, 400) + '  => ANSWER: ' + String(it.solution || '').slice(0, 200) + '  (photo: ' + (it.photo ? 'yes' : 'no') + (it.explain ? '; explain: "' + String(it.explain).slice(0, 200) + '"' : '') + ')';
+      return it.n + '. [' + it.type + '] ' + String(it.text || '').slice(0, 400) + '  => ANSWER: ' + String(it.solution || '').slice(0, 200) + '  (photo: ' + (it.photo ? 'yes' : 'no') + (it.explain ? '; explain: "' + String(it.explain).slice(0, 200) + '"' : '') + (it.hint ? '; hint: "' + String(it.hint).slice(0, 200) + '"' : '; hint: none') + ')';
     }).join('\n');
     const user = [
       'EXERCISES (' + lang + ', CEFR ' + (params.level || 'A2') + '):',
@@ -1021,6 +1030,7 @@
       '- extra: {"n":1,"type":"extra","sentence":"correct sentence","extraWord":"word to add","extraAfter":"word after which it goes"}',
       '- scramble: {"n":1,"type":"scramble","sentence":"correct sentence"}',
       'Allowed types: ' + kinds.join(', ') + '.',
+      'HINTS: an exercise can carry "hint": the help shown after the FIRST wrong attempt. It must be the rule in simple English, never the answer (e.g. "Nouns ending in -a: the plural ends in -e."). If the teacher asks for hints or help, return {"n":1,"hint":"..."} for each exercise (an entry can carry only "n" and "hint"; "hint":"" removes it). Keep answers and full solutions for "explain".',
       'PHOTOS: you cannot see, create or attach images yourself. If the teacher asks to add or change the photo of some exercises, return for each of them {"n":7,"photo":["2 or 3 English search queries for a stock photo site, 1-3 words each, from specific to generic, e.g. black cat, cat"]}: the app searches and attaches the photo. The photo must illustrate the word or situation without showing the written answer. To remove a photo return {"n":7,"photo":false}. An entry can carry only "photo" (text unchanged) or text fields plus "photo".',
       'EXPLANATIONS: an exercise can carry "explain": a short note the student sees AFTER answering (a rule, a translation, e.g. "casa = house, case = houses"). If the teacher asks for explanations, translations or notes, put them in "explain" (an entry can carry only "n" and "explain"; "explain":"" removes it). NEVER write explanations, translations or the answer inside "sentence" or "q": the student reads those BEFORE answering. If an existing exercise has such text in brackets inside its sentence, move it to "explain" and clean the sentence.',
       'note: one short sentence in Italian saying what you changed (or why you changed nothing). NEVER say you did something that is not in "items": if you returned nothing for an exercise, you did not change it.',
@@ -1041,9 +1051,10 @@
         if (!photo.length) photo = undefined;
       }
       const explain = typeof raw.explain === 'string' ? raw.explain.trim().slice(0, 600) : undefined;
-      if (!item && photo === undefined && explain === undefined) return null;
+      const hint = typeof raw.hint === 'string' ? raw.hint.trim().slice(0, 400) : undefined;
+      if (!item && photo === undefined && explain === undefined && hint === undefined) return null;
       seen[n] = 1;
-      return { n: n, item: item, photo: photo, explain: explain };
+      return { n: n, item: item, photo: photo, explain: explain, hint: hint };
     }).filter(Boolean);
     return { changes: changes, note: String(j.note || '').trim().slice(0, 300), ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
@@ -1096,6 +1107,7 @@
         ? 'Write ONE replacement exercise: the SAME point and the same kind of form being tested, but a completely NEW sentence with a different context and names. The teacher did not like the original, so do not reuse its words.'
         : 'Write ONE SIMILAR exercise to add next to it: the SAME point, but practising a DIFFERENT form of it (e.g. another article: il → lo / gli / l\' ; another person of the verb; singular ↔ plural; masculine ↔ feminine) in a new sentence with a different context.',
       'The sentence must be natural, correct and understandable on its own.',
+      HINT_RULE,
       LEVEL_RULES[String(params.level || '').toUpperCase()] || '',
       'Keep the same SIZE as the original: if it is a 2-4 word frame around a single word, write a 2-4 word frame too.',
       (params.avoid || []).length ? 'Do NOT repeat any of these sentences already in the set: ' + params.avoid.slice(0, 40).map(function (x) { return '"' + String(x).slice(0, 120) + '"'; }).join(' ; ') : '',
@@ -1106,7 +1118,7 @@
     const j = extractJSON(res.text) || {};
     const raw = j.item || (Array.isArray(j.items) ? j.items[0] : j);
     if (raw && !raw.type) raw.type = kind;
-    const item = cleanRawItem(raw, ok, true);
+    const item = withHint(cleanRawItem(raw, ok, true), raw);
     if (!item) throw new Error('l\'AI non ha scritto un esercizio utilizzabile: riprova');
     if (topic && !item.topic) item.topic = topic;
     return { item: item, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };

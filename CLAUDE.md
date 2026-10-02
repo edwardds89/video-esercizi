@@ -1,5 +1,14 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- AIUTO CON LA REGOLA, POI "RICOPIA LA RISPOSTA"; COMPITI E SFIDE DISTINTI (v165, 2/10). (1) Edoardo: "non ha senso questo
+  hint che dice 'inizia con ragazz' e dopo dai la soluzione": nei compiti (playAssignSet) il primo errore mostra item.hint
+  (la REGOLA, senza risposta; campo nuovo, generato dall'IA con HINT_RULE/withHint, modificabile in ✎ #ca-hint e
+  aggiungibile a un set esistente dal chip di "Modifica con IA"); senza item.hint resta l'aiuto generico "starts with".
+  hintFor NON aggiunge più item.explain (di solito contiene la risposta). Al secondo errore (gap/gapbank/wrong/missing)
+  compare la risposta giusta (.as-copy) e lo studente deve RISCRIVERLA per andare avanti: resta sbagliato nel report.
+  (2) Edoardo: "non capisco la differenza tra quelli fatti in classe e quelli assegnati come compito a casa": nella
+  scheda della classe due sezioni sempre visibili "🏠 Compiti a casa (n)" e "📱 Sfide in classe (n)" (.cls-sec-h),
+  etichetta .cls-tag su ogni riga, bordo blu/arancione. Test: e2e165.js.
 - IPHONE: "MAESTRA " CON LO SPAZIO E CHECK CHE NON PARTE (v164, 2/10). Edoardo, compito sul telefono: dopo uno spazio
   la parola resta sottolineata dal correttore di iOS e il primo tocco fuori serve a confermarla: il clic su Check non
   arrivava. Rimedi: autocorrect:'off' su tutte le caselle di risposta (8 input: .chp-gap, .gap del player video,
