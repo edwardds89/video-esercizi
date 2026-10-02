@@ -1,5 +1,11 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IPHONE: "MAESTRA " CON LO SPAZIO E CHECK CHE NON PARTE (v164, 2/10). Edoardo, compito sul telefono: dopo uno spazio
+  la parola resta sottolineata dal correttore di iOS e il primo tocco fuori serve a confermarla: il clic su Check non
+  arrivava. Rimedi: autocorrect:'off' su tutte le caselle di risposta (8 input: .chp-gap, .gap del player video,
+  correzione/parola mancante; il correttore EN/IT cambiava anche parole italiane giuste), .chp-send parte già a touchend
+  (preventDefault + click, protetto da disabled), e i valori degli spazi vengono ripuliti (spazi doppi e finali).
+  Test: e2e164.js (hasTouch + tap). NON riprodotto su un iPhone vero: va verificato da Edoardo.
 - IL VIA LO DÀ SEMPRE IL PROF, ORDINE CASUALE, "YOU TYPED" (v162-v163, 2/10). (1) Edoardo: "per ogni tipo di sfida sono io
   che do il via... adesso [al proprio ritmo] appena lo studente mette il nickname parte subito la prima frase". Ora anche
   in modalità sp c'è la sala d'attesa: l'host NON manda 'set' agli hello finché CHAL.spStarted è falso; #chal-start

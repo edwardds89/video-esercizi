@@ -4984,7 +4984,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         // v117: la casella parte con una min-width fissa (non svela la risposta) e si ALLARGA quando la parola
         // inserita e' più lunga — prima le parole lunghe venivano tagliate ('i gap si devono adattare').
         const width = Math.min(11 * run.indices.length, 34);
-        const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', style: 'width:' + width + 'ch;min-width:' + width + 'ch', 'data-words': String(run.indices.length) });
+        const inp = el('input', { type: 'text', class: 'gap', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', style: 'width:' + width + 'ch;min-width:' + width + 'ch', 'data-words': String(run.indices.length) });
         const fitGap = function () { inp.style.width = inp.value.length > width ? (inp.value.length + 2) + 'ch' : width + 'ch'; };
         inp.addEventListener('input', fitGap);
         // v77 ('che senso ha lasciare la funzione per rimuovere i caratteri se c'e' la x?'): nel gapbank la casella
@@ -5291,7 +5291,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const sdiv = el('div', { class: 'sentence full gapfinder' });
       const slots = [];
       let selected = -1;
-      const inp = el('input', { type: 'text', class: 'gap gapfind', placeholder: '…', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'Parola mancante' });
+      const inp = el('input', { type: 'text', class: 'gap gapfind', placeholder: '…', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', 'aria-label': 'Parola mancante' });
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); checkBtn.click(); } });
       inp.addEventListener('input', function () { inp.style.width = Math.max(5, inp.value.length + 2) + 'ch'; });
       const choose = function (k) {
@@ -5416,7 +5416,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     } else if (ex.type === 'extra' || ex.type === 'wrong') {
       let selected = -1;
       const chips = el('div', { class: 'chips' });
-      const corr = el('input', { type: 'text', placeholder: 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', style: 'margin-top:10px;max-width:16em;display:none' });
+      const corr = el('input', { type: 'text', placeholder: 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', style: 'margin-top:10px;max-width:16em;display:none' });
       corr.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkBtn.click(); });
       // L'aiuto indica una ZONA, non la parola: due o tre parole attorno a quella da trovare, che lampeggiano.
       // Indirizza lo sguardo senza rispondere al posto dello studente (richiesta di Edoardo, 3/9: "deve essere un
@@ -6495,7 +6495,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const fb = el('div', { class: 'feedback' });
       let wrow = null;
       if (write) {
-        const inp = el('input', { type: 'text', placeholder: 'Scrivi la parola', autocomplete: 'off', autocapitalize: 'off', style: 'max-width:18em;margin-top:8px' });
+        const inp = el('input', { type: 'text', placeholder: 'Scrivi la parola', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', style: 'max-width:18em;margin-top:8px' });
         const chk = el('button', { class: 'primary', text: 'Controlla', onclick: function () {
           const ok = L.normalize(inp.value, { accents: !!(ls.options && ls.options.strict) }) === L.normalize(w.word, { accents: !!(ls.options && ls.options.strict) });
           inp.classList.toggle('ok', ok); inp.classList.toggle('bad', !ok);
@@ -8374,14 +8374,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           q.appendChild(document.createTextNode(i > 0 ? part.replace(/^\s+(?=[.,;:!?…)»])/, '') : part));
           if (i < arr.length - 1) {
             const r = (pub.runs || [])[i] || { words: 1 };
-            const inp = el('input', { type: 'text', class: 'chp-gap inline', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'spazio ' + (i + 1), style: 'width:' + Math.min(9 * r.words + 2, 30) + 'ch' });
+            const inp = el('input', { type: 'text', class: 'chp-gap inline', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', 'aria-label': 'spazio ' + (i + 1), style: 'width:' + Math.min(9 * r.words + 2, 30) + 'ch' });
             inputs.push(inp);
             q.appendChild(inp);
           }
         });
         box.appendChild(q);
       } else (pub.runs || []).forEach(function (r, i) {
-        const inp = el('input', { type: 'text', class: 'chp-gap', autocomplete: 'off', autocapitalize: 'off', placeholder: 'spazio ' + (i + 1) + (r.words > 1 ? ' (' + r.words + ' parole)' : '') });
+        const inp = el('input', { type: 'text', class: 'chp-gap', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', placeholder: 'spazio ' + (i + 1) + (r.words > 1 ? ' (' + r.words + ' parole)' : '') });
         inputs.push(inp);
         box.appendChild(inp);
       });
@@ -8395,7 +8395,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         });
         box.appendChild(bank);
       }
-      getVal = function () { return inputs.some(function (i) { return i.value.trim(); }) ? inputs.map(function (i) { return i.value; }) : null; };
+      getVal = function () { return inputs.some(function (i) { return i.value.trim(); }) ? inputs.map(function (i) { return i.value.replace(/\s+/g, ' ').trim(); }) : null; };
     } else if (kind === 'extra' || kind === 'wrong') {
       let sel = -1;
       const chips = el('div', { class: 'chips chp-words' });
@@ -8405,7 +8405,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(chips);
       let corr = null;
       if (kind === 'wrong') {
-        corr = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.wrongPh || 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', style: 'display:none' });
+        corr = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.wrongPh || 'Scrivi la parola giusta', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', style: 'display:none' });
         box.appendChild(corr);
       }
       getVal = function () {
@@ -8426,7 +8426,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       line.appendChild(mkSlot((pub.tokens || []).length));
       box.appendChild(line);
-      const word = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.missPh || 'La parola che manca', autocomplete: 'off', autocapitalize: 'off' });
+      const word = el('input', { type: 'text', class: 'chp-gap', placeholder: opts.missPh || 'La parola che manca', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off' });
       box.appendChild(word);
       getVal = function () { return sel === -1 || !word.value.trim() ? null : { index: sel, word: word.value }; };
     } else if (kind === 'scramble') {
@@ -8479,6 +8479,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       getVal = function () { return chosen.some(function (v) { return v !== -1; }) ? chosen.slice() : null; };
     }
     const send = el('button', { class: 'primary big chp-send', text: opts.sendLabel || 'Invia ▶' });
+    // v164 (Edoardo, iPhone: 'se scrivo "maestra " con uno spazio dopo, non mi fa cliccare su check'): con la parola ancora
+    // sottolineata dal correttore, iOS usa il primo tocco per confermarla e il clic sul bottone non arriva. Due rimedi:
+    // autocorrect="off" sulle caselle (il correttore inglese cambiava anche le parole italiane) e il bottone che parte
+    // già al tocco (touchend), senza aspettare il clic.
+    send.addEventListener('touchend', function (e) { if (send.disabled) return; e.preventDefault(); send.click(); });
     send.addEventListener('click', function () {
       const v = getVal();
       if (v == null) return toast(opts.answerFirst || 'Prima rispondi');
