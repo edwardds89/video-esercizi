@@ -1180,5 +1180,40 @@
       ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, photoQueries: photoQueries, editSet: editSet, askExercise: askExercise };
+
+  /** v166: traduzioni del set per gli studenti (Edoardo: "voglio anche che lo studente possa tradurre l'esercizio, se non
+   *  capisce sceglie quale lingua usare"). Le prepara l'insegnante UNA volta (la chiave AI non arriva mai ai telefoni).
+   *  items: [{n, text, hint}], langs: [{code, name}]. Torna { byN: { n: { t: {code: testo}, h: {code: aiuto} } } }. */
+  async function translateSet(params) {
+    const langs = params.langs || [];
+    const codes = {}; langs.forEach(function (l) { codes[l.code] = 1; });
+    const system = 'You are a professional translator helping beginner students of ' + (params.lang || 'Italian') + ' understand their exercises. Output ONLY a JSON object, no prose, no markdown fences.';
+    const all = (params.items || []).slice(0, 120);
+    const byN = {};
+    const SIZE = 6;
+    const batches = []; for (let i = 0; i < all.length; i += SIZE) batches.push(all.slice(i, i + SIZE));
+    const one = async function (batch) {
+      const user = [
+        'Translate each exercise text into these languages: ' + langs.map(function (l) { return l.name + ' ("' + l.code + '")'; }).join(', ') + '.',
+        'The translation tells the student what the text MEANS, in natural simple words. Translate the whole meaning, including the answer part after an arrow (e.g. "ragazza bella → ragazze belle" = "beautiful girl → beautiful girls"). Keep arrows and punctuation. Do not explain grammar, do not add notes, do not keep words in the original language unless they are names.',
+        'If an exercise has a HINT (a grammar rule written in English), translate the hint too; keep the example words of the language being studied (like "-a", "ragazza") untranslated inside it.',
+        'EXERCISES:',
+        batch.map(function (it) { return it.n + '. TEXT: ' + String(it.text || '').slice(0, 400) + (it.hint ? '\n   HINT: ' + String(it.hint).slice(0, 400) : ''); }).join('\n'),
+        'SCHEMA: {"items":[{"n":1,"t":{"' + langs.map(function (l) { return l.code; }).join('":"...","') + '":"..."},"h":{ same codes, only if the exercise has a HINT }}]}'
+      ].join('\n');
+      const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 8000, timeoutMs: 120000, fetchImpl: params.fetchImpl });
+      const j = extractJSON(res.text) || {};
+      (Array.isArray(j.items) ? j.items : []).forEach(function (raw) {
+        const n = parseInt(raw && raw.n, 10); if (!(n >= 1)) return;
+        const pick = function (o, max) { const r = {}; Object.keys(o && typeof o === 'object' ? o : {}).forEach(function (k) { if (codes[k] && typeof o[k] === 'string' && o[k].trim()) r[k] = o[k].trim().slice(0, max); }); return r; };
+        const t = pick(raw.t, 500); if (!Object.keys(t).length) return;
+        byN[n] = { t: t, h: pick(raw.h, 500) };
+      });
+      if (params.onProgress) params.onProgress(Object.keys(byN).length, all.length);
+    };
+    // due chiamate alla volta: abbastanza veloce senza far scattare i limiti
+    for (let i = 0; i < batches.length; i += 2) await Promise.all(batches.slice(i, i + 2).map(one));
+    return { byN: byN };
+  }
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, photoQueries: photoQueries, editSet: editSet, translateSet: translateSet, askExercise: askExercise };
 });

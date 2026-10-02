@@ -1,5 +1,14 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- TRADUZIONI PER GLI STUDENTI (v166, 2/10). Edoardo: "voglio anche che lo studente possa tradurre l'esercizio, se non
+  capisce sceglie quale lingua usare"; lingue confermate: en, es, fr, de, zh, ja, ar, fa, tr (STU_LANGS in app.js; NB
+  TR_LANGS e trLang esistevano già per le video-lezioni: nomi diversi apposta). Le prepara l'insegnante: "🌐 Traduzioni n/tot"
+  nel set (#cs-tr, chalTranslateSet -> AI.translateSet, 6 esercizi per chiamata, 2 chiamate alla volta), solo per gli
+  esercizi senza traduzione o cambiati. item.tr = { src, t:{codice: testo}, hsrc, h:{codice: aiuto} }: trValid(it) le
+  scarta se il testo (trSrc: frase, o domanda per mc) non è più quello; match e ruota NON si traducono (sarebbe la
+  soluzione). La chiave AI non arriva mai ai telefoni. Lo studente: menu "🌐 Translate" (trBar, scelta in localStorage
+  pl-trlang) nei compiti (anche l'aiuto con la regola esce tradotto), nella sfida al proprio ritmo (item.tr viaggia nel
+  'set') e in quella tutti insieme (pay.tr in chalQPayload). Il menu compare solo se il set ha traduzioni. Test: e2e166.js.
 - AIUTO CON LA REGOLA, POI "RICOPIA LA RISPOSTA"; COMPITI E SFIDE DISTINTI (v165, 2/10). (1) Edoardo: "non ha senso questo
   hint che dice 'inizia con ragazz' e dopo dai la soluzione": nei compiti (playAssignSet) il primo errore mostra item.hint
   (la REGOLA, senza risposta; campo nuovo, generato dall'IA con HINT_RULE/withHint, modificabile in ✎ #ca-hint e

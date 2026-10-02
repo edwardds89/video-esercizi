@@ -7033,6 +7033,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   let CS_DRAG = -1;
   function renderChalSet(ls) {
+    trSetLabel(ls);
     $('#cs-title').value = ls.title || '';
     $('#cs-import').disabled = !chalImportGroups().length;
     const box = $('#cs-items'); box.innerHTML = '';
@@ -7524,6 +7525,70 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     dlg.showModal(); ta.focus();
   }
   $('#cs-ai').addEventListener('click', openSetAi);
+  // ---------- v166: traduzioni per gli studenti ----------
+  // Edoardo: "voglio anche che lo studente possa tradurre l'esercizio, se non capisce sceglie quale lingua usare".
+  // L'insegnante le prepara una volta (🌐 Traduzioni nel set): restano in item.tr = { src, hsrc, t:{en:…}, h:{en:…} } e
+  // viaggiano con il compito e con la sfida. Lo studente sceglie la lingua (ricordata sul suo dispositivo).
+  const STU_LANGS = [['en', 'English', 'English'], ['es', 'Español', 'Spanish'], ['fr', 'Français', 'French'], ['de', 'Deutsch', 'German'], ['zh', '中文', 'Chinese (Simplified)'], ['ja', '日本語', 'Japanese'], ['ar', 'العربية', 'Arabic'], ['fa', 'فارسی', 'Persian'], ['tr', 'Türkçe', 'Turkish']];
+  function trSrc(it) {
+    if (!it || it.kind === 'match' || it.kind === 'wheel') return '';   // abbinamenti: la traduzione sarebbe la soluzione
+    if (it.kind === 'mc') return String(it.data && it.data.question || '');
+    return String(it.sentence || '');
+  }
+  /** Le traduzioni dell'esercizio se sono ancora quelle del testo attuale (dopo una modifica non valgono più). */
+  function trValid(it) { return it && it.tr && it.tr.t && it.tr.src === trSrc(it) && STU_LANGS.every(function (l) { return it.tr.t[l[0]]; }) ? it.tr : null; }
+  function trHintOk(it) { const tr = trValid(it); return !it.hint || !!(tr && tr.hsrc === it.hint && tr.h && tr.h.en); }
+  function stuTrLang() { try { return localStorage.getItem('pl-trlang') || ''; } catch (e) { return ''; } }
+  /** Sul telefono: menu "🌐 Translate" + riquadro con la traduzione nella lingua scelta. t = { en: '…', … } o null. */
+  function trBar(t, onChange) {
+    const box = el('div', { class: 'tr-box', dir: 'auto', style: 'display:none' });
+    const sel = el('select', { class: 'tr-sel', 'aria-label': 'Translate' });
+    sel.appendChild(el('option', { value: '', text: '🌐 Translate' }));
+    STU_LANGS.forEach(function (l) { sel.appendChild(el('option', { value: l[0], text: '🌐 ' + l[1] })); });
+    const paint = function () {
+      const lg = sel.value, x = lg && t && t[lg];
+      box.textContent = x || ''; box.style.display = x ? '' : 'none';
+    };
+    sel.value = stuTrLang(); paint();
+    sel.addEventListener('change', function () { try { localStorage.setItem('pl-trlang', sel.value); } catch (e) {} paint(); if (onChange) onChange(sel.value); });
+    return el('div', { class: 'tr-bar' }, sel, box);
+  }
+  function trSetLabel(ls) {
+    const b = $('#cs-tr'); if (!b || !ls || !ls.chal) return;
+    const can = (ls.chal.items || []).filter(function (it) { return trSrc(it); });
+    const done = can.filter(function (it) { return trValid(it) && trHintOk(it); }).length;
+    b.textContent = '🌐 Traduzioni' + (can.length ? ' ' + done + '/' + can.length : '');
+    b.classList.toggle('ok', !!can.length && done === can.length);
+  }
+  function chalTranslateSet() {
+    const ls = current(); if (!ls || !ls.chal) return;
+    const b = $('#cs-tr');
+    const todo = [];
+    (ls.chal.items || []).forEach(function (it, i) { if (trSrc(it) && !(trValid(it) && trHintOk(it))) todo.push({ n: i + 1, it: it }); });
+    if (!todo.length) return toast((ls.chal.items || []).some(trSrc) ? 'Tutti gli esercizi sono già tradotti nelle ' + STU_LANGS.length + ' lingue: gli studenti vedono "🌐 Translate"' : 'Qui non c\'è niente da tradurre');
+    if (!S.settings.apiKey) return toast('Serve la chiave AI: Impostazioni AI in alto', 6000);
+    b.disabled = true; busyMsg(b, ' Traduco 0/' + todo.length + '…');
+    AI.translateSet({
+      items: todo.map(function (x) { return { n: x.n, text: trSrc(x.it), hint: x.it.hint || '' }; }),
+      langs: STU_LANGS.map(function (l) { return { code: l[0], name: l[2] }; }),
+      lang: String(ls.lang || 'it').slice(0, 2) === 'en' ? 'English' : 'Italian',
+      apiKey: S.settings.apiKey, model: S.settings.model,
+      onProgress: function (d, n) { busyMsg(b, ' Traduco ' + d + '/' + n + '…'); }
+    }).then(function (r) {
+      let n = 0;
+      todo.forEach(function (x) {
+        const got = r.byN[x.n]; if (!got || ls.chal.items[x.n - 1] !== x.it) return;
+        const tr = { src: trSrc(x.it), t: got.t };
+        if (x.it.hint) { tr.hsrc = x.it.hint; tr.h = Object.assign({}, got.h, { en: got.h.en || x.it.hint }); }
+        x.it.tr = tr; if (trValid(x.it)) n++;
+      });
+      b.disabled = false;
+      chalSetTouched(ls); trSetLabel(ls);
+      toast(n === todo.length ? '🌐 ' + n + (n === 1 ? ' esercizio tradotto' : ' esercizi tradotti') + ' in ' + STU_LANGS.length + ' lingue' : '🌐 Tradotti ' + n + ' su ' + todo.length + ': premi di nuovo per completare', 6000);
+    }, function (e) { b.disabled = false; trSetLabel(ls); toast('Traduzione non riuscita: ' + (e && e.message || e), 7000); });
+  }
+  $('#cs-tr').addEventListener('click', chalTranslateSet);
+
   $('#cs-add').addEventListener('click', function () { openChalAdd(null); });
   $('#ca-close').addEventListener('click', function () { CA_EDIT = null; $('#dlg-chal-add').close(); });
   // v70: esercizi del set generati da una foto o screenshot
@@ -7613,7 +7678,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (CA_IMG) { it.image = CA_IMG; if (CA_IMG_CREDIT) it.imageCredit = CA_IMG_CREDIT; }
     if (CA_EDIT != null && ls.chal.items[CA_EDIT]) {
       const old = ls.chal.items[CA_EDIT];
-      it.id = old.id; if (old.src) it.src = old.src;   // stessa identita': niente doppioni all'import
+      it.id = old.id; if (old.src) it.src = old.src; if (old.tr) it.tr = old.tr;   // stessa identita': niente doppioni all'import
       ls.chal.items[CA_EDIT] = it;
       CA_EDIT = null;
       toast('Esercizio aggiornato');
@@ -8037,6 +8102,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const pay = { i: CHAL.state.i, total: CHAL.items.length, pub: VLChal.wire(CHAL.pub), showQ: !!CHAL.showQ, secs: CHAL.secs || 0 };
     // v152: con "mostra la domanda anche sui telefoni" viaggia anche l'immagine (se è incollata e pesante, no: resta sullo schermo)
     if (CHAL.showQ && it.image && it.image.length < 120000) { pay.image = it.image; if (it.imageCredit) pay.credit = it.imageCredit; }
+    if (CHAL.items.some(trValid)) pay.tr = (trValid(it) || {}).t || {};   // v166: traduzioni per il telefono
     return pay;
   }
   /** La classifica ai telefoni (student-paced): al massimo una ogni 700 ms. */
@@ -8541,6 +8607,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const t0 = tStart || Date.now();
     wrap.appendChild(el('div', { class: 'chp-status', text: 'Domanda ' + (p.i + 1) + ' di ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo!') }));
     if (p.image) wrap.appendChild(chpImage(p.image, p.credit));
+    if (p.tr) wrap.appendChild(trBar(p.tr));   // v166
     const done = el('div', { class: 'chp-status', style: 'display:none' });
     const inputBox = chpItemInput(p.pub, { onSubmit: function (v) {
       me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, value: v, ms: Date.now() - t0 });
@@ -8606,6 +8673,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       // v152 (Edoardo, screenshot dal telefono: "perché lo studente non vede l'immagine?"): l'immagine dell'esercizio c'era
       // solo sullo schermo del prof e nei compiti; ora anche sul telefono, sopra la domanda
       if (item.image) { stage.appendChild(chpImage(item.image, item.imageCredit)); }
+      if (items.some(trValid)) stage.appendChild(trBar((trValid(item) || {}).t));   // v166
       stage.appendChild(chpItemInput(pub, { onSubmit: function (v) {
         const res = VLChal.checkItem(item, v, pub);
         last = { i: orig[i], a: chalAnswerText(item, v, pub).slice(0, 300), ok: !!res.correct, frac: res.frac };   // v135: per il report del prof
@@ -9485,6 +9553,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const shuffleOn = !!(a.lesson.shuffle || (live && live.shuffle));
     if (shuffleOn) items = VLChal.shuffleArr(items, Math.random);
     let over = false;   // v131: tempo scaduto o fermato dal docente
+    const anyTr = items.some(trValid);   // v166
     const box = $('#as-box');
     const T = asgT(a.lesson);
     $('#view-assign').classList.add('as-set');
@@ -9566,6 +9635,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
       if (item.image && item.imageCredit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + item.imageCredit }));
       box.appendChild(el('div', { class: 'as-kind', text: T.both ? ((T.k[item.kind] || '').split('\n')[0] + ' · ' + (INSTR[item.kind] || '').split('\n')[0] + '\n' + (T.k[item.kind] || '').split('\n')[1] + ' · ' + (INSTR[item.kind] || '').split('\n')[1]) + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? '\n' + T.accents.trim() : '') : (T.k[item.kind] || VLChal.itemLabel(item.kind)) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? T.accents : '') }));
+      const trv = trValid(item);
+      let hintShown = null;
+      const hintPaint = function () {
+        if (!hintShown) return;
+        const lg = stuTrLang(), th = lg && item.hint && trv && trv.hsrc === item.hint && trv.h && trv.h[lg];
+        hintBox.textContent = T.hint + (th ? ': ' + th : hintShown.length ? ': ' + hintShown.join('\n') : '');
+        hintBox.dir = th ? 'auto' : 'ltr';
+      };
+      if (anyTr) box.appendChild(trBar(trv && trv.t, hintPaint));
       const msg = el('div', { class: 'as-msg' });
       const hintBox = el('div', { class: 'as-hint', style: 'display:none' });
       let mcOff = null;
@@ -9583,7 +9661,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             msg.textContent = res.frac > 0 ? T.almost.split('{p}').join(Math.round(res.frac * 100)) : T.notYet;
             const h = hintFor(item, pub);
             cell.hints = 1; mcOff = h.mcOff;
-            hintBox.textContent = T.hint + (h.text.length ? ': ' + h.text.join('\n') : '');
+            hintShown = h.text; hintPaint();
             hintBox.style.display = '';
             inputBox.replaceWith(ask());
             return;
@@ -9594,7 +9672,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           if (['gap', 'gapbank', 'wrong', 'missing'].indexOf(item.kind) === -1) return done(false);
           clearTimeout(S.assign.timer); S.assign.timer = setTimeout(function () { assignSend(false); }, 400);
           msg.className = 'as-msg no'; msg.textContent = T.typeIt;
-          hintBox.className = 'as-hint as-copy'; hintBox.innerHTML = '';
+          hintShown = null; hintBox.className = 'as-hint as-copy'; hintBox.innerHTML = '';
           hintBox.appendChild(el('div', { class: 'as-copy-sol', text: VLChal.solutionText(item) }));
           hintBox.appendChild(el('div', { class: 'as-copy-do', text: T.typeIt2 }));
           hintBox.style.display = '';
