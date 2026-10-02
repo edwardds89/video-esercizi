@@ -1706,3 +1706,10 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v149: foto proposte nella Modifica con IA */
 .setai-photos { display: flex; gap: 6px; margin-top: 4px; }
 .setai-photos .ca-photo-it { width: 96px; flex: none; }
+
+/* v150: striscia di foto che scorre + ricerca modificabile */
+.setai-diff { min-width: 0; flex: 1; }
+.setai-photos { overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; max-width: 100%; }
+.setai-photos .ca-photo-it { width: 120px; scroll-snap-align: start; }
+.setai-qrow { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.setai-q { flex: 1; min-width: 120px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }

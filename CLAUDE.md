@@ -1,5 +1,11 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- PIÙ FOTO DA SCORRERE NELLA MODIFICA CON IA (v150, 2/10). Edoardo: "mi propone solo 3 foto, voglio poter scorrere e
+  trovare quella più adatta". Per ogni esercizio searchScenePhotos(queries, 12) → fino a 24 foto in una striscia che
+  scorre di lato (.setai-photos, scroll conservato al ridisegno), credito della foto scelta sotto, e un campo con le
+  parole cercate + "🔎 Cerca altre" per rifare la ricerca con parole sue. Stesso costo in richieste Unsplash (una pagina
+  da 12 per ricerca). NOTA: le chiavi (Anthropic, Unsplash) stanno in S.settings = localStorage di QUEL browser: su un
+  altro computer vanno rimesse, altrimenti la ricerca usa solo Openverse.
 - LA MODIFICA CON IA NON MENTE PIÙ, E METTE LE FOTO (v149, 2/10). Edoardo: "metti le foto alle domande dalla 7 alla 12" →
   la nota diceva "Ho aggiunto un'immagine descrittiva…" e sotto "Nessuna modifica proposta". Il modello non può attaccare
   immagini ma lo dichiarava. Ora: (1) il prompt di AI.editSet dice che non può e che la nota non deve mai dichiarare

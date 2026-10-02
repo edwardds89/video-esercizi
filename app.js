@@ -7398,6 +7398,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         // v149 (Edoardo: "metti le foto alle domande dalla 7 alla 12" → l'AI diceva di averlo fatto senza poterlo fare):
         // le foto le cerca l'APP con le parole date dall'AI (3 candidate per esercizio, la prima è scelta, clic per cambiarla)
         const paint = function () {
+          const keep = {}; $$('.setai-photos', out).forEach(function (st) { keep[st.getAttribute('data-k')] = st.scrollLeft; });
+          const top = out.scrollTop;
           out.innerHTML = '';
           proposals.forEach(function (p, k) {
             const diff = el('span', { class: 'setai-diff' });
@@ -7410,13 +7412,30 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
               if (p.searching) { const w = el('span', { class: 'hint' }); busyMsg(w, 'Cerco la foto: ' + p.queries.join(' · ') + '…'); diff.appendChild(w); }
               else if (!p.photos.length) diff.appendChild(el('span', { class: 'hint', text: '🖼 Nessuna foto trovata per: ' + p.queries.join(' · ') + ' (usa 🖼 sulla riga per cercarla a mano)' }));
               else {
-                const strip = el('span', { class: 'setai-photos' });
+                const strip = el('span', { class: 'setai-photos', 'data-k': String(k) });
+                setTimeout(function () { if (keep[k]) strip.scrollLeft = keep[k]; out.scrollTop = top; }, 0);
                 p.photos.forEach(function (ph, j) {
                   const bt = el('button', { type: 'button', class: 'ca-photo-it' + (p.pick === j ? ' on' : ''), title: ph.credit }, el('img', { src: ph.thumb, alt: '', referrerpolicy: 'no-referrer' }));
                   bt.addEventListener('click', function (e) { e.preventDefault(); p.pick = j; paint(); });
                   strip.appendChild(bt);
                 });
                 diff.appendChild(strip);
+                diff.appendChild(el('span', { class: 'hint', style: 'font-size:12px', text: p.photos.length + ' foto: scorri di lato → · ' + (p.photos[p.pick] ? p.photos[p.pick].credit : '') }));
+              }
+              // v150 (Edoardo: "mi propone solo 3 foto, voglio poter scorrere e trovare quella più adatta"): fino a 24 foto
+              // in una striscia che scorre, e le parole della ricerca si possono cambiare lì (Invio o 🔎)
+              if (!p.searching) {
+                const qi = el('input', { type: 'text', value: p.queries.join(', '), class: 'setai-q', title: 'Parole cercate (in inglese, separate da virgole): cambiale e premi Invio' });
+                const again = function (e) {
+                  if (e) e.preventDefault();
+                  const qs = qi.value.split(/[,;]+/).map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 4);
+                  if (!qs.length) return;
+                  p.queries = qs; p.searching = true; p.pick = 0; paint();
+                  searchScenePhotos(qs, 12).then(function (list) { p.photos = list.slice(0, 24); p.searching = false; if (dlg.open) paint(); });
+                };
+                qi.addEventListener('keydown', function (e) { if (e.key === 'Enter') again(e); });
+                qi.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); qi.focus(); });
+                diff.appendChild(el('span', { class: 'setai-qrow' }, qi, el('button', { type: 'button', class: 'small', text: '🔎 Cerca altre', onclick: again })));
               }
             }
             const cb = el('input', { type: 'checkbox', 'data-k': String(k) }); cb.checked = p.on !== false;
@@ -7432,7 +7451,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         paint();
         // una ricerca alla volta (Unsplash in demo: 50 richieste all'ora)
         proposals.filter(function (p) { return p.queries; }).reduce(function (chain, p) {
-          return chain.then(function () { return searchScenePhotos(p.queries, 3); }).then(function (list) { p.photos = list.slice(0, 3); p.searching = false; if (dlg.open) paint(); });
+          return chain.then(function () { return searchScenePhotos(p.queries, 12); }).then(function (list) { p.photos = list.slice(0, 24); p.searching = false; if (dlg.open) paint(); });
         }, Promise.resolve());
         apply.style.display = proposals.length ? '' : 'none';
       }, function (e) { go.disabled = false; msg.textContent = 'AI: ' + e.message; });
