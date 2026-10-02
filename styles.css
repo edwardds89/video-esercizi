@@ -1770,7 +1770,9 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 
 /* v163: la risposta sbagliata dello studente sopra quella giusta */
 .chp-mine { margin-bottom: 10px; }
-.chp-mine-val { font-size: 22px; font-weight: 700; color: #c92a2a; text-decoration: line-through; text-decoration-thickness: 2px; overflow-wrap: anywhere; }
+.chp-mine-val { font-size: 22px; font-weight: 700; overflow-wrap: anywhere; }
+.chp-mine-val .w-ko { color: #c92a2a; text-decoration: line-through; text-decoration-thickness: 2px; }
+.chp-mine-val .w-ok { color: #2f7d32; }
 
 /* v165: al secondo errore la risposta da ricopiare */
 .as-hint.as-copy { background: #eef9f1; border-color: #bfe3c8; text-align: center; }

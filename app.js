@@ -7871,7 +7871,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   function chalLog(i, id, nick, a, ok, frac) {
     if (!CHAL || i == null) return;
-    (CHAL.log[i] = CHAL.log[i] || {})[id] = { nick: nick, a: String(a || '').slice(0, 300), ok: !!ok, frac: frac || 0 };
+    (CHAL.log[i] = CHAL.log[i] || {})[id] = { nick: nick, a: String(a || '').slice(0, 300), ok: !!ok, frac: frac || 0, t: Date.now() };   // t (v168): ordine di arrivo, per i puntini
     chalSaveReport();
   }
   /** light = per il canale e per il report salvato: le immagini incollate (data:, pesanti) restano fuori, i link sì. */
@@ -8272,11 +8272,18 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function chalBar(r, tot, pct) {
     if (!tot || tot > 60) return el('span', { class: 'bar' }, el('i', { style: 'width:' + pct + '%' }));
     const bar = el('span', { class: 'bar segs', title: r.right + ' giuste su ' + tot });
-    for (let k = 0; k < tot; k++) {
-      const c = CHAL.log[k] && CHAL.log[k][r.id];
+    // v168 (Edoardo: "voglio che i puntini siano comunque in ordine, anche se le risposte sono random"): con l'ordine
+    // casuale i puntini si riempiono da sinistra nell'ordine in cui lo studente ha risposto, non nella posizione del set
+    let cells = [];
+    for (let k = 0; k < tot; k++) cells.push(CHAL.log[k] && CHAL.log[k][r.id] || null);
+    if (CHAL.shuffle) {
+      const done = cells.filter(Boolean).sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
+      cells = done.concat(cells.filter(function (c) { return !c; }));
+    }
+    cells.forEach(function (c) {
       const st = !c ? 'none' : c.ok ? 'ok' : c.frac > 0 ? 'half' : 'ko';
       bar.appendChild(el('i', { class: 'seg ' + st }));
-    }
+    });
     return bar;
   }
   function renderChalBoard() {
@@ -8601,10 +8608,26 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /** Insieme sullo schermo: arriva una domanda alla volta, si risponde e si aspetta la rivelazione. */
   /** v156 (Edoardo: 'voglio che ci sia scritto "Risposta corretta:" ma la parola deve essere sotto, in verde, più grande,
    *  deve risaltare'): etichetta piccola sopra, soluzione grande e verde sotto. */
+  /** v168 (Edoardo, "ragazze bella" tutta barrata: '"ragazze" era giusta ma solo l'aggettivo era sbagliato'): la risposta
+   *  dello studente parola per parola: quelle giuste in verde, solo quelle sbagliate rosse e barrate. */
+  function chpMineWords(mine, sol) {
+    const norm = function (w) { return String(w).toLowerCase().replace(/[.,;:!?"«»()]/g, ''); };
+    const mw = String(mine).split(/\s+/).filter(Boolean), sw = String(sol).split(/\s+/).filter(Boolean);
+    const box = el('span', { class: 'chp-mine-val' });
+    const left = sw.map(norm);
+    mw.forEach(function (w, k) {
+      let ok;
+      if (mw.length === sw.length) ok = norm(w) === norm(sw[k]);
+      else { const j = left.indexOf(norm(w)); ok = j >= 0; if (ok) left.splice(j, 1); }
+      if (k) box.appendChild(document.createTextNode(' '));
+      box.appendChild(el('span', { class: ok ? 'w-ok' : 'w-ko', text: w }));
+    });
+    return box;
+  }
   function chpSol(text, mine) {
     return el('div', { class: 'sol chp-sol' },
       // v163 (Edoardo: 'voglio che appaia anche la risposta sbagliata tipo "you typed: nonni" e poi la risposta corretta in verde')
-      mine ? el('div', { class: 'chp-mine' }, el('span', { class: 'chp-sol-lbl', text: 'Hai scritto · You typed: ' }), el('span', { class: 'chp-mine-val', text: mine })) : null,
+      mine ? el('div', { class: 'chp-mine' }, el('span', { class: 'chp-sol-lbl', text: 'Hai scritto · You typed: ' }), chpMineWords(mine, text)) : null,
       el('div', { class: 'chp-sol-lbl', text: 'Risposta corretta · Correct answer:' }), el('div', { class: 'chp-sol-val', text: text }));
   }
   /** Quello che lo studente ha risposto, in parole (sul telefono c'è solo la versione pubblica dell'esercizio). */

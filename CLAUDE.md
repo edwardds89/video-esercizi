@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- PUNTINI IN ORDINE CON LE DOMANDE CASUALI (v168, 2/10). Edoardo: "voglio che i puntini siano comunque in ordine, anche se
+  le risposte sono random". chalBar: se CHAL.shuffle i segmenti si riempiono da sinistra nell'ordine di risposta (campo
+  t = Date.now() nel log); il report resta nell'ordine del set. Test: e2e168.js.
+  Stessa versione: "You typed" parola per parola (chpMineWords): giuste verdi, solo le sbagliate rosse e barrate
+  (Edoardo: '"ragazze" era giusta ma solo l'aggettivo era sbagliato'). Il punteggio non cambia: la risposta resta sbagliata.
 - COPERTINA DELLE ESERCITAZIONI (v167, 2/10). Edoardo: "non mi piace che siano tutte uguali, non si può prendere una delle
   foto e metterla qui?". chalCoverThumb: la card usa la foto scelta con "🖼 Copertina" su un esercizio (ls.chal.cover =
   id), altrimenti la prima foto del set; senza foto, sfumatura di colore ricavata dal titolo + iniziali. Test: e2e167.js.
