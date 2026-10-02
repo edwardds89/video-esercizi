@@ -6840,7 +6840,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const client = window.supabase.createClient(VLSync.CONFIG.url, VLSync.CONFIG.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
       const cbs = {};
       const ch = client.channel('chal:' + pin, { config: { broadcast: { self: false } } });
-      ['hello', 'score', 'set', 'q', 'ans', 'reveal', 'board', 'end'].forEach(function (ev) {
+      ['hello', 'score', 'set', 'q', 'ans', 'reveal', 'board', 'end', 'count'].forEach(function (ev) {
         ch.on('broadcast', { event: ev }, function (msg) { if (cbs[ev]) cbs[ev](msg.payload); });
       });
       let opened = false;
@@ -8384,8 +8384,33 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         kb));
     });
   }
+  /** v171 (Edoardo: 'voglio che sullo schermo appaia un 3 2 1 via! grande, con trasparenza'): conto alla rovescia a tutto
+   *  schermo sopra la pagina (fondo trasparente, si vede quello che c'è sotto), poi parte davvero. Anche sui telefoni. */
+  function bigCountdown(then) {
+    const old = document.querySelector('.big-count'); if (old) old.remove();
+    const ov = el('div', { class: 'big-count' }), n = el('div', { class: 'big-count-n' });
+    ov.appendChild(n); document.body.appendChild(ov);
+    const steps = ['3', '2', '1', 'Via!'];
+    let k = 0;
+    const tick = function () {
+      if (k >= steps.length) { ov.remove(); return; }
+      n.textContent = steps[k]; n.className = 'big-count-n' + (k === 3 ? ' go' : '');
+      void n.offsetWidth; n.classList.add('pop');
+      if (k === 3 && then) then();
+      k++; setTimeout(tick, k > 3 ? 900 : 1000);
+    };
+    tick();
+  }
   $('#chal-start').addEventListener('click', function () {
-    if (!CHAL) return;
+    if (!CHAL || CHAL.counting) return;
+    if (CHAL.play === 'tp' && CHAL.state.phase !== 'lobby') return;
+    if (CHAL.play !== 'tp' && CHAL.spStarted) return;
+    CHAL.counting = true;
+    try { CHAL.conn.send('count', {}); } catch (e) {}
+    bigCountdown(function () { if (CHAL) { CHAL.counting = false; chalGo(); } });
+  });
+  function chalGo() {
+    if (!CHAL || CHAL.ended) return;
     if (CHAL.play === 'tp') { if (CHAL.state.phase === 'lobby') chalOpenQuestion(0); return; }
     if (CHAL.spStarted) return;
     CHAL.spStarted = true;
@@ -8393,7 +8418,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     setTimeout(function () { if (CHAL && !CHAL.ended) chalSendSet(); }, 1500);   // secondo invio: un telefono che ha perso il primo parte lo stesso (chi è già partito lo ignora)
     $('#chal-start').style.display = 'none';
     toast('Via! Ognuno risponde al suo ritmo');
-  });
+  }
   $('#chal-end').addEventListener('click', function () {
     if (this.dataset.arm) { delete this.dataset.arm; this.textContent = '🏁 Termina la sfida'; chalFinish(); }
     else { this.dataset.arm = '1'; this.textContent = 'Sicuro? Clicca ancora per chiudere'; const b = this; setTimeout(function () { delete b.dataset.arm; b.textContent = '🏁 Termina la sfida'; }, 2500); }
@@ -8467,6 +8492,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem('vle.chalid.' + pin, id); } catch (e) { /* ignora */ } }
       chalJoin(pin, function (conn) {
         const me = { conn: conn, id: id, nick: nk, started: false };
+        conn.on('count', function () { bigCountdown(); });   // v171: 3 2 1 Via! anche sul telefono
         conn.on('set', function (p) {   // ognuno al suo ritmo: il set arriva intero
           if (me.started || !p || !Array.isArray(p.items)) return;
           me.started = true;

@@ -1806,3 +1806,11 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v170: timer sul telefono */
 .chp-clock{position:sticky;top:6px;z-index:5;width:max-content;margin:0 auto 10px;padding:6px 16px;border-radius:999px;background:#1f2937;color:#fff;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
 .chp-clock.low{background:#e5484d}
+
+/* v171: 3 2 1 Via! a tutto schermo, fondo trasparente */
+.big-count{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.28);pointer-events:none}
+.big-count-n{font-size:min(46vw,62vh);font-weight:900;line-height:1;color:#fff;-webkit-text-stroke:min(1.2vw,10px) #1d4ed8;paint-order:stroke fill;text-shadow:0 12px 40px rgba(0,0,0,.45);opacity:0}
+.big-count-n.go{font-size:min(26vw,48vh);color:#ffd43b;-webkit-text-stroke-color:#e8590c}
+.big-count-n.pop{animation:bigCountPop .95s ease-out forwards}
+@keyframes bigCountPop{0%{transform:scale(.3);opacity:0}18%{transform:scale(1.12);opacity:1}35%{transform:scale(1)}80%{opacity:1}100%{transform:scale(1.25);opacity:0}}
+@media (prefers-reduced-motion:reduce){.big-count-n.pop{animation:none;opacity:1}}

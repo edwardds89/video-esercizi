@@ -1,5 +1,9 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- 3 2 1 VIA! (v171, 2/10). Edoardo: "quando clicco [Via!] voglio che sullo schermo appaia un 3 2 1 via! grande, con
+  trasparenza". bigCountdown(then): overlay .big-count a tutto schermo con fondo semitrasparente (si vede la pagina sotto),
+  numeri enormi animati; al "Via!" parte davvero (chalGo: prima domanda in tp, invio del set in sp). Evento Realtime nuovo
+  'count': lo stesso conto alla rovescia compare sui telefoni. Test: e2e171.js.
 - LA TRADUZIONE È QUELLA DELLA DOMANDA, E PARTE DA SOLA (v170, 2/10). Edoardo, telefono: sotto "Qual è il maschile di
   nonna?" usciva "Write the missing word." ("non ha senso dare una traduzione del genere"). La consegna VERA è il testo
   dell'esercizio. (1) trSrc per gap/gapbank = il testo che lo studente vede, con lo spazio vuoto e SENZA risposta; il
