@@ -1749,3 +1749,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .chp-sol { margin: 12px 0 8px; }
 .chp-sol-lbl { font-size: 15px; color: var(--muted, #667); font-weight: 600; }
 .chp-sol-val { font-size: clamp(30px, 9vw, 46px); font-weight: 800; color: #1a7f37; line-height: 1.15; margin-top: 4px; overflow-wrap: anywhere; }
+
+/* v157: annulla la risposta sul telefono */
+.chp-undo { margin-top: 10px; padding: 10px 16px; font-size: 16px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.chp-item.sent { opacity: .55; pointer-events: none; }

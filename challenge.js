@@ -239,12 +239,21 @@
     if (!pl) return null;   // v83: espulso — reduce non lo ricrea, la risposta cade nel vuoto
     var res = checkItem(item, msg.value, pub);
     var pts = 0;
+    var prev = { streak: pl.streak || 0, right: pl.right, at: pl.at };   // v157: per poter annullare la risposta
     if (res.frac === 1) { pts = pointsFor(mode)(pl.streak || 0, msg.ms); pl.streak = (pl.streak || 0) + 1; pl.right++; }
     else if (res.frac > 0) { pts = Math.round(100 * res.frac); pl.streak = 0; }
     else pl.streak = 0;
     pl.score += pts; pl.at = st.i + 1;
-    st.answers[msg.id] = { ok: res.correct, frac: res.frac, pts: pts };
+    st.answers[msg.id] = { ok: res.correct, frac: res.frac, pts: pts, prev: prev };
     return { ok: res.correct, frac: res.frac, pts: pts };
+  }
+  /** v157: lo studente annulla la risposta (solo a domanda ancora aperta): punti, serie e conteggi tornano com'erano. */
+  function tpUndo(st, id) {
+    if (st.phase !== 'question' || !id || !st.answers[id]) return false;
+    var a = st.answers[id], pl = st.players[id];
+    if (pl) { pl.score -= a.pts || 0; if (a.prev) { pl.streak = a.prev.streak; pl.right = a.prev.right; pl.at = a.prev.at; } }
+    delete st.answers[id];
+    return true;
   }
   function tpAllAnswered(st) {
     var ids = Object.keys(st.players);
@@ -260,5 +269,5 @@
 
   return { makePin: makePin, validPin: validPin, MODES: MODES, pointsFor: pointsFor, newState: newState, reduce: reduce, kick: kick, leaderboard: leaderboard, memBus: memBus, localBus: localBus,
     ITEM_KINDS: ITEM_KINDS, itemLabel: itemLabel, buildItem: buildItem, pubItem: pubItem, checkItem: checkItem, gapText: gapText, solutionText: solutionText, shuffleArr: shuffleArr, wire: wire,
-    tpNew: tpNew, tpJoin: tpJoin, tpOpen: tpOpen, tpAnswer: tpAnswer, tpAllAnswered: tpAllAnswered, tpReveal: tpReveal };
+    tpNew: tpNew, tpUndo: tpUndo, tpJoin: tpJoin, tpOpen: tpOpen, tpAnswer: tpAnswer, tpAllAnswered: tpAllAnswered, tpReveal: tpReveal };
 });

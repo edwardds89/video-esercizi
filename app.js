@@ -7729,11 +7729,26 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (CHAL.play !== 'tp' || !p) return;
         const item = CHAL.items[CHAL.state.i];
         if (!item) return;
+        // v157 (Edoardo: "voglio una funzione annulla per lo studente, se invia e cambia idea deve poter annullare e
+        // riscrivere"): 'ans' con undo:true toglie la risposta finché la domanda è aperta (punti e serie tornano com'erano)
+        if (p.undo) {
+          if (p.i === CHAL.state.i && VLChal.tpUndo(CHAL.state, p.id)) {
+            clearTimeout(CHAL.allTimer);
+            if (CHAL.log[CHAL.state.i]) delete CHAL.log[CHAL.state.i][p.id];
+            chalSaveReport(); chalAnswered();
+          }
+          return;
+        }
         const r = VLChal.tpAnswer(CHAL.state, p, item, CHAL.mode, CHAL.pub);
         if (r) {
           chalLog(CHAL.state.i, p.id, p.nick, chalAnswerText(item, p.value, CHAL.pub), r.ok, r.frac);   // v135
           chalAnswered();
-          if (VLChal.tpAllAnswered(CHAL.state)) chalCloseQuestion();   // tutti hanno risposto: si chiude da sola
+          // tutti hanno risposto: si chiude da sola, ma dopo 3 secondi (l'ultimo deve avere il tempo di annullare)
+          if (VLChal.tpAllAnswered(CHAL.state)) {
+            const qi = CHAL.state.i;
+            clearTimeout(CHAL.allTimer);
+            CHAL.allTimer = setTimeout(function () { if (CHAL && CHAL.state.phase === 'question' && CHAL.state.i === qi && VLChal.tpAllAnswered(CHAL.state)) chalCloseQuestion(); }, S.mock ? 1200 : 3000);
+          }
         }
       });
       show('chal');
@@ -8416,16 +8431,23 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (credit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + credit }));
     return box;
   }
-  function chpQuestion(me, p) {
+  function chpQuestion(me, p, tStart) {
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
-    const t0 = Date.now();
+    const t0 = tStart || Date.now();
     wrap.appendChild(el('div', { class: 'chp-status', text: 'Domanda ' + (p.i + 1) + ' di ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo!') }));
     if (p.image) wrap.appendChild(chpImage(p.image, p.credit));
     const done = el('div', { class: 'chp-status', style: 'display:none' });
     const inputBox = chpItemInput(p.pub, { onSubmit: function (v) {
       me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, value: v, ms: Date.now() - t0 });
-      done.textContent = 'Risposta inviata: aspetta la rivelazione…';
+      done.innerHTML = '';
+      done.appendChild(el('div', { text: 'Risposta inviata: aspetta la rivelazione…' }));
+      // v157: finché il prof non mostra la risposta si può annullare e riscrivere (il tempo continua a contare dall'inizio)
+      done.appendChild(el('button', { class: 'chp-undo', type: 'button', text: '↶ Annulla e riscrivi', onclick: function () {
+        me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, undo: true });
+        chpQuestion(me, p, t0);
+      } }));
       done.style.display = '';
+      inputBox.classList.add('sent');
     } });
     wrap.appendChild(inputBox);
     wrap.appendChild(done);

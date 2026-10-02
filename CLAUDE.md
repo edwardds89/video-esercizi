@@ -1,5 +1,12 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- ↶ ANNULLA E RISCRIVI PER LO STUDENTE (v157, 2/10). Edoardo: "voglio una funzione annulla per lo studente, se invia e
+  cambia idea deve poter annullare e riscrivere". Modalità guidata: dopo l'invio il telefono mostra "↶ Annulla e riscrivi"
+  finché il prof non rivela; manda 'ans' con undo:true (stesso evento: niente nuovi eventi da registrare sul canale) e
+  ridisegna la domanda con lo stesso t0 (il tempo non riparte: niente trucchi in modalità velocità). Host: VLChal.tpUndo
+  rimette score/streak/right/at com'erano (tpAnswer ora salva prev), toglie la voce da CHAL.log. La chiusura automatica
+  "hanno risposto tutti" ora aspetta 3 s (CHAL.allTimer; 1,2 s in mock) per lasciare all'ultimo il tempo di annullare.
+  Al proprio ritmo non c'è annulla: lì la correzione è immediata. Test: e2e157.js.
 - "RISPOSTA CORRETTA:" GRANDE E VERDE SUL TELEFONO (v156, 2/10). Edoardo (screenshot iPhone, "✗ Sbagliata / Risposta:
   penna" piccolo e grigio): chpSol(text) = etichetta "Risposta corretta:" piccola e sotto la soluzione in verde, grande
   (.chp-sol-val, clamp 30-46px). Usata sia nella rivelazione della modalità guidata sia nel feedback al proprio ritmo.
