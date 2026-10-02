@@ -1,5 +1,9 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- CONSEGNA TRADOTTA SEMPRE (v169, 2/10). Edoardo: "volevo che ci potesse essere la traduzione della consegna dell'esercizio,
+  perché non c'è?". Nella v166 il menu "🌐 Translate" compariva solo nei set tradotti con l'IA e traduceva solo la frase.
+  Ora il menu c'è SEMPRE (compiti, sfida sp e tp) e mostra la consegna del tipo di esercizio nelle 9 lingue (STU_INSTR,
+  testi fissi scritti a mano, niente IA); sotto, la traduzione della frase se l'insegnante ha premuto "🌐 Traduzioni".
 - PUNTINI IN ORDINE CON LE DOMANDE CASUALI (v168, 2/10). Edoardo: "voglio che i puntini siano comunque in ordine, anche se
   le risposte sono random". chalBar: se CHAL.shuffle i segmenti si riempiono da sinistra nell'ordine di risposta (campo
   t = Date.now() nel log); il report resta nell'ordine del set. Test: e2e168.js.

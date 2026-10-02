@@ -1798,3 +1798,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v167: copertina delle esercitazioni */
 .lesson-card .thumb.chal-thumb.has-cover{background-color:#eef1f6;background-size:cover;background-position:center}
 .lesson-card .thumb.chal-thumb.no-cover .ini{font-size:54px;font-weight:800;letter-spacing:2px}
+
+/* v169: consegna tradotta */
+.tr-box .tr-ins{font-weight:700;font-size:15px}
+.tr-box .tr-ins + .tr-txt{margin-top:5px;padding-top:5px;border-top:1px dashed #b9cbee}

@@ -7563,14 +7563,30 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function trHintOk(it) { const tr = trValid(it); return !it.hint || !!(tr && tr.hsrc === it.hint && tr.h && tr.h.en); }
   function stuTrLang() { try { return localStorage.getItem('pl-trlang') || ''; } catch (e) { return ''; } }
   /** Sul telefono: menu "🌐 Translate" + riquadro con la traduzione nella lingua scelta. t = { en: '…', … } o null. */
-  function trBar(t, onChange) {
+  // v169 (Edoardo: "volevo che ci potesse essere la traduzione della consegna dell'esercizio, perché non c'è?"): la CONSEGNA
+  // (cosa bisogna fare) è un testo fisso per tipo di esercizio: tradotta qui una volta, senza IA, quindi c'è SEMPRE, anche
+  // nei set dove l'insegnante non ha premuto "🌐 Traduzioni" (quelle servono solo per la frase).
+  const STU_INSTR = {
+    gap: { en: 'Write the missing word.', es: 'Escribe la palabra que falta.', fr: 'Écris le mot qui manque.', de: 'Schreib das fehlende Wort.', zh: '写出缺少的词。', ja: '空欄に入る言葉を書いてください。', ar: 'اكتب الكلمة الناقصة.', fa: 'کلمهٔ جاافتاده را بنویس.', tr: 'Eksik kelimeyi yaz.' },
+    gapbank: { en: 'Choose the right word for each gap.', es: 'Elige la palabra correcta para cada hueco.', fr: 'Choisis le bon mot pour chaque espace.', de: 'Wähle für jede Lücke das richtige Wort.', zh: '为每个空格选择正确的词。', ja: '空欄に合う言葉を選んでください。', ar: 'اختر الكلمة الصحيحة لكل فراغ.', fa: 'برای هر جای خالی کلمهٔ درست را انتخاب کن.', tr: 'Her boşluk için doğru kelimeyi seç.' },
+    mc: { en: 'Choose the right answer.', es: 'Elige la respuesta correcta.', fr: 'Choisis la bonne réponse.', de: 'Wähle die richtige Antwort.', zh: '选择正确的答案。', ja: '正しい答えを選んでください。', ar: 'اختر الإجابة الصحيحة.', fa: 'پاسخ درست را انتخاب کن.', tr: 'Doğru cevabı seç.' },
+    scramble: { en: 'Put the words in the right order.', es: 'Pon las palabras en el orden correcto.', fr: 'Mets les mots dans le bon ordre.', de: 'Bring die Wörter in die richtige Reihenfolge.', zh: '把词语按正确的顺序排列。', ja: '言葉を正しい順番に並べてください。', ar: 'رتّب الكلمات بالترتيب الصحيح.', fa: 'کلمه‌ها را به ترتیب درست بچین.', tr: 'Kelimeleri doğru sıraya koy.' },
+    extra: { en: 'There is one extra word: tap it.', es: 'Sobra una palabra: tócala.', fr: 'Il y a un mot en trop : touche-le.', de: 'Ein Wort ist zu viel: Tippe es an.', zh: '句子里多了一个词：点击它。', ja: '余分な言葉が一つあります。それをタップしてください。', ar: 'توجد كلمة زائدة: اضغط عليها.', fa: 'یک کلمه اضافه است: روی آن بزن.', tr: 'Fazla bir kelime var: ona dokun.' },
+    missing: { en: 'A word is missing: tap where it goes and write it.', es: 'Falta una palabra: toca dónde va y escríbela.', fr: 'Il manque un mot : touche l’endroit où il va et écris-le.', de: 'Ein Wort fehlt: Tippe auf die Stelle und schreib es.', zh: '句子里少了一个词：点击它的位置并写出来。', ja: '言葉が一つ足りません。入る場所をタップして書いてください。', ar: 'هناك كلمة ناقصة: اضغط على مكانها واكتبها.', fa: 'یک کلمه جا افتاده است: روی جای آن بزن و آن را بنویس.', tr: 'Bir kelime eksik: yerine dokun ve yaz.' },
+    wrong: { en: 'One word is wrong: tap it and write the correct one.', es: 'Una palabra está mal: tócala y escribe la correcta.', fr: 'Un mot est faux : touche-le et écris le bon.', de: 'Ein Wort ist falsch: Tippe es an und schreib das richtige.', zh: '有一个词是错的：点击它并写出正确的词。', ja: '間違っている言葉が一つあります。タップして正しい言葉を書いてください。', ar: 'هناك كلمة خاطئة: اضغط عليها واكتب الكلمة الصحيحة.', fa: 'یک کلمه اشتباه است: روی آن بزن و درستش را بنویس.', tr: 'Bir kelime yanlış: ona dokun ve doğrusunu yaz.' },
+    match: { en: 'Match the pairs.', es: 'Une las parejas.', fr: 'Associe les paires.', de: 'Ordne die Paare zu.', zh: '把相配的两项连起来。', ja: '合うものを組み合わせてください。', ar: 'صِل كل عنصر بما يناسبه.', fa: 'جفت‌ها را به هم وصل کن.', tr: 'Çiftleri eşleştir.' }
+  };
+  function trBar(t, onChange, kind) {
     const box = el('div', { class: 'tr-box', dir: 'auto', style: 'display:none' });
     const sel = el('select', { class: 'tr-sel', 'aria-label': 'Translate' });
     sel.appendChild(el('option', { value: '', text: '🌐 Translate' }));
     STU_LANGS.forEach(function (l) { sel.appendChild(el('option', { value: l[0], text: '🌐 ' + l[1] })); });
     const paint = function () {
-      const lg = sel.value, x = lg && t && t[lg];
-      box.textContent = x || ''; box.style.display = x ? '' : 'none';
+      const lg = sel.value, x = lg && t && t[lg], ins = lg && STU_INSTR[kind] && STU_INSTR[kind][lg];
+      box.innerHTML = '';
+      if (ins) box.appendChild(el('div', { class: 'tr-ins', text: ins }));
+      if (x) box.appendChild(el('div', { class: 'tr-txt', text: x }));
+      box.style.display = ins || x ? '' : 'none';
     };
     sel.value = stuTrLang(); paint();
     sel.addEventListener('change', function () { try { localStorage.setItem('pl-trlang', sel.value); } catch (e) {} paint(); if (onChange) onChange(sel.value); });
@@ -8653,7 +8669,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const t0 = tStart || Date.now();
     wrap.appendChild(el('div', { class: 'chp-status', text: 'Domanda ' + (p.i + 1) + ' di ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo!') }));
     if (p.image) wrap.appendChild(chpImage(p.image, p.credit));
-    if (p.tr) wrap.appendChild(trBar(p.tr));   // v166
+    wrap.appendChild(trBar(p.tr, null, p.pub && p.pub.kind));   // v166, v169: sempre (la consegna è tradotta comunque)
     const done = el('div', { class: 'chp-status', style: 'display:none' });
     const inputBox = chpItemInput(p.pub, { onSubmit: function (v) {
       me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, value: v, ms: Date.now() - t0 });
@@ -8719,7 +8735,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       // v152 (Edoardo, screenshot dal telefono: "perché lo studente non vede l'immagine?"): l'immagine dell'esercizio c'era
       // solo sullo schermo del prof e nei compiti; ora anche sul telefono, sopra la domanda
       if (item.image) { stage.appendChild(chpImage(item.image, item.imageCredit)); }
-      if (items.some(trValid)) stage.appendChild(trBar((trValid(item) || {}).t));   // v166
+      stage.appendChild(trBar((trValid(item) || {}).t, null, item.kind));   // v166, v169
       stage.appendChild(chpItemInput(pub, { onSubmit: function (v) {
         const res = VLChal.checkItem(item, v, pub);
         last = { i: orig[i], a: chalAnswerText(item, v, pub).slice(0, 300), ok: !!res.correct, frac: res.frac };   // v135: per il report del prof
@@ -9689,7 +9705,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         hintBox.textContent = T.hint + (th ? ': ' + th : hintShown.length ? ': ' + hintShown.join('\n') : '');
         hintBox.dir = th ? 'auto' : 'ltr';
       };
-      if (anyTr) box.appendChild(trBar(trv && trv.t, hintPaint));
+      box.appendChild(trBar(trv && trv.t, hintPaint, item.kind));
       const msg = el('div', { class: 'as-msg' });
       const hintBox = el('div', { class: 'as-hint', style: 'display:none' });
       let mcOff = null;
