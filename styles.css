@@ -1767,3 +1767,7 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .rv-sol.inl { background: #f4f6fa; color: inherit; border-style: dashed; }
 .rv-sol.inl.open { background: #fff; border-color: var(--line); color: #556; }
 .rv-exp { margin-top: 8px; color: #445; font-size: .8em; }
+
+/* v163: la risposta sbagliata dello studente sopra quella giusta */
+.chp-mine { margin-bottom: 10px; }
+.chp-mine-val { font-size: 22px; font-weight: 700; color: #c92a2a; text-decoration: line-through; text-decoration-thickness: 2px; overflow-wrap: anywhere; }

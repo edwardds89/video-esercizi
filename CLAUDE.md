@@ -1,5 +1,16 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IL VIA LO DÀ SEMPRE IL PROF, ORDINE CASUALE, "YOU TYPED" (v162-v163, 2/10). (1) Edoardo: "per ogni tipo di sfida sono io
+  che do il via... adesso [al proprio ritmo] appena lo studente mette il nickname parte subito la prima frase". Ora anche
+  in modalità sp c'è la sala d'attesa: l'host NON manda 'set' agli hello finché CHAL.spStarted è falso; #chal-start
+  diventa "▶ Via! Fai partire la sfida" (chalSendSet, ripetuto dopo 1,5 s; chi arriva dopo lo riceve all'hello). Il
+  telefono mostra "✓ Sei dentro! Aspetta che il prof dia il via… · You're in!…". (2) "poter selezionare se le frasi
+  vengono proposte nell'ordine che sono messe o randomizzate per ogni studente": #ch-shuffle nel dialogo di avvio. tp =
+  un ordine casuale uguale per tutti (items mescolati in startChal); sp = flag shuffle nel 'set', ogni telefono mescola
+  (chpPlaySelf: orig[] tiene l'indice del set, last.i = orig[i], così report e barra restano giusti). (3) 'voglio che
+  appaia anche la risposta sbagliata tipo "you typed: nonni"': chpSol(text, mine) con chpMine(pub, v) (gap, mc, wrong,
+  missing, scramble) → "Hai scritto · You typed: nonni" rosso barrato sopra "Risposta corretta · Correct answer:".
+  Test: e2e162.js.
 - SOLUZIONE DENTRO LO SPAZIO, E REPORT SEMPRE IN UNA SCHEDA NUOVA (v160-v161, 2/10). (1) Edoardo: "quando clicco su
   soluzione la parola in verde appaia sul gap e non al posto della parola soluzione". chalReviewList aggiunge g = risposte
   per spazio (EX.gapRuns) agli item gap/gapbank; in chalReview la frase è spezzata su /_{3,}/ e a soluzione aperta ogni

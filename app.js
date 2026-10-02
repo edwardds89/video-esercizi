@@ -7677,7 +7677,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   $('#ch-class-add').addEventListener('click', chAddClass);
   $('#ch-class-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); chAddClass(); } });
-  function chTpOpts() { const tp = (document.querySelector('#dlg-chal-new input[name=chplay]:checked') || {}).value !== 'sp'; $('#ch-tp-opts').style.display = tp ? '' : 'none'; }
+  function chTpOpts() { const tp = (document.querySelector('#dlg-chal-new input[name=chplay]:checked') || {}).value !== 'sp'; $('#ch-tp-opts').style.display = tp ? '' : 'none'; const h = $('#ch-shuffle-hint'); if (h) h.textContent = tp ? '(uguale per tutti)' : '(diverso per ogni studente)'; }
   $$('#dlg-chal-new input[name=chplay]').forEach(function (r) { r.addEventListener('change', chTpOpts); });
   function chalMode() { const r = document.querySelector('#dlg-chal-new input[name=chmode]:checked'); return r ? r.value : 'streak'; }
   $('#ch-new-set').addEventListener('click', function () { $('#dlg-chal-new').close(); newChalSet(); });
@@ -7692,6 +7692,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       mode: chalMode(),
       secs: +$('#ch-secs').value || 0,
       showQ: $('#ch-showq').checked,
+      shuffle: $('#ch-shuffle').checked,
       classId: classBackend() && $('#ch-class').value && $('#ch-class').value !== '__new' ? $('#ch-class').value : null
     });
   });
@@ -7701,12 +7702,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function startChal(setLs, cfg) {
     const pin = VLChal.makePin();
     const items = JSON.parse(JSON.stringify(setLs.chal.items, function (k, v) { return typeof k === 'string' && k.charAt(0) === '_' ? undefined : v; }));
+    // v162 (Edoardo: "voglio poter selezionare se le frasi vengono proposte nell'ordine che sono messe o randomizzate per
+    // ogni studente"): insieme sullo schermo = un ordine casuale uguale per tutti (deciso qui); al proprio ritmo = ogni
+    // telefono mescola per conto suo (flag shuffle nel 'set'), e il report resta nell'ordine del set (indice originale).
+    if (cfg.shuffle && cfg.play === 'tp') { const sh = VLChal.shuffleArr(items, Math.random); items.length = 0; sh.forEach(function (x) { items.push(x); }); }
     overlay(true);
     chalJoin(pin, function (conn) {
       overlay(false);
       CHAL = { pin: pin, setId: setLs.id, title: setLs.title || 'Sfida', play: cfg.play, items: items, mode: cfg.mode, secs: cfg.secs, showQ: cfg.showQ,
         conn: conn, state: cfg.play === 'tp' ? VLChal.tpNew() : VLChal.newState(), pub: null, ended: false, boardAt: 0, boardTimer: null, clock: null, log: {},
-        repId: VLClass.uuid(), classId: cfg.classId || null, cloud: { timer: null, ok: false, err: '', warned: false } };
+        repId: VLClass.uuid(), classId: cfg.classId || null, shuffle: !!cfg.shuffle, spStarted: false, cloud: { timer: null, ok: false, err: '', warned: false } };
       chalSaveReport();
       conn.on('hello', function (p) {
         if (!p || !p.id) return;
@@ -7715,7 +7720,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           if (CHAL.state.phase === 'question') conn.send('q', chalQPayload());   // chi arriva a domanda aperta la riceve
         } else {
           VLChal.reduce(CHAL.state, 'hello', p);
-          conn.send('set', { items: chalWireItems(CHAL.items), mode: CHAL.mode });
+          // v162 (Edoardo: "per ogni tipo di sfida sono io che do il via... adesso appena lo studente mette il nickname parte
+          // subito la prima frase"): anche al proprio ritmo c'è la sala d'attesa. Il set parte solo dopo "▶ Via!"; chi
+          // arriva a sfida già partita lo riceve subito.
+          if (CHAL.spStarted) chalSendSet();
         }
         renderChalBoard(); chalBoardOut();
       });
@@ -8013,6 +8021,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!CHAL._slimWarned) { CHAL._slimWarned = true; toast('Le immagini incollate sono troppo pesanti per i telefoni: lì non si vedono (quelle scelte con 🔎 sì)', 7000); }
     return slim;
   }
+  function chalSendSet() { CHAL.conn.send('set', { items: chalWireItems(CHAL.items), mode: CHAL.mode, shuffle: !!CHAL.shuffle }); }
   function chalQPayload() {
     const it = CHAL.items[CHAL.state.i] || {};
     const pay = { i: CHAL.state.i, total: CHAL.items.length, pub: VLChal.wire(CHAL.pub), showQ: !!CHAL.showQ, secs: CHAL.secs || 0 };
@@ -8040,7 +8049,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     q.make();
     $('#chal-qr').innerHTML = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
     chalClassPicker();
-    $('#chal-start').style.display = CHAL.play === 'tp' ? '' : 'none';
+    $('#chal-start').style.display = CHAL.play === 'tp' || !CHAL.spStarted ? '' : 'none';
+    $('#chal-start').textContent = CHAL.play === 'tp' ? '▶ Prima domanda' : '▶ Via! Fai partire la sfida';
     $('#chal-stagebox').style.display = 'none';
     $('#chal-live').style.display = '';
     $('#chal-after').style.display = 'none';
@@ -8213,7 +8223,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         kb));
     });
   }
-  $('#chal-start').addEventListener('click', function () { if (CHAL && CHAL.play === 'tp' && CHAL.state.phase === 'lobby') chalOpenQuestion(0); });
+  $('#chal-start').addEventListener('click', function () {
+    if (!CHAL) return;
+    if (CHAL.play === 'tp') { if (CHAL.state.phase === 'lobby') chalOpenQuestion(0); return; }
+    if (CHAL.spStarted) return;
+    CHAL.spStarted = true;
+    chalSendSet();
+    setTimeout(function () { if (CHAL && !CHAL.ended) chalSendSet(); }, 1500);   // secondo invio: un telefono che ha perso il primo parte lo stesso (chi è già partito lo ignora)
+    $('#chal-start').style.display = 'none';
+    toast('Via! Ognuno risponde al suo ritmo');
+  });
   $('#chal-end').addEventListener('click', function () {
     if (this.dataset.arm) { delete this.dataset.arm; this.textContent = '🏁 Termina la sfida'; chalFinish(); }
     else { this.dataset.arm = '1'; this.textContent = 'Sicuro? Clicca ancora per chiudere'; const b = this; setTimeout(function () { delete b.dataset.arm; b.textContent = '🏁 Termina la sfida'; }, 2500); }
@@ -8290,7 +8309,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         conn.on('set', function (p) {   // ognuno al suo ritmo: il set arriva intero
           if (me.started || !p || !Array.isArray(p.items)) return;
           me.started = true;
-          chpPlaySelf(me, p.items, p.mode);
+          chpPlaySelf(me, p.items, p.mode, !!p.shuffle);
         });
         conn.on('q', function (p) {     // insieme sullo schermo: arriva la domanda corrente
           if (!p || p.pub == null) return;
@@ -8318,7 +8337,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const hello = function () {
           if (me.started) return;
           conn.send('hello', { id: id, nick: nk });
-          if (++tries === 4) busyMsg(msg, 'Collegato: aspetta che il prof avvii la sfida…');
+          if (++tries === 2) busyMsg(msg, '✓ Sei dentro! Aspetta che il prof dia il via… · You\'re in! Wait for the teacher to start…');
           if (tries < 150) setTimeout(hello, 2500);
         };
         hello();
@@ -8478,8 +8497,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /** Insieme sullo schermo: arriva una domanda alla volta, si risponde e si aspetta la rivelazione. */
   /** v156 (Edoardo: 'voglio che ci sia scritto "Risposta corretta:" ma la parola deve essere sotto, in verde, più grande,
    *  deve risaltare'): etichetta piccola sopra, soluzione grande e verde sotto. */
-  function chpSol(text) {
-    return el('div', { class: 'sol chp-sol' }, el('div', { class: 'chp-sol-lbl', text: 'Risposta corretta:' }), el('div', { class: 'chp-sol-val', text: text }));
+  function chpSol(text, mine) {
+    return el('div', { class: 'sol chp-sol' },
+      // v163 (Edoardo: 'voglio che appaia anche la risposta sbagliata tipo "you typed: nonni" e poi la risposta corretta in verde')
+      mine ? el('div', { class: 'chp-mine' }, el('span', { class: 'chp-sol-lbl', text: 'Hai scritto · You typed: ' }), el('span', { class: 'chp-mine-val', text: mine })) : null,
+      el('div', { class: 'chp-sol-lbl', text: 'Risposta corretta · Correct answer:' }), el('div', { class: 'chp-sol-val', text: text }));
+  }
+  /** Quello che lo studente ha risposto, in parole (sul telefono c'è solo la versione pubblica dell'esercizio). */
+  function chpMine(pub, v) {
+    if (!pub || v == null) return '';
+    if (pub.kind === 'gap' || pub.kind === 'gapbank') return (Array.isArray(v) ? v : [v]).map(function (x) { return String(x || '').trim() || '—'; }).join(' / ');
+    if (pub.kind === 'mc') return pub.options && pub.options[v] != null ? String(pub.options[v]) : (typeof v === 'number' && v >= 0 ? 'ABCD'[v] || '' : '');
+    if (pub.kind === 'wrong') return v && v.correction ? String(v.correction) : '';
+    if (pub.kind === 'missing') return v && v.word ? String(v.word) : '';
+    if (pub.kind === 'scramble') return Array.isArray(v) ? v.join(' ') : '';
+    return '';
   }
   function chpImage(src, credit) {
     const box = el('div', { class: 'chp-imgbox' });
@@ -8497,6 +8529,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const done = el('div', { class: 'chp-status', style: 'display:none' });
     const inputBox = chpItemInput(p.pub, { onSubmit: function (v) {
       me.conn.send('ans', { id: me.id, nick: me.nick, i: p.i, value: v, ms: Date.now() - t0 });
+      me.lastMine = { i: p.i, text: chpMine(p.pub, v) };
       done.innerHTML = '';
       done.appendChild(el('div', { text: 'Risposta inviata: aspetta la rivelazione…' }));
       // v157: finché il prof non mostra la risposta si può annullare e riscrivere (il tempo continua a contare dall'inizio)
@@ -8514,7 +8547,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const mine = rev.per && rev.per[me.id];
       const boxr = el('div', { class: 'chp-reveal ' + (mine && mine.ok ? 'ok' : 'no') },
         el('div', { class: 'big', text: mine ? (mine.ok ? '✓ Giusto! +' + mine.pts : (mine.pts ? 'Quasi: +' + mine.pts : '✗ Sbagliata')) : 'Tempo scaduto' }),
-        rev.sol ? chpSol(rev.sol) : null);
+        rev.sol ? chpSol(rev.sol, mine && !mine.ok && me.lastMine && me.lastMine.i === p.i ? me.lastMine.text : '') : null);
       const meRow = (rev.top || []).find(function (r) { return r.id === me.id; });
       if (meRow) boxr.appendChild(el('div', { class: 'pos', text: 'Sei ' + meRow.rank + '° con ' + meRow.score + ' punti' }));
       wrap.innerHTML = '';
@@ -8523,7 +8556,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     };
   }
   /** Ognuno al suo ritmo: il set intero sul telefono, correzione locale, punteggio come nel v68. */
-  function chpPlaySelf(me, items, mode) {
+  function chpPlaySelf(me, items, mode, shuffle) {
+    // v162: ordine casuale per questo telefono; orig[i] = posizione nel set del prof (serve al report)
+    let orig = items.map(function (x, k) { return k; });
+    if (shuffle) { orig = VLChal.shuffleArr(orig, Math.random); items = orig.map(function (k) { return items[k]; }); }
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
     const stage = el('div', { class: 'chp-stage2' });
     const status = el('div', { class: 'chp-status', text: 'Rispondi al tuo ritmo: la classifica è dal prof' });
@@ -8557,7 +8593,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (item.image) { stage.appendChild(chpImage(item.image, item.imageCredit)); }
       stage.appendChild(chpItemInput(pub, { onSubmit: function (v) {
         const res = VLChal.checkItem(item, v, pub);
-        last = { i: i, a: chalAnswerText(item, v, pub).slice(0, 300), ok: !!res.correct, frac: res.frac };   // v135: per il report del prof
+        last = { i: orig[i], a: chalAnswerText(item, v, pub).slice(0, 300), ok: !!res.correct, frac: res.frac };   // v135: per il report del prof
         if (res.frac === 1) { right++; score += pts(streak, Date.now() - t0); streak++; if (typeof playWinSound === 'function') playWinSound(); }
         else if (res.frac > 0) { score += Math.round(100 * res.frac); streak = 0; }
         else streak = 0;
@@ -8565,7 +8601,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         sendScore(false);
         const fb = el('div', { class: 'chp-reveal ' + (res.correct ? 'ok' : 'no') },
           el('div', { class: 'big', text: res.correct ? '✓ Giusto!' : (res.frac > 0 ? 'Quasi: ' + Math.round(res.frac * 100) + '%' : '✗ Sbagliata') }),
-          res.correct ? null : chpSol(VLChal.solutionText(item)),
+          res.correct ? null : chpSol(VLChal.solutionText(item), chpMine(pub, v)),
           item.explain ? el('div', { class: 'chp-explain', text: '💬 ' + item.explain }) : null);
         stage.innerHTML = '';
         stage.appendChild(fb);
