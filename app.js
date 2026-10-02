@@ -4715,7 +4715,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (S.player.kind === 'mock' && S.player.state() === 0 && !st.ended) onEnded();
   }
   function onEnded() {
-    const st = S.student; if (!st || st.ended || st.blocked) return;
+    const st = S.student; if (!st || st.ended) return;
+    // v172: il video finisce mentre c'è un esercizio aperto (ultimo esercizio messo proprio alla fine): ce lo ricordiamo,
+    // così dopo l'esercizio NON si preme play su un video finito (YouTube lo farebbe ripartire da capo)
+    if (st.blocked) { st.endPending = true; return; }
     st.ended = true;
     st.talkIdx = 0;
     advancePhase();
@@ -4799,6 +4802,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const bar = $('#s-progress');
       const btn = el('button', { class: 'small', text: 'Vai al riepilogo', style: 'margin-left:8px', onclick: function () { S.player.pause(); st.ended = true; renderSummary(); } });
       bar.appendChild(btn);
+    }
+    // v172 (Edoardo: "quando finisce il video, ricomincia da capo ma non capisco perché"): se il video è già finito (o
+    // mancano meno di 0,7 s) play() su YouTube lo riavvia dall'inizio. Qui invece si passa alla sezione successiva.
+    const dur = st.lesson.duration || 0;
+    if (st.endPending || S.player.state() === 0 || (dur > 0 && S.player.time() >= dur - 0.7)) {
+      st.endPending = false; S.player.pause();
+      st.ended = true; st.talkIdx = 0;
+      return advancePhase();
     }
     S.player.play();
   }

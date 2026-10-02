@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IL VIDEO RIPARTIVA DA CAPO ALLA FINE (v172, 2/10). Edoardo, video-lezione con l'ultimo esercizio proprio alla fine
+  (13 a 10:30 su 10:30): il video finiva con l'esercizio aperto, onEnded veniva ignorato (st.blocked) e poi continueVideo
+  chiamava play() su un video FINITO: YouTube lo riavvia dall'inizio. Ora onEnded ricorda st.endPending, e continueVideo,
+  se il video è finito (stato 0, endPending o meno di 0,7 s alla fine), non preme play: va alla sezione successiva
+  (advancePhase: parliamone / riepilogo). Diagnosi dal codice, NON riprodotta su YouTube vero: da verificare con Edoardo.
 - 3 2 1 VIA! (v171, 2/10). Edoardo: "quando clicco [Via!] voglio che sullo schermo appaia un 3 2 1 via! grande, con
   trasparenza". bigCountdown(then): overlay .big-count a tutto schermo con fondo semitrasparente (si vede la pagina sotto),
   numeri enormi animati; al "Via!" parte davvero (chalGo: prima domanda in tp, invio del set in sp). Evento Realtime nuovo
