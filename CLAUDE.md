@@ -1,5 +1,8 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- "RISPOSTA CORRETTA:" GRANDE E VERDE SUL TELEFONO (v156, 2/10). Edoardo (screenshot iPhone, "✗ Sbagliata / Risposta:
+  penna" piccolo e grigio): chpSol(text) = etichetta "Risposta corretta:" piccola e sotto la soluzione in verde, grande
+  (.chp-sol-val, clamp 30-46px). Usata sia nella rivelazione della modalità guidata sia nel feedback al proprio ritmo.
 - IL PROF COMANDA SEMPRE NELLA SFIDA GUIDATA (v155, 2/10). Edoardo: "se non rispondono tutti non posso andare avanti,
   perché? voglio un modo per controllare sempre io, e se qualcuno si disconnette si blocca tutto". Il bottone "⏹ Chiudi la
   domanda" c'era ma piccolo e grigio; senza timer e con uno studente scollegato la domanda non si chiudeva da sola. Ora a

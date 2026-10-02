@@ -8403,6 +8403,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     return box;
   }
   /** Insieme sullo schermo: arriva una domanda alla volta, si risponde e si aspetta la rivelazione. */
+  /** v156 (Edoardo: 'voglio che ci sia scritto "Risposta corretta:" ma la parola deve essere sotto, in verde, più grande,
+   *  deve risaltare'): etichetta piccola sopra, soluzione grande e verde sotto. */
+  function chpSol(text) {
+    return el('div', { class: 'sol chp-sol' }, el('div', { class: 'chp-sol-lbl', text: 'Risposta corretta:' }), el('div', { class: 'chp-sol-val', text: text }));
+  }
   function chpImage(src, credit) {
     const box = el('div', { class: 'chp-imgbox' });
     const im = el('img', { class: 'chp-img', src: src, alt: '', referrerpolicy: 'no-referrer' });
@@ -8429,7 +8434,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const mine = rev.per && rev.per[me.id];
       const boxr = el('div', { class: 'chp-reveal ' + (mine && mine.ok ? 'ok' : 'no') },
         el('div', { class: 'big', text: mine ? (mine.ok ? '✓ Giusto! +' + mine.pts : (mine.pts ? 'Quasi: +' + mine.pts : '✗ Sbagliata')) : 'Tempo scaduto' }),
-        rev.sol ? el('div', { class: 'sol', text: 'Risposta: ' + rev.sol }) : null);
+        rev.sol ? chpSol(rev.sol) : null);
       const meRow = (rev.top || []).find(function (r) { return r.id === me.id; });
       if (meRow) boxr.appendChild(el('div', { class: 'pos', text: 'Sei ' + meRow.rank + '° con ' + meRow.score + ' punti' }));
       wrap.innerHTML = '';
@@ -8480,7 +8485,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         sendScore(false);
         const fb = el('div', { class: 'chp-reveal ' + (res.correct ? 'ok' : 'no') },
           el('div', { class: 'big', text: res.correct ? '✓ Giusto!' : (res.frac > 0 ? 'Quasi: ' + Math.round(res.frac * 100) + '%' : '✗ Sbagliata') }),
-          res.correct ? null : el('div', { class: 'sol', text: 'Risposta: ' + VLChal.solutionText(item) }),
+          res.correct ? null : chpSol(VLChal.solutionText(item)),
           item.explain ? el('div', { class: 'chp-explain', text: '💬 ' + item.explain }) : null);
         stage.innerHTML = '';
         stage.appendChild(fb);

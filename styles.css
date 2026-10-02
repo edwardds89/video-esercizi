@@ -1744,3 +1744,8 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .chal-class-box { display: inline-flex; gap: 6px; align-items: center; }
 .chal-class-box select { font-size: 14px; padding: 7px 10px; border-radius: 10px; max-width: 230px; width: auto; }
 .chal-class-box .folder-new { padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; min-width: 200px; }
+
+/* v156: risposta corretta sul telefono, grande e verde */
+.chp-sol { margin: 12px 0 8px; }
+.chp-sol-lbl { font-size: 15px; color: var(--muted, #667); font-weight: 600; }
+.chp-sol-val { font-size: clamp(30px, 9vw, 46px); font-weight: 800; color: #1a7f37; line-height: 1.15; margin-top: 4px; overflow-wrap: anywhere; }
