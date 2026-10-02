@@ -7996,7 +7996,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function chalAnswered() {
     if (!CHAL || CHAL.play !== 'tp') return;
     const n = Object.keys(CHAL.state.answers).length, tot = Object.keys(CHAL.state.players).length;
-    $('#chal-answered').textContent = n + ' su ' + tot + ' hanno risposto';
+    // v155: chi manca, per nome (se uno si è scollegato si vede subito chi è, e il prof va avanti lo stesso)
+    const miss = Object.keys(CHAL.state.players).filter(function (id) { return !CHAL.state.answers[id]; }).map(function (id) { return CHAL.state.players[id].nick; });
+    $('#chal-answered').textContent = n + ' su ' + tot + ' hanno risposto' + (CHAL.state.phase === 'question' && miss.length && miss.length <= 8 ? ' · mancano: ' + miss.join(', ') : '');
     renderChalBoard();
   }
   /** Modalita' guidata (teacher-paced): apre la domanda i sullo schermo grande e la manda ai telefoni. */
@@ -8013,7 +8015,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const box = $('#chal-qbox'); box.innerHTML = '';
     box.appendChild(chalScreenItem(item, CHAL.pub));
     const act = $('#chal-stage-actions'); act.innerHTML = '';
-    act.appendChild(el('button', { class: 'small', text: '⏹ Chiudi la domanda', onclick: chalCloseQuestion }));
+    // v155 (Edoardo: "se non rispondono tutti non posso andare avanti... voglio un modo per controllare sempre io, e se
+    // qualcuno si disconnette si blocca tutto"): il bottone per chiudere c'era ma piccolo e grigio. Ora due bottoni grandi,
+    // sempre attivi: mostra la risposta (chiude la domanda anche se manca qualcuno) e salta direttamente alla prossima.
+    const lastQ = i + 1 >= CHAL.items.length;
+    act.appendChild(el('button', { class: 'primary big', id: 'chal-reveal', text: '👁 Mostra la risposta', title: 'Chiude la domanda adesso, anche se non hanno risposto tutti', onclick: chalCloseQuestion }));
+    act.appendChild(el('button', { class: 'big', id: 'chal-skip', text: lastQ ? '🏁 Chiudi e vai alla classifica' : '⏭ Prossima domanda', title: 'Chiude questa domanda e passa subito alla successiva, senza aspettare nessuno', onclick: function () { chalCloseQuestion(); if (lastQ) chalFinish(); else chalOpenQuestion(i + 1); } }));
     clearInterval(CHAL.clock);
     const clock = $('#chal-clock');
     if (CHAL.secs) {

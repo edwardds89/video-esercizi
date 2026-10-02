@@ -1,5 +1,11 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IL PROF COMANDA SEMPRE NELLA SFIDA GUIDATA (v155, 2/10). Edoardo: "se non rispondono tutti non posso andare avanti,
+  perché? voglio un modo per controllare sempre io, e se qualcuno si disconnette si blocca tutto". Il bottone "⏹ Chiudi la
+  domanda" c'era ma piccolo e grigio; senza timer e con uno studente scollegato la domanda non si chiudeva da sola. Ora a
+  domanda aperta ci sono due bottoni grandi: #chal-reveal "👁 Mostra la risposta" (chiude subito) e #chal-skip
+  "⏭ Prossima domanda" (chiude e apre la successiva; all'ultima: classifica). #chal-answered dice chi manca per nome
+  (fino a 8). La chiusura automatica quando hanno risposto tutti resta. Test: e2e155.js.
 - LA CLASSE SI SCEGLIE ANCHE DALLA SCHERMATA DELLA SFIDA (v154, 2/10). Edoardo, dalla schermata del QR: "come faccio a
   scegliere la classe a cui appartiene questa attività? aggiungi un pulsante qui". Il menu c'era solo nel dialogo di avvio
   (#ch-class) e non si notava. Ora #chal-class-box nella barra, accanto a Report: chalClassPicker (select "🏷 Classe: …"
