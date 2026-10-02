@@ -1739,3 +1739,8 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .rv-nav { justify-content: center; align-items: center; gap: 16px; margin-top: 12px; }
 .rv-count { font-weight: 700; }
 .chal-review:focus { outline: none; }
+
+/* v154: classe della sfida nella barra */
+.chal-class-box { display: inline-flex; gap: 6px; align-items: center; }
+.chal-class-box select { font-size: 14px; padding: 7px 10px; border-radius: 10px; max-width: 230px; width: auto; }
+.chal-class-box .folder-new { padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; min-width: 200px; }

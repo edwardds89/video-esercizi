@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- LA CLASSE SI SCEGLIE ANCHE DALLA SCHERMATA DELLA SFIDA (v154, 2/10). Edoardo, dalla schermata del QR: "come faccio a
+  scegliere la classe a cui appartiene questa attività? aggiungi un pulsante qui". Il menu c'era solo nel dialogo di avvio
+  (#ch-class) e non si notava. Ora #chal-class-box nella barra, accanto a Report: chalClassPicker (select "🏷 Classe: …"
+  con le classi e "+ Nuova classe…" in linea); cambia CHAL.classId in qualsiasi momento (lobby, partita, sfida chiusa),
+  salva subito il report e ricorda la scelta ('pl-chal-class'). Senza accesso: "🔒 report solo su questo computer".
 - REVISIONE: MOSTRA/NASCONDI, UNA ALLA VOLTA, FOTO (v153, 2/10). Edoardo: "se clicco su mostra tutte poi è irreversibile…
   voglio anche vedere frase per frase, scegliere se una alla volta o tutte insieme, e vedere la foto". chalReview riscritta
   con stato {mode:'all'|'one', i, open[]}: "👁 Mostra tutte" ↔ "🙈 Nascondi tutte", ogni soluzione si richiude; vista

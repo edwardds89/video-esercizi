@@ -7788,6 +7788,47 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     clearTimeout(C.cloud.timer);
     if (snap.ended) go(); else C.cloud.timer = setTimeout(go, 5000);
   }
+  /** v154 (Edoardo, dalla schermata del QR: "come faccio a scegliere la classe a cui appartiene questa attività? aggiungi
+   *  un pulsante qui"): la classe si sceglie (o si cambia) anche a sfida aperta, dal menu 🏷 accanto a Report. Vale subito
+   *  per il report salvato; resta la scelta predefinita per la prossima sfida. Senza accesso: avviso al posto del menu. */
+  function chalClassPicker() {
+    const box = $('#chal-class-box'); if (!box || !CHAL) return;
+    box.innerHTML = '';
+    const be = classBackend();
+    if (!be) { box.appendChild(el('span', { class: 'hint', title: 'Accedi (in alto a destra) per salvare il report nel tuo account con la classe', text: '🔒 report solo su questo computer' })); return; }
+    const sel = el('select', { id: 'chal-class', class: 'small', title: 'La classe di questa sfida: il report finisce lì, in 📋 Classi' });
+    const fill = function (classes) {
+      sel.innerHTML = '';
+      sel.appendChild(el('option', { value: '', text: '🏷 Classe: nessuna' }));
+      classes.forEach(function (c) { sel.appendChild(el('option', { value: c.id, text: '🏷 ' + c.name })); });
+      sel.appendChild(el('option', { value: '__new', text: '+ Nuova classe…' }));
+      sel.value = CHAL.classId && classes.some(function (c) { return c.id === CHAL.classId; }) ? CHAL.classId : '';
+    };
+    fill(CLS.classes || []);
+    be.listClasses().then(function (cl) { CLS.classes = cl || []; fill(CLS.classes); }, function () { /* resta l'elenco che c'è */ });
+    const setClass = function (id) {
+      if (!CHAL) return;
+      CHAL.classId = id || null;
+      try { localStorage.setItem('pl-chal-class', id || ''); } catch (e) { /* ignora */ }
+      const c = (CLS.classes || []).find(function (x) { return x.id === id; });
+      chalSaveReport();
+      toast(c ? 'Questa sfida è della classe «' + c.name + '»' : 'Sfida senza classe');
+    };
+    sel.addEventListener('change', function () {
+      if (sel.value !== '__new') return setClass(sel.value);
+      const inp = el('input', { type: 'text', class: 'folder-new', placeholder: 'Nome della classe (es. PoliMi Lun-Mer)', maxlength: '80' });
+      const ok = el('button', { class: 'small primary', text: 'Crea' });
+      const go = function () {
+        const n = inp.value.trim(); if (!n) { inp.focus(); return; }
+        ok.disabled = true;
+        be.createClass(n).then(function (c) { CLS.classes = (CLS.classes || []).concat([c]); CHAL.classId = c.id; chalClassPicker(); setClass(c.id); }, function (e) { ok.disabled = false; toast('Non creata: ' + e.message, 6000); });
+      };
+      ok.addEventListener('click', go);
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); if (e.key === 'Escape') chalClassPicker(); });
+      box.innerHTML = ''; box.appendChild(inp); box.appendChild(ok); inp.focus();
+    });
+    box.appendChild(sel);
+  }
   function chalCloudMsg() {
     const p = $('#chal-cloud'); if (!p || !CHAL) return;
     const cls = CHAL.classId && (CLS.classes || []).find(function (c) { return c.id === CHAL.classId; });
@@ -7945,6 +7986,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     q.addData(chalUrl(CHAL.pin));
     q.make();
     $('#chal-qr').innerHTML = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+    chalClassPicker();
     $('#chal-start').style.display = CHAL.play === 'tp' ? '' : 'none';
     $('#chal-stagebox').style.display = 'none';
     $('#chal-live').style.display = '';
