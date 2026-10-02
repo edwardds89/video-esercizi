@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- CARTELLE PER LE ESERCITAZIONI (v145, 2/10). Edoardo: "nella sezione esercitazioni voglio poter creare delle cartelle".
+  Una cartella è un nome: ls.folder sull'esercitazione (viaggia nel cloud con la lezione; saveDebounced senza toccare
+  updatedAt, così l'ordine non cambia) + S.settings.chalFolders per le cartelle ancora vuote (solo questo browser).
+  Niente annidamento. Nella scheda 📝 Esercitazioni #home-folders (renderHomeFolders): chip Tutte / 📁 cartella (n) /
+  Senza cartella / + Nuova cartella (campo in linea, niente prompt()); con una cartella aperta ✎ Rinomina ed Elimina
+  cartella (twoStep: le esercitazioni restano, senza cartella). S.homeFolder filtra ('' tutte, '\u0000' senza cartella).
+  Sulla card: folderSelect "📁 Sposta in…" (anche "+ Nuova cartella…" e "togli dalla cartella"); la meta mostra 📁 nome.
+  Un'esercitazione creata con una cartella aperta nasce lì (newChalSet). Test: e2e145.js.
 - FORMATO "SOLO PAROLE" (v144, 1/10). Edoardo, arrabbiato a ragione: con lo screenshot "Scrivete le parole al singolare o al
   plurale" la v143 dava ancora frasi corte ("Sul tavolo c'è una (mele) ___"). Il motore costruiva SEMPRE da una frase e la
   regola "match the format" era solo un consiglio al modello. Ora c'è un formato vero: select #ig-format (come l'immagine /

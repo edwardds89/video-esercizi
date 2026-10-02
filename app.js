@@ -1200,6 +1200,94 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (ls.chal && !Array.isArray(ls.exercises)) return 'chal';
     return 'video';
   }
+  /** v145 (Edoardo: "nella sezione esercitazioni voglio poter creare delle cartelle"). Una cartella è un NOME: ogni
+   *  esercitazione ha ls.folder (viaggia nel cloud con la lezione); l'elenco delle cartelle = quelle usate + quelle create e
+   *  ancora vuote (S.settings.chalFolders, solo in questo browser finché non ci metti qualcosa). Niente cartelle annidate.
+   *  Barra sopra la lista (solo nella scheda 📝 Esercitazioni): Tutte, una per cartella, Senza cartella, + Nuova cartella;
+   *  con una cartella aperta: Rinomina ed Elimina (a due clic, le esercitazioni NON si cancellano: tornano senza cartella).
+   *  Su ogni card il menu "📁 Sposta in…". */
+  function chalFolders() {
+    const set = {};
+    (S.settings.chalFolders || []).forEach(function (f) { if (f) set[f] = 1; });
+    Object.keys(S.lessons).forEach(function (k) { const ls = S.lessons[k]; if (homeKind(ls) === 'chal' && ls.folder) set[ls.folder] = 1; });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'it', { sensitivity: 'base' }); });
+  }
+  function folderAdd(name) {
+    name = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+    if (!name) return '';
+    const ex = chalFolders().find(function (f) { return f.toLowerCase() === name.toLowerCase(); });
+    if (ex) return ex;
+    S.settings.chalFolders = (S.settings.chalFolders || []).concat([name]); saveSettings();
+    return name;
+  }
+  function folderSet(ls, name) { if (name) ls.folder = name; else delete ls.folder; saveDebounced(); }
+  function renderHomeFolders(all, visible) {
+    const box = $('#home-folders'); if (!box) return;
+    box.innerHTML = '';
+    box.style.display = visible ? '' : 'none';
+    if (!visible) return;
+    const sets = all.filter(function (ls) { return homeKind(ls) === 'chal'; });
+    const folders = chalFolders();
+    if (S.homeFolder && S.homeFolder !== '\u0000' && folders.indexOf(S.homeFolder) === -1) S.homeFolder = '';
+    const cnt = function (f) { return sets.filter(function (ls) { return (ls.folder || '') === f; }).length; };
+    const chip = function (val, label) {
+      return el('button', { class: 'fchip folder' + ((S.homeFolder || '') === val ? ' on' : ''), text: label, onclick: function () { S.homeFolder = val; renderHome(); } });
+    };
+    const row = el('div', { class: 'fchips' });
+    row.appendChild(chip('', 'Tutte (' + sets.length + ')'));
+    folders.forEach(function (f) { row.appendChild(chip(f, '📁 ' + f + ' (' + cnt(f) + ')')); });
+    if (folders.length) row.appendChild(chip('\u0000', 'Senza cartella (' + cnt('') + ')'));
+    const nameIn = el('input', { type: 'text', class: 'folder-new', placeholder: 'Nome della cartella', maxlength: '60', style: 'display:none' });
+    const addBtn = el('button', { class: 'fchip folder-add', text: '+ Nuova cartella' });
+    const create = function () { const n = folderAdd(nameIn.value); if (!n) { nameIn.focus(); return; } S.homeFolder = n; renderHome(); toast('Cartella «' + n + '» creata: spostaci le esercitazioni con il menu 📁 sulla card'); };
+    addBtn.addEventListener('click', function () { if (nameIn.style.display === 'none') { nameIn.style.display = ''; addBtn.textContent = 'Crea'; nameIn.focus(); } else create(); });
+    nameIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') create(); if (e.key === 'Escape') renderHome(); });
+    row.appendChild(nameIn); row.appendChild(addBtn);
+    box.appendChild(row);
+    if (S.homeFolder && S.homeFolder !== '\u0000') {
+      const cur = S.homeFolder;
+      const rn = el('button', { class: 'small', text: '✎ Rinomina cartella' });
+      rn.addEventListener('click', function () {
+        const inp = el('input', { type: 'text', value: cur, maxlength: '60' });
+        const ok = el('button', { class: 'small primary', text: 'Salva' });
+        const go = function () {
+          const n = String(inp.value || '').trim().replace(/\s+/g, ' ').slice(0, 60); if (!n || n === cur) return renderHome();
+          Object.keys(S.lessons).forEach(function (k) { const ls = S.lessons[k]; if (homeKind(ls) === 'chal' && ls.folder === cur) ls.folder = n; });
+          S.settings.chalFolders = (S.settings.chalFolders || []).filter(function (f) { return f !== cur && f !== n; }).concat([n]); saveSettings();
+          saveDebounced(); S.homeFolder = n; renderHome();
+        };
+        ok.addEventListener('click', go); inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+        rn.replaceWith(inp, ok); inp.focus(); inp.select();
+      });
+      box.appendChild(el('div', { class: 'row folder-tools' }, rn,
+        twoStep('Elimina cartella', function () {
+          Object.keys(S.lessons).forEach(function (k) { const ls = S.lessons[k]; if (homeKind(ls) === 'chal' && ls.folder === cur) delete ls.folder; });
+          S.settings.chalFolders = (S.settings.chalFolders || []).filter(function (f) { return f !== cur; }); saveSettings();
+          saveDebounced(); S.homeFolder = ''; renderHome(); toast('Cartella eliminata: le esercitazioni sono rimaste, senza cartella');
+        }),
+        el('span', { class: 'hint', text: 'Eliminando la cartella le esercitazioni restano.' })));
+    }
+  }
+  function folderSelect(ls) {
+    const sel = el('select', { class: 'small folder-sel', title: 'Sposta questa esercitazione in una cartella' });
+    sel.appendChild(el('option', { value: '', text: ls.folder ? '📁 ' + ls.folder : '📁 Sposta in…' }));
+    chalFolders().forEach(function (f) { if (f !== ls.folder) sel.appendChild(el('option', { value: 'f:' + f, text: f })); });
+    if (ls.folder) sel.appendChild(el('option', { value: 'none', text: '— togli dalla cartella —' }));
+    sel.appendChild(el('option', { value: 'new', text: '+ Nuova cartella…' }));
+    sel.addEventListener('change', function () {
+      const v = sel.value;
+      if (v === 'new') {
+        const inp = el('input', { type: 'text', class: 'folder-new', placeholder: 'Nome della cartella', maxlength: '60' });
+        const ok = el('button', { class: 'small primary', text: 'Crea e sposta' });
+        const go = function () { const n = folderAdd(inp.value); if (!n) { inp.focus(); return; } folderSet(ls, n); renderHome(); toast('Spostata in «' + n + '»'); };
+        ok.addEventListener('click', go); inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); if (e.key === 'Escape') renderHome(); });
+        sel.replaceWith(inp, ok); inp.focus(); return;
+      }
+      if (v === 'none') { folderSet(ls, ''); renderHome(); toast('Tolta dalla cartella'); return; }
+      if (v.indexOf('f:') === 0) { folderSet(ls, v.slice(2)); renderHome(); toast('Spostata in «' + v.slice(2) + '»'); }
+    });
+    return sel;
+  }
   function renderHome() {
     show('home');
     const svcPanel = $('#services'), svcToggle = $('#svc-toggle');   // v109: si richiude tornando/restando in home
@@ -1222,13 +1310,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
     }
     const q = L.normalize(S.homeSearch || '');
+    const inChal = (S.homeFilter || 'all') === 'chal';
+    renderHomeFolders(all, inChal);
     const items = all.filter(function (ls) {
       if ((S.homeFilter || 'all') !== 'all' && homeKind(ls) !== (S.homeFilter || 'all')) return false;
       if (q && L.normalize(ls.title || '').indexOf(q) === -1) return false;
+      // v145: nella scheda Esercitazioni la cartella scelta filtra ('' = tutte, '\u0000' = senza cartella)
+      if (inChal && S.homeFolder) { const f = ls.folder || ''; if (S.homeFolder === '\u0000' ? f : f !== S.homeFolder) return false; }
       return true;
     });
     if (!all.length) { list.appendChild(el('p', { class: 'muted', text: 'Nessuna lezione ancora. Crea la prima con una delle card qui sopra, oppure prova la demo.' })); return; }
-    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: 'Niente che corrisponda al filtro o alla ricerca.' })); return; }
+    if (!items.length) { list.appendChild(el('p', { class: 'muted', text: inChal && S.homeFolder && S.homeFolder !== '\u0000' && !q ? 'Cartella vuota: sposta qui un\'esercitazione con il menu 📁 sulla sua card (da "Tutte"), oppure creane una nuova adesso: nasce in questa cartella.' : 'Niente che corrisponda al filtro o alla ricerca.' })); return; }
     items.forEach(function (ls) {
       // attività standalone: card con l'emoji del tipo, Apri = gioca
       if (ls.activity && !Array.isArray(ls.exercises)) {
@@ -1260,12 +1352,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('div', { class: 'thumb act-thumb chal-thumb', onclick: openS, title: 'Apri l\'esercitazione' }, '📝'),
           el('div', { class: 'body' },
             el('div', { class: 'title', text: ls.title || '(set senza titolo)', onclick: openS }),
-            el('div', { class: 'meta', text: 'Esercitazione · ' + nIt + (nIt === 1 ? ' esercizio' : ' esercizi') + (ls.importedFrom ? ' · da ' + platformName(ls.importedFrom.site) : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
+            el('div', { class: 'meta', text: (ls.folder ? '📁 ' + ls.folder + ' · ' : '') + 'Esercitazione · ' + nIt + (nIt === 1 ? ' esercizio' : ' esercizi') + (ls.importedFrom ? ' · da ' + platformName(ls.importedFrom.site) : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
             publishNudge(ls),
             el('div', { class: 'actions' },
               el('button', { class: 'small primary', text: '📋 Assegna', title: 'Compito o esercitazione per una classe: vedi chi l\'ha fatto e cosa ha sbagliato', onclick: function () { openAssignDialog(ls); } }),   // v126
               el('button', { class: 'small', text: '📱 Sfida in classe', title: 'Gioco dal vivo con classifica, come Kahoot', onclick: function () { openChalNew(ls.id); } }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: openS }),
+              folderSelect(ls),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'sfida') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, chal: ls.chal }, null, 1)); } }),
               publishBtn(ls),
               el('button', { class: 'small danger', text: 'Elimina', onclick: function () { if (confirm('Eliminare "' + (ls.title || 'set senza titolo') + '"?')) deleteLesson(ls); } }))));
@@ -6774,6 +6867,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function newChalSet() {
     const id = 'chal-' + Date.now().toString(36);
     S.lessons[id] = { id: id, title: '', chal: { items: [] }, updatedAt: new Date().toISOString() };
+    if (S.homeFilter === 'chal' && S.homeFolder && S.homeFolder !== '\u0000') S.lessons[id].folder = S.homeFolder;   // v145: nasce nella cartella aperta
     saveDebounced();
     openChalSet(id);
   }

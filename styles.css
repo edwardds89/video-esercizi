@@ -1679,3 +1679,11 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .chal-row .bar.segs .seg.half { background: #f08c00; }
 .chal-row .bar.segs .seg.ko { background: #e03131; }
 .chal-row:not(.final) { grid-template-columns: 2.4em minmax(5.5em, 1fr) minmax(50px, 140px) auto auto; }
+
+/* v145: cartelle delle esercitazioni */
+.home-folders { margin: 4px 0 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; background: #fbfcfe; }
+.home-folders .fchips { align-items: center; }
+.home-folders .folder-add { border-style: dashed; }
+.home-folders .folder-new, .lesson-card .folder-new { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; min-width: 170px; }
+.home-folders .folder-tools { gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.lesson-card select.folder-sel { max-width: 170px; font-size: 14px; padding: 5px 8px; border-radius: 8px; width: auto; }
