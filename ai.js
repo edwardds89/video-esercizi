@@ -1195,7 +1195,9 @@
     const one = async function (batch) {
       const user = [
         'Translate each exercise text into these languages: ' + langs.map(function (l) { return l.name + ' ("' + l.code + '")'; }).join(', ') + '.',
-        'The translation tells the student what the text MEANS, in natural simple words. Translate the whole meaning, including the answer part after an arrow (e.g. "ragazza bella → ragazze belle" = "beautiful girl → beautiful girls"). Keep arrows and punctuation. Do not explain grammar, do not add notes, do not keep words in the original language unless they are names.',
+        'The translation tells the student what the exercise ASKS and what its words mean, in natural simple words. Keep every blank "_____" and every arrow exactly where it is: never fill a blank, never give the answer.',
+        'When the text is a question ABOUT a word of the language being studied (e.g. "Qual è il maschile di nonna? → _____"), translate the question, keep that word in the original language in «» and add its meaning in brackets: "What is the masculine of «nonna» (grandmother)? → _____". When the text is just words (e.g. "ragazza bella → _____"), give their meaning: "beautiful girl → _____". When it is a sentence with a blank, translate the sentence and leave the blank.',
+        'Do not explain grammar and do not add notes.',
         'If an exercise has a HINT (a grammar rule written in English), translate the hint too; keep the example words of the language being studied (like "-a", "ragazza") untranslated inside it.',
         'EXERCISES:',
         batch.map(function (it) { return it.n + '. TEXT: ' + String(it.text || '').slice(0, 400) + (it.hint ? '\n   HINT: ' + String(it.hint).slice(0, 400) : ''); }).join('\n'),

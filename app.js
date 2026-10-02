@@ -7556,6 +7556,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function trSrc(it) {
     if (!it || it.kind === 'match' || it.kind === 'wheel') return '';   // abbinamenti: la traduzione sarebbe la soluzione
     if (it.kind === 'mc') return String(it.data && it.data.question || '');
+    // v170: per gli spazi si traduce il testo che lo studente VEDE ("Qual è il maschile di nonna? → _____"), senza la risposta
+    if (it.kind === 'gap' || it.kind === 'gapbank') { try { return String(VLChal.pubItem(it, { showQ: true }).sentence || ''); } catch (e) { return ''; } }
     return String(it.sentence || '');
   }
   /** Le traduzioni dell'esercizio se sono ancora quelle del testo attuale (dopo una modifica non valgono più). */
@@ -7567,7 +7569,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   // (cosa bisogna fare) è un testo fisso per tipo di esercizio: tradotta qui una volta, senza IA, quindi c'è SEMPRE, anche
   // nei set dove l'insegnante non ha premuto "🌐 Traduzioni" (quelle servono solo per la frase).
   const STU_INSTR = {
-    gap: { en: 'Write the missing word.', es: 'Escribe la palabra que falta.', fr: 'Écris le mot qui manque.', de: 'Schreib das fehlende Wort.', zh: '写出缺少的词。', ja: '空欄に入る言葉を書いてください。', ar: 'اكتب الكلمة الناقصة.', fa: 'کلمهٔ جاافتاده را بنویس.', tr: 'Eksik kelimeyi yaz.' },
+    gap: { en: 'Write the answer in the blank.', es: 'Escribe la respuesta en el hueco.', fr: 'Écris la réponse dans l’espace vide.', de: 'Schreib die Antwort in die Lücke.', zh: '在空格里写出答案。', ja: '空欄に答えを書いてください。', ar: 'اكتب الإجابة في الفراغ.', fa: 'پاسخ را در جای خالی بنویس.', tr: 'Cevabı boşluğa yaz.' },
     gapbank: { en: 'Choose the right word for each gap.', es: 'Elige la palabra correcta para cada hueco.', fr: 'Choisis le bon mot pour chaque espace.', de: 'Wähle für jede Lücke das richtige Wort.', zh: '为每个空格选择正确的词。', ja: '空欄に合う言葉を選んでください。', ar: 'اختر الكلمة الصحيحة لكل فراغ.', fa: 'برای هر جای خالی کلمهٔ درست را انتخاب کن.', tr: 'Her boşluk için doğru kelimeyi seç.' },
     mc: { en: 'Choose the right answer.', es: 'Elige la respuesta correcta.', fr: 'Choisis la bonne réponse.', de: 'Wähle die richtige Antwort.', zh: '选择正确的答案。', ja: '正しい答えを選んでください。', ar: 'اختر الإجابة الصحيحة.', fa: 'پاسخ درست را انتخاب کن.', tr: 'Doğru cevabı seç.' },
     scramble: { en: 'Put the words in the right order.', es: 'Pon las palabras en el orden correcto.', fr: 'Mets les mots dans le bon ordre.', de: 'Bring die Wörter in die richtige Reihenfolge.', zh: '把词语按正确的顺序排列。', ja: '言葉を正しい順番に並べてください。', ar: 'رتّب الكلمات بالترتيب الصحيح.', fa: 'کلمه‌ها را به ترتیب درست بچین.', tr: 'Kelimeleri doğru sıraya koy.' },
@@ -7584,8 +7586,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const paint = function () {
       const lg = sel.value, x = lg && t && t[lg], ins = lg && STU_INSTR[kind] && STU_INSTR[kind][lg];
       box.innerHTML = '';
-      if (ins) box.appendChild(el('div', { class: 'tr-ins', text: ins }));
+      // v170 (Edoardo: 'che significa "write the missing word" se la consegna è "qual è il maschile di nonna?"'): la
+      // consegna vera è il testo dell'esercizio; quella generica per tipo resta solo se la traduzione manca
       if (x) box.appendChild(el('div', { class: 'tr-txt', text: x }));
+      else if (ins) box.appendChild(el('div', { class: 'tr-ins', text: ins }));
       box.style.display = ins || x ? '' : 'none';
     };
     sel.value = stuTrLang(); paint();
@@ -7599,20 +7603,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     b.textContent = '🌐 Traduzioni' + (can.length ? ' ' + done + '/' + can.length : '');
     b.classList.toggle('ok', !!can.length && done === can.length);
   }
-  function chalTranslateSet() {
-    const ls = current(); if (!ls || !ls.chal) return;
-    const b = $('#cs-tr');
+  /** Traduce gli esercizi del set che non hanno ancora una traduzione valida. Non rifiuta mai: { todo, n, err }.
+   *  v170: parte anche DA SOLA quando si assegna un compito o si lancia una sfida (Edoardo si aspettava di trovarla). */
+  function trEnsure(ls, onProgress) {
     const todo = [];
-    (ls.chal.items || []).forEach(function (it, i) { if (trSrc(it) && !(trValid(it) && trHintOk(it))) todo.push({ n: i + 1, it: it }); });
-    if (!todo.length) return toast((ls.chal.items || []).some(trSrc) ? 'Tutti gli esercizi sono già tradotti nelle ' + STU_LANGS.length + ' lingue: gli studenti vedono "🌐 Translate"' : 'Qui non c\'è niente da tradurre');
-    if (!S.settings.apiKey) return toast('Serve la chiave AI: Impostazioni AI in alto', 6000);
-    b.disabled = true; busyMsg(b, ' Traduco 0/' + todo.length + '…');
-    AI.translateSet({
+    ((ls && ls.chal && ls.chal.items) || []).forEach(function (it, i) { if (trSrc(it) && !(trValid(it) && trHintOk(it))) todo.push({ n: i + 1, it: it }); });
+    if (!todo.length) return Promise.resolve({ todo: 0, n: 0 });
+    if (!S.settings.apiKey) return Promise.resolve({ todo: todo.length, n: 0, err: 'nokey' });
+    return AI.translateSet({
       items: todo.map(function (x) { return { n: x.n, text: trSrc(x.it), hint: x.it.hint || '' }; }),
       langs: STU_LANGS.map(function (l) { return { code: l[0], name: l[2] }; }),
       lang: String(ls.lang || 'it').slice(0, 2) === 'en' ? 'English' : 'Italian',
       apiKey: S.settings.apiKey, model: S.settings.model,
-      onProgress: function (d, n) { busyMsg(b, ' Traduco ' + d + '/' + n + '…'); }
+      onProgress: function (d) { if (onProgress) onProgress(d, todo.length); }
     }).then(function (r) {
       let n = 0;
       todo.forEach(function (x) {
@@ -7621,10 +7624,31 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (x.it.hint) { tr.hsrc = x.it.hint; tr.h = Object.assign({}, got.h, { en: got.h.en || x.it.hint }); }
         x.it.tr = tr; if (trValid(x.it)) n++;
       });
-      b.disabled = false;
-      chalSetTouched(ls); trSetLabel(ls);
-      toast(n === todo.length ? '🌐 ' + n + (n === 1 ? ' esercizio tradotto' : ' esercizi tradotti') + ' in ' + STU_LANGS.length + ' lingue' : '🌐 Tradotti ' + n + ' su ' + todo.length + ': premi di nuovo per completare', 6000);
-    }, function (e) { b.disabled = false; trSetLabel(ls); toast('Traduzione non riuscita: ' + (e && e.message || e), 7000); });
+      if (n) { ls.updatedAt = new Date().toISOString(); saveDebounced(); }
+      return { todo: todo.length, n: n };
+    }, function (e) { return { todo: todo.length, n: 0, err: (e && e.message) || String(e) }; });
+  }
+  /** Prima di assegnare o lanciare: traduce quello che manca, al massimo 60 secondi, poi si va avanti comunque. */
+  function trBefore(ls, then) {
+    const need = ((ls && ls.chal && ls.chal.items) || []).some(function (it) { return trSrc(it) && !(trValid(it) && trHintOk(it)); });
+    if (!need || !S.settings.apiKey) return then();
+    let gone = false; const go = function () { if (gone) return; gone = true; then(); };
+    toast('🌐 Preparo le traduzioni per gli studenti (solo la prima volta, 10-30 secondi)…', 30000);
+    setTimeout(go, 60000);
+    trEnsure(ls).then(function (r) { toast(r.n ? '🌐 Traduzioni pronte' : 'Traduzioni non riuscite: si parte senza', 3000); go(); });
+  }
+  function chalTranslateSet() {
+    const ls = current(); if (!ls || !ls.chal) return;
+    const b = $('#cs-tr');
+    if (!(ls.chal.items || []).some(trSrc)) return toast('Qui non c\'è niente da tradurre');
+    b.disabled = true; busyMsg(b, ' Traduco…');
+    trEnsure(ls, function (d, n) { busyMsg(b, ' Traduco ' + d + '/' + n + '…'); }).then(function (r) {
+      b.disabled = false; renderChalSet(ls);
+      if (!r.todo) return toast('Tutti gli esercizi sono già tradotti nelle ' + STU_LANGS.length + ' lingue: gli studenti vedono "🌐 Translate"');
+      if (r.err === 'nokey') return toast('Serve la chiave AI: Impostazioni AI in alto', 6000);
+      if (r.err) return toast('Traduzione non riuscita: ' + r.err, 7000);
+      toast(r.n === r.todo ? '🌐 ' + r.n + (r.n === 1 ? ' esercizio tradotto' : ' esercizi tradotti') + ' in ' + STU_LANGS.length + ' lingue' : '🌐 Tradotti ' + r.n + ' su ' + r.todo + ': premi di nuovo per completare', 6000);
+    });
   }
   $('#cs-tr').addEventListener('click', chalTranslateSet);
 
@@ -7801,14 +7825,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const ls = S.lessons[$('#ch-set').value];
     if (!ls || !chalSetReady(ls)) return toast('Il set è vuoto: aggiungi almeno un esercizio');
     $('#dlg-chal-new').close();
-    startChal(ls, {
+    const chCfg = {
       play: (document.querySelector('#dlg-chal-new input[name=chplay]:checked') || {}).value === 'sp' ? 'sp' : 'tp',
       mode: chalMode(),
       secs: +$('#ch-secs').value || 0,
       showQ: $('#ch-showq').checked,
       shuffle: $('#ch-shuffle').checked,
       classId: classBackend() && $('#ch-class').value && $('#ch-class').value !== '__new' ? $('#ch-class').value : null
-    });
+    };
+    trBefore(ls, function () { startChal(ls, chCfg); });   // v170: le traduzioni mancanti si preparano da sole
   });
   $('#ch-close').addEventListener('click', function () { $('#dlg-chal-new').close(); });
   $('#svc-qr').addEventListener('click', function () { newChalSet(); });   // v126: la card è "Esercitazione" (compiti + sfida)
@@ -8141,6 +8166,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const pay = { i: CHAL.state.i, total: CHAL.items.length, pub: VLChal.wire(CHAL.pub), showQ: !!CHAL.showQ, secs: CHAL.secs || 0 };
     // v152: con "mostra la domanda anche sui telefoni" viaggia anche l'immagine (se è incollata e pesante, no: resta sullo schermo)
     if (CHAL.showQ && it.image && it.image.length < 120000) { pay.image = it.image; if (it.imageCredit) pay.credit = it.imageCredit; }
+    if (CHAL.secs) pay.left = Math.max(0, CHAL.secs - Math.round((Date.now() - (CHAL.qAt || Date.now())) / 1000));   // v170: secondi rimasti (chi entra a domanda aperta vede quelli veri)
     if (CHAL.items.some(trValid)) pay.tr = (trValid(it) || {}).t || {};   // v166: traduzioni per il telefono
     return pay;
   }
@@ -8184,6 +8210,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const item = CHAL.items[i]; if (!item) return chalFinish();
     CHAL.pub = VLChal.pubItem(item, { showQ: CHAL.showQ });
     VLChal.tpOpen(CHAL.state, i, Date.now());
+    CHAL.qAt = Date.now();   // v170: per il timer sui telefoni
     CHAL.conn.send('q', chalQPayload());
     $('#chal-start').style.display = 'none';
     $('#chal-live').style.display = 'none';
@@ -8247,7 +8274,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const box = el('div', { class: 'chal-screen' });
     if (item.image) box.appendChild(el('img', { class: 'chal-img', src: item.image, alt: '' }));   // v127
     if (item.image && item.imageCredit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + item.imageCredit }));   // v139
-    box.appendChild(el('div', { class: 'instr', text: item.kind === 'gapbank' ? 'Completa gli spazi con le parole della lista (dal telefono).' : EX.INSTRUCTIONS[item.kind] || 'Rispondi dal telefono.' }));
+    box.appendChild(el('div', { class: 'instr', text: ({
+      // v170 (Edoardo, schermo della sfida: 'che vuol dire "ascolta"? e non ha senso dire "la parola mancante" qui'): le
+      // consegne di EX.INSTRUCTIONS sono quelle delle video-lezioni (si ascolta il video). Nella sfida non c'è audio e la
+      // domanda è già scritta grande sotto: qui solo cosa fare con il telefono, bilingue.
+      gap: 'Scrivi la risposta sul telefono · Write the answer on your phone',
+      gapbank: 'Scegli la parola giusta sul telefono · Choose the right word on your phone',
+      mc: 'Scegli la risposta sul telefono · Choose the answer on your phone',
+      scramble: 'Metti le parole in ordine · Put the words in order',
+      extra: 'C\'è una parola in più: toccala · There is one extra word: tap it',
+      missing: 'Manca una parola: tocca dove va e scrivila · A word is missing: tap where it goes and write it',
+      wrong: 'C\'è una parola sbagliata: toccala e correggila · One word is wrong: tap it and fix it',
+      match: 'Abbina le coppie sul telefono · Match the pairs on your phone'
+    })[item.kind] || 'Rispondi dal telefono · Answer on your phone' }));
     if (item.kind === 'mc') {
       box.appendChild(el('div', { class: 'chal-q', text: item.data.question }));
       const grid = el('div', { class: 'chal-mcgrid' });
@@ -8668,6 +8707,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
     const t0 = tStart || Date.now();
     wrap.appendChild(el('div', { class: 'chp-status', text: 'Domanda ' + (p.i + 1) + ' di ' + p.total + (p.showQ || p.pub.sentence || p.pub.q ? '' : ' · guarda lo schermo!') }));
+    // v170 (Edoardo: "lo studente non può vedere sul suo telefono il timer... devono vederlo sia sullo schermo del pc che
+    // sul loro telefono"): conto alla rovescia anche qui, calcolato dai secondi rimasti mandati dal prof
+    clearInterval(me.clock);
+    if (p.secs) {
+      if (!p._end) p._end = Date.now() + (p.left != null ? p.left : p.secs) * 1000;
+      const ck = el('div', { class: 'chp-clock' });
+      const tick = function () {
+        if (!ck.isConnected && ck._on) return clearInterval(me.clock);
+        const left = Math.max(0, Math.ceil((p._end - Date.now()) / 1000));
+        ck.textContent = '⏱ ' + left + 's'; ck.classList.toggle('low', left <= 5); ck._on = true;
+        if (!left) clearInterval(me.clock);
+      };
+      wrap.appendChild(ck); tick(); me.clock = setInterval(tick, 250);
+    }
     if (p.image) wrap.appendChild(chpImage(p.image, p.credit));
     wrap.appendChild(trBar(p.tr, null, p.pub && p.pub.kind));   // v166, v169: sempre (la consegna è tradotta comunque)
     const done = el('div', { class: 'chp-status', style: 'display:none' });
@@ -9111,7 +9164,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       waitTitle: 'Sei dentro! ✓', waitMsg: 'Aspetta: il quiz parte quando lo dice il docente…', ended: 'La sessione è finita: il docente ha chiuso il quiz.', timeUp: '⏰ Tempo scaduto!', stopped: '⏹ Il docente ha fermato il quiz.',
       done: '✓ Consegnato: il docente vede i tuoi risultati ({n}).', closed: 'Il docente ha chiuso questo compito: i risultati non sono stati inviati.', notSent: 'Non inviato ({e}). ', resend: 'Riprova', sending: 'Invio dei risultati al docente…',
       k: { gap: 'Completa gli spazi', gapbank: 'Completa con le parole', mc: 'Scelta multipla', scramble: 'Riordina la frase', extra: 'Trova la parola in più', missing: 'Trova la parola mancante', wrong: 'Trova la parola sbagliata', match: 'Abbina le coppie' },
-      i: { gap: 'Scrivi la parola che manca.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' } },
+      i: { gap: 'Scrivi la risposta.', gapbank: 'Completa con le parole della lista.', mc: 'Scegli la risposta giusta.', scramble: 'Metti le parole nell\'ordine giusto.', extra: 'Tocca la parola in più.', missing: 'Tocca dove manca una parola e scrivila.', wrong: 'Tocca la parola sbagliata e scrivi quella giusta.', match: 'Abbina ogni parola a sinistra con una a destra.' } },
     en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. You don\'t need an account.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
       check: 'Check', retry: '✗ Not quite: try again.', almost: '✗ Almost ({p}% right): try again.', ok: '✓ Correct!', okLate: '✓ Correct on the second try', wrong: '✗ Wrong', solution: 'Answer: ', next: 'Next ▶', result: 'See your result ▶',
       review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
@@ -9121,7 +9174,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       waitTitle: 'You\'re in! ✓', waitMsg: 'Wait: the quiz starts when your teacher says so…', ended: 'The session is over: your teacher closed the quiz.', timeUp: '⏰ Time\'s up!', stopped: '⏹ Your teacher stopped the quiz.',
       done: '✓ Submitted: your teacher can see your results ({n}).', closed: 'Your teacher has closed this assignment: your results were not sent.', notSent: 'Not sent ({e}). ', resend: 'Try again', sending: 'Sending your results to your teacher…',
       k: { gap: 'Fill in the gaps', gapbank: 'Fill in with the words', mc: 'Multiple choice', scramble: 'Put the sentence in order', extra: 'Find the extra word', missing: 'Find the missing word', wrong: 'Find the wrong word', match: 'Match the pairs' },
-      i: { gap: 'Write the missing word.', gapbank: 'Complete with the words in the list.', mc: 'Choose the right answer.', scramble: 'Put the words in the right order.', extra: 'Tap the extra word.', missing: 'Tap where a word is missing and write it.', wrong: 'Tap the wrong word and write the right one.', match: 'Match each word on the left with one on the right.' } }
+      i: { gap: 'Write the answer.', gapbank: 'Complete with the words in the list.', mc: 'Choose the right answer.', scramble: 'Put the words in the right order.', extra: 'Tap the extra word.', missing: 'Tap where a word is missing and write it.', wrong: 'Tap the wrong word and write the right one.', match: 'Match each word on the left with one on the right.' } }
   };
   // 'both' = italiano e inglese insieme (Edoardo: "la consegna la voglio poter mettere in inglese o in entrambe le lingue"):
   // pulsanti e messaggi "Controlla / Check", consegne su due righe (italiano sopra, inglese sotto).
@@ -9176,6 +9229,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (creating && !newIn.value.trim()) { newIn.focus(); return toast('Scrivi il nome della classe'); }
         go.disabled = true;
         (creating ? be.createClass(newIn.value.trim()) : Promise.resolve({ id: sel.value, name: sel.options[sel.selectedIndex].textContent }))
+          .then(function (cls) { return new Promise(function (res) { trBefore(ls, function () { res(cls); }); }); })   // v170
           .then(function (cls) {
             const live = VLClass.isSet(ls) && modeSel.value === 'live';
             return be.createAssignment({ class_id: cls.id, lesson_id: ls.id, title: ls.title || '', kind: live ? 'live' : 'homework', lesson: asgPayload(ls), live: live ? { state: 'lobby' } : null })

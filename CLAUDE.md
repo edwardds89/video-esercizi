@@ -1,5 +1,17 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- LA TRADUZIONE È QUELLA DELLA DOMANDA, E PARTE DA SOLA (v170, 2/10). Edoardo, telefono: sotto "Qual è il maschile di
+  nonna?" usciva "Write the missing word." ("non ha senso dare una traduzione del genere"). La consegna VERA è il testo
+  dell'esercizio. (1) trSrc per gap/gapbank = il testo che lo studente vede, con lo spazio vuoto e SENZA risposta; il
+  prompt tiene «nonna» in italiano con il significato tra parentesi e non riempie mai lo spazio. Le traduzioni fatte con
+  la v166 (frase con la risposta) decadono da sole e si rifanno. (2) trBefore: quando si lancia una sfida (#ch-go) o si
+  assegna un compito, le traduzioni mancanti si preparano da sole (max 60 s, poi si parte comunque; serve la chiave AI).
+  (3) Nel riquadro: se c'è la traduzione della frase si mostra SOLO quella; la consegna generica per tipo (STU_INSTR) è
+  un ripiego quando manca. Test: e2e170.js.
+  (4) TIMER SUL TELEFONO (Edoardo: "devono vederlo sia sullo schermo del pc che sul loro telefono"): nella sfida tutti
+  insieme con il tempo, 'q' porta pay.left (secondi rimasti, da CHAL.qAt) e chpQuestion mostra .chp-clock (rosso sotto i 5 s).
+  (5) SCHERMO DELLA SFIDA: via "Ascolta e scrivi le parole mancanti." (era la consegna delle video-lezioni, EX.INSTRUCTIONS:
+  nella sfida non c'è audio). Ora consegne proprie, bilingui, che dicono solo cosa fare col telefono.
 - CONSEGNA TRADOTTA SEMPRE (v169, 2/10). Edoardo: "volevo che ci potesse essere la traduzione della consegna dell'esercizio,
   perché non c'è?". Nella v166 il menu "🌐 Translate" compariva solo nei set tradotti con l'IA e traduceva solo la frase.
   Ora il menu c'è SEMPRE (compiti, sfida sp e tp) e mostra la consegna del tipo di esercizio nelle 9 lingue (STU_INSTR,
