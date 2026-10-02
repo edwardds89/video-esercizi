@@ -1,5 +1,8 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- ✕ SULL'IMMAGINE DELL'ESERCIZIO (v147, 2/10). Edoardo: "ho incollato per sbaglio un'immagine ma non c'è la x per
+  eliminarla". Il bottone "✕ Togli l'immagine" c'era ma in fondo, dopo riquadro incolla e link: non si vedeva. Ora
+  l'anteprima è .ca-imgprev con un bottone tondo rosso .ca-imgx nell'angolo dell'immagine (azzera CA_IMG e CA_IMG_CREDIT).
 - "NON TROVO NELLA FRASE" CON UNA RISPOSTA DI PIÙ PAROLE (v146, 2/10). Screenshot di Edoardo: frase "Qual è il singolare
   di ragazzi simpatici? → ragazzo simpatico", parole da far scrivere "ragazzo simpatico", toast "Non trovo nella frase".
   Effetto collaterale della v138 (una gapWord di più parole = uno spazio per parola): il controllo del dialogo ✎

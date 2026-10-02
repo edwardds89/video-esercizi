@@ -7201,7 +7201,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       fields.appendChild(imgWrap);
       const paintImg = function () {
         imgWrap.innerHTML = '';
-        if (CA_IMG) imgWrap.appendChild(el('img', { src: CA_IMG, alt: '' }));
+        // v147 (Edoardo: "ho incollato per sbaglio un'immagine ma non c'è la x per eliminarla"): la ✕ sta SULL'immagine,
+        // dove la si cerca; il bottone "Togli l'immagine" in fondo resta.
+        if (CA_IMG) imgWrap.appendChild(el('div', { class: 'ca-imgprev' }, el('img', { src: CA_IMG, alt: '' }),
+          el('button', { class: 'ca-imgx', type: 'button', title: 'Togli l\'immagine', 'aria-label': 'Togli l\'immagine', text: '✕', onclick: function () { CA_IMG = null; CA_IMG_CREDIT = ''; paintImg(); } })));
         const f = el('input', { type: 'file', accept: 'image/*', class: 'sr', id: 'ca-imgfile' });
         f.addEventListener('change', function () { if (f.files[0]) imgToJpeg(f.files[0], function (im) { if (im) { CA_IMG = im.preview; paintImg(); } }, 560); });
         // v134 (Edoardo: "ma l'immagine non posso metterla con link? o incollare uno screenshot non salvato sul mac?"):

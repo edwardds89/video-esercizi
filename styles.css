@@ -1687,3 +1687,9 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 .home-folders .folder-new, .lesson-card .folder-new { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; min-width: 170px; }
 .home-folders .folder-tools { gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 .lesson-card select.folder-sel { max-width: 170px; font-size: 14px; padding: 5px 8px; border-radius: 8px; width: auto; }
+
+/* v147: ✕ sull'immagine dell'esercizio */
+.ca-imgprev { position: relative; display: inline-block; }
+.ca-imgprev img { display: block; }
+.ca-imgx { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid #fff; background: #e03131; color: #fff; font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.ca-imgx:hover { background: #c92a2a; }
