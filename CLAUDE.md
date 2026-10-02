@@ -1,5 +1,18 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- SOLUZIONE DENTRO LO SPAZIO, E REPORT SEMPRE IN UNA SCHEDA NUOVA (v160-v161, 2/10). (1) Edoardo: "quando clicco su
+  soluzione la parola in verde appaia sul gap e non al posto della parola soluzione". chalReviewList aggiunge g = risposte
+  per spazio (EX.gapRuns) agli item gap/gapbank; in chalReview la frase è spezzata su /_{3,}/ e a soluzione aperta ogni
+  riga diventa .rv-fill verde; il bottone resta interruttore (👁 Soluzione / 🙈 Nascondi), la spiegazione (.rv-exp) compare
+  sotto solo a soluzione aperta. Altri tipi: soluzione nel bottone come prima. (2) "anche se clicco su report voglio che si
+  apra sempre una nuova tab e mai sostituire quella attuale": Report dei compiti (assignmentRow) e titolo del compito →
+  #rep=ID&m=table in _blank; report e revisione della sfida ora _blank (prima finestre con nome, che riusavano la scheda).
+- REVISIONE IN UN'ALTRA SCHEDA E A SCHERMO INTERO (v158-v159, 2/10). Edoardo: 'voglio che quando clicco su "revisione" si
+  apra un'altra tab' e "qui voglio un pulsante per andare a schermo intero". #chal-review salva {title, list} in
+  localStorage 'pl-chalrev' (lista piena; se non ci sta, quella leggera) e apre #chalrev (renderChalRevTab, vista report
+  larga); se il popup è bloccato ripiega sulla revisione in pagina. Dal report salvato (#chalrep=ID) c'è lo stesso bottone
+  "📖 Revisione (nuova scheda)" con R.items. In chalReview il bottone "⛶ Schermo intero" (requestFullscreen sul riquadro,
+  anche webkit; Esc o "🗗 Esci"), con testo e foto più grandi in :fullscreen. Test: e2e158.js.
 - ↶ ANNULLA E RISCRIVI PER LO STUDENTE (v157, 2/10). Edoardo: "voglio una funzione annulla per lo studente, se invia e
   cambia idea deve poter annullare e riscrivere". Modalità guidata: dopo l'invio il telefono mostra "↶ Annulla e riscrivi"
   finché il prof non rivela; manda 'ans' con undo:true (stesso evento: niente nuovi eventi da registrare sul canale) e

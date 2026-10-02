@@ -1753,3 +1753,17 @@ input.gap[readonly] { cursor: pointer; caret-color: transparent; }
 /* v157: annulla la risposta sul telefono */
 .chp-undo { margin-top: 10px; padding: 10px 16px; font-size: 16px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .chp-item.sent { opacity: .55; pointer-events: none; }
+
+/* v159: revisione a schermo intero */
+.chal-review:fullscreen { background: #f5f6f8; padding: 20px 28px; overflow-y: auto; }
+.chal-review:-webkit-full-screen { background: #f5f6f8; padding: 20px 28px; overflow-y: auto; }
+.chal-review:fullscreen .rv-item.big .rv-img { max-height: 50vh; }
+.chal-review:fullscreen .rv-item.big .rv-q { font-size: clamp(28px, 4.2vw, 64px); }
+.chal-review:fullscreen .rv-item.big .rv-sol { font-size: clamp(26px, 3.6vw, 52px); }
+
+/* v160: la soluzione dentro lo spazio */
+.rv-fill { color: #1a7f37; font-weight: 800; border-bottom: 3px solid #1a7f37; padding: 0 .15em; }
+.rv-gap { letter-spacing: 1px; }
+.rv-sol.inl { background: #f4f6fa; color: inherit; border-style: dashed; }
+.rv-sol.inl.open { background: #fff; border-color: var(--line); color: #556; }
+.rv-exp { margin-top: 8px; color: #445; font-size: .8em; }

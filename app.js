@@ -7774,6 +7774,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const e = { type: it.kind, data: it.data || {}, pairs: it.pairs, sentence: it.sentence };
       const o = { k: VLChal.itemLabel(it.kind), p: VLClass.promptOf(e), s: VLChal.solutionText(it), x: it.explain || '' };
       if (it.image && (!light || !/^data:/.test(it.image))) { o.img = it.image; if (it.imageCredit) o.c = it.imageCredit; }
+      if ((it.kind === 'gap' || it.kind === 'gapbank') && it.data && it.data.tokens) o.g = EX.gapRuns(it.data).map(function (r) { return r.answer; });   // v160: le risposte spazio per spazio
       return o;
     });
   }
@@ -7850,7 +7851,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     p.textContent = CHAL.cloud.err ? '⚠️ Report non salvato nel cloud: ' + CHAL.cloud.err
       : CHAL.cloud.ok ? '☁️ Report salvato' + (cls ? ' in «' + cls.name + '»' : '') + ': lo ritrovi in 📋 Classi e compiti.' : '';
   }
-  function chalOpenReport() { window.open(location.pathname + location.search + '#chalrep', 'pl-chalrep'); }
+  function chalOpenReport() { window.open(location.pathname + location.search + '#chalrep', '_blank'); }   // v161: sempre una scheda nuova
   /** Scheda del report (#chalrep): studenti × domande, clic su una casella = cosa ha risposto. */
   function renderChalReport(saved) {
     show('report');
@@ -7869,6 +7870,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('span', { class: 'muted', text: (cls ? cls.name + ' · ' : '') + fmtDate(saved.created_at) })));
       }
       root.appendChild(el('h2', { style: 'margin-top:0', text: '📊 ' + R.title + ' · PIN ' + R.pin + (R.ended ? ' · chiusa' : ' · in corso') }));
+      root.appendChild(el('div', { class: 'row', style: 'margin:0 0 8px' }, el('button', { class: 'small', text: '📖 Revisione (nuova scheda)', onclick: function () {
+        try { localStorage.setItem('pl-chalrev', JSON.stringify({ title: R.title, at: Date.now(), list: R.items })); } catch (e) { return toast('Non riesco ad aprire la revisione'); }
+        window.open(location.pathname + location.search + '#chalrev', '_blank');
+      } })));
       root.appendChild(el('p', { class: 'hint', text: saved ? 'Report salvato nel tuo account. Clicca una casella per vedere la risposta.' : 'Solo per te: si aggiorna da sola. Clicca una casella per vedere la risposta.' }));
       const det = el('div', { class: 'rep-detail' });
       const tb = el('table', { class: 'rep-table' });
@@ -7920,9 +7925,33 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const box = el('div', { class: 'chal-review' });
     const st = { mode: 'all', i: 0, open: list.map(function () { return false; }) };
     const item = function (it, i, big) {
-      const sol = el('button', { class: 'rv-sol' + (st.open[i] ? ' open' : ''), title: 'Clicca per vedere o nascondere la soluzione' }, el('span', { class: 'rv-hid', text: '👁 Soluzione' }), el('span', { class: 'rv-txt', text: it.s + (it.x ? '  ·  ' + it.x : '') }));
-      sol.addEventListener('click', function () { st.open[i] = !st.open[i]; sol.classList.toggle('open', st.open[i]); head(); });
-      const txt = el('div', { class: 'rv-body' }, el('div', { class: 'rv-q', text: (i + 1) + '. ' + it.p }), sol);
+      // v160 (Edoardo: "quando clicco su soluzione la parola in verde appaia sul gap e non al posto della parola soluzione"):
+      // negli esercizi con gli spazi la risposta si scrive DENTRO la frase, al posto della riga; il bottone resta un
+      // interruttore (👁 Soluzione / 🙈 Nascondi). Gli altri tipi (scelta multipla, abbina…) mostrano la soluzione sotto.
+      const parts = String(it.p || '').split(/_{3,}/);
+      const inline = Array.isArray(it.g) && it.g.length && parts.length === it.g.length + 1;
+      const q = el('div', { class: 'rv-q' });
+      const drawQ = function () {
+        q.innerHTML = '';
+        if (!inline) { q.textContent = (i + 1) + '. ' + it.p; return; }
+        q.appendChild(document.createTextNode((i + 1) + '. '));
+        parts.forEach(function (t, k) {
+          q.appendChild(document.createTextNode(t));
+          if (k < it.g.length) q.appendChild(st.open[i] ? el('span', { class: 'rv-fill', text: it.g[k] }) : el('span', { class: 'rv-gap', text: '_____' }));
+        });
+      };
+      const sol = el('button', { class: 'rv-sol' + (inline ? ' inl' : '') + (st.open[i] ? ' open' : ''), title: 'Clicca per vedere o nascondere la soluzione' });
+      const drawSol = function () {
+        sol.innerHTML = '';
+        sol.classList.toggle('open', st.open[i]);
+        if (inline) { sol.appendChild(el('span', { text: st.open[i] ? '🙈 Nascondi' : '👁 Soluzione' })); return; }
+        sol.appendChild(el('span', { class: 'rv-hid', text: '👁 Soluzione' })); sol.appendChild(el('span', { class: 'rv-txt', text: it.s }));
+      };
+      const exp = el('div', { class: 'rv-exp', text: it.x ? '💬 ' + it.x : '' });
+      const drawExp = function () { exp.style.display = it.x && st.open[i] ? '' : 'none'; };
+      sol.addEventListener('click', function () { st.open[i] = !st.open[i]; drawQ(); drawSol(); drawExp(); head(); });
+      drawQ(); drawSol(); drawExp();
+      const txt = el('div', { class: 'rv-body' }, q, sol, exp);
       const row = el('div', { class: 'rv-item' + (big ? ' big' : '') });
       if (it.img) {
         const im = el('img', { class: 'rv-img', src: it.img, alt: '', title: it.c || '', referrerpolicy: 'no-referrer' });
@@ -7940,6 +7969,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       headBox.appendChild(el('span', { style: 'flex:1' }));
       headBox.appendChild(el('button', { class: 'small' + (st.mode === 'all' ? ' primary' : ''), text: '📋 Tutte insieme', onclick: function () { st.mode = 'all'; paint(); } }));
       headBox.appendChild(el('button', { class: 'small' + (st.mode === 'one' ? ' primary' : ''), text: '1️⃣ Una alla volta', onclick: function () { st.mode = 'one'; paint(); } }));
+      // v159 (Edoardo: "qui voglio un pulsante per andare a schermo intero"): la revisione occupa tutto lo schermo (Esc per uscire)
+      const isFs = (document.fullscreenElement || document.webkitFullscreenElement) === box;
+      if (box.requestFullscreen || box.webkitRequestFullscreen) headBox.appendChild(el('button', { class: 'small rv-fs', text: isFs ? '🗗 Esci da schermo intero' : '⛶ Schermo intero', onclick: function () {
+        if (isFs) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+        const r = (box.requestFullscreen || box.webkitRequestFullscreen).call(box);
+        if (r && r.catch) r.catch(function () { toast('Il browser non permette lo schermo intero qui'); });
+      } }));
       headBox.appendChild(el('button', { class: 'small rv-all', text: allOpen ? '🙈 Nascondi tutte' : '👁 Mostra tutte', onclick: function () { const v = !allOpen; st.open = st.open.map(function () { return v; }); paint(); } }));
     };
     const go = function (d) { st.i = Math.max(0, Math.min(list.length - 1, st.i + d)); paint(); };
@@ -7960,6 +7996,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); box.focus(); }
       else if (e.key === ' ' || e.key === 'Enter') { if (e.target === box) { e.preventDefault(); st.open[st.i] = !st.open[st.i]; paint(); box.focus(); } }
     });
+    const onFs = function () { if (!document.body.contains(box)) { document.removeEventListener('fullscreenchange', onFs); document.removeEventListener('webkitfullscreenchange', onFs); return; } head(); box.focus(); };
+    document.addEventListener('fullscreenchange', onFs); document.addEventListener('webkitfullscreenchange', onFs);
     box.appendChild(headBox); box.appendChild(body);
     paint();
     host.innerHTML = ''; host.appendChild(box);
@@ -8190,12 +8228,32 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   $('#chal-report2').addEventListener('click', chalOpenReport);
   $('#chal-review').addEventListener('click', function () {
     if (!CHAL) return;
+    // v158 (Edoardo: 'voglio che quando clicco su "revisione" si apra un'altra tab'): la revisione va in una scheda sua
+    // (#chalrev), a tutta pagina, così la classifica resta dov'è. La lista passa da localStorage (stesso browser); se le
+    // immagini incollate non ci stanno si salva la versione leggera. Se il browser blocca la scheda, si apre qui sotto.
+    const pack = function (light) { return JSON.stringify({ title: CHAL.title, at: Date.now(), list: chalReviewList(CHAL.items, light) }); };
+    let saved = false;
+    try { localStorage.setItem('pl-chalrev', pack(false)); saved = true; } catch (e) { try { localStorage.setItem('pl-chalrev', pack(true)); saved = true; } catch (e2) { /* niente spazio */ } }
+    const w = saved ? window.open(location.pathname + location.search + '#chalrev', '_blank') : null;
+    if (w) return;
     $('#chal-stagebox').style.display = '';
     $('#chal-progress').textContent = ''; $('#chal-answered').textContent = ''; $('#chal-clock').textContent = '';
     $('#chal-stage-actions').innerHTML = '';
     chalReview(chalReviewList(CHAL.items), $('#chal-qbox'));
     $('#chal-stagebox').scrollIntoView({ behavior: 'smooth' });
   });
+  /** Scheda della revisione (#chalrev): tutta la pagina, pronta da proiettare. */
+  function renderChalRevTab() {
+    show('report');
+    $('#view-report').classList.add('rep-big');
+    const root = $('#rep-root'); root.innerHTML = '';
+    let R = null; try { R = JSON.parse(localStorage.getItem('pl-chalrev') || 'null'); } catch (e) { /* ignora */ }
+    if (!R || !R.list || !R.list.length) { root.appendChild(el('p', { class: 'muted', text: 'Nessuna revisione da mostrare: aprila dalla sfida con 📖 Revisione.' })); return; }
+    document.title = '📖 ' + (R.title || 'Revisione');
+    root.appendChild(el('p', { class: 'hint', style: 'margin:0 0 8px', text: R.title || '' }));
+    const host = el('div'); root.appendChild(host);
+    chalReview(R.list, host).focus();
+  }
   $('#chal-assign').addEventListener('click', function () {   // v135: gli stessi esercizi come compito con link
     const ls = CHAL && S.lessons[CHAL.setId];
     if (!ls) return toast('Esercitazione non trovata tra le tue lezioni');
@@ -8840,11 +8898,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     });
     return el('div', { class: 'cls-asg' + (a.open ? '' : ' closed') },
       el('div', { class: 'cls-asg-main' },
-        el('a', { class: 'cls-asg-title', href: '#', text: a.title || '(senza titolo)', onclick: function (e) { e.preventDefault(); renderReport(a.id); } }),
+        el('a', { class: 'cls-asg-title', href: location.pathname + location.search + '#rep=' + a.id + '&m=table', target: '_blank', text: a.title || '(senza titolo)' }),
         el('div', { class: 'meta', text: fmtDate(a.created_at) + ' · codice ' + a.code + ' · ' + (nS ? nS + (nS === 1 ? ' studente' : ' studenti') + ', ' + nF + ' ' + (nF === 1 ? 'ha consegnato' : 'hanno consegnato') : 'nessuno ancora') })),
       el('div', { class: 'actions' },
         a.kind === 'live' ? el('button', { class: 'small primary', text: '🔴 Sessione dal vivo', onclick: function () { renderReport(a.id, 'live'); } }) : null,   // v131
-        el('button', { class: 'small' + (a.kind === 'live' ? '' : ' primary'), text: '📊 Report', onclick: function () { renderReport(a.id); } }),
+        el('button', { class: 'small' + (a.kind === 'live' ? '' : ' primary'), text: '📊 Report', title: 'Si apre in una nuova scheda', onclick: function () { if (!window.open(location.pathname + location.search + '#rep=' + a.id + '&m=table', '_blank')) renderReport(a.id); } }),   // v161 (Edoardo: "anche se clicco su report voglio che si apra sempre una nuova tab e mai sostituire quella attuale")
         el('button', { class: 'small', text: '🔗 Copia link', onclick: function () { copyText(url); } }),
         el('button', { class: 'small', text: 'QR', onclick: function () { CLS.qrOpen = CLS.qrOpen === a.id ? null : a.id; if (CLS.qrOpen) { qrBox.innerHTML = qrSvg(url); qrBox.hidden = false; } else qrBox.hidden = true; } }),
         toggle,
@@ -9623,6 +9681,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (VLChal.validPin(pin)) { S.standalone = true; return openChalPlay(pin); }
       toast('PIN della sfida non valido');
     }
+    if (h === '#chalrev') { history.replaceState(null, '', location.pathname + location.search); return renderChalRevTab(); }   // v158
     if (h === '#chalrep') { history.replaceState(null, '', location.pathname + location.search); return renderChalReport(); }   // v135
     if (h.indexOf('#chalrep=') === 0) {   // v137: report di una sfida salvata nel cloud
       const rid = h.slice(9);
