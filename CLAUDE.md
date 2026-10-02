@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- "NON TROVO NELLA FRASE" CON UNA RISPOSTA DI PIÙ PAROLE (v146, 2/10). Screenshot di Edoardo: frase "Qual è il singolare
+  di ragazzi simpatici? → ragazzo simpatico", parole da far scrivere "ragazzo simpatico", toast "Non trovo nella frase".
+  Effetto collaterale della v138 (una gapWord di più parole = uno spazio per parola): il controllo del dialogo ✎
+  confrontava la risposta intera con le singole parole. Ora confronta parola per parola, e il campo si riempie con
+  EX.gapRuns (parole vicine = una risposta sola), non più con data.answers separati da virgole.
 - CARTELLE PER LE ESERCITAZIONI (v145, 2/10). Edoardo: "nella sezione esercitazioni voglio poter creare delle cartelle".
   Una cartella è un nome: ls.folder sull'esercitazione (viaggia nel cloud con la lezione; saveDebounced senza toccare
   updatedAt, così l'ordine non cambia) + S.settings.chalFolders per le cartelle ancora vuote (solo questo browser).

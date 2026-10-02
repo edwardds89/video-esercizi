@@ -7189,7 +7189,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         } else fields.appendChild(el('p', { class: 'hint', text: 'La parola in più/mancante/sbagliata la sceglie l\'app dalla frase.' }));
         if (editing) {
           $('#ca-sent').value = editing.sentence || '';
-          if ($('#ca-gaps')) $('#ca-gaps').value = ((editing.data && editing.data.answers) || []).join(', ');
+          if ($('#ca-gaps')) $('#ca-gaps').value = (editing.data && editing.data.tokens ? EX.gapRuns(editing.data).map(function (r) { return r.answer; }) : []).join(', ');   // v146: parole vicine = una risposta sola ("ragazzo simpatico")
         }
       }
       // v127: per tutti i tipi, spiegazione, accenti e immagine
@@ -7405,8 +7405,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       it = VLChal.buildItem(k, sent, { lang: ls.lang || 'it', seed: Date.now() % 100000, distractors: 2, choices: gw.length ? { gapWords: gw } : null });
       if (!it) return toast('Frase non adatta a questo tipo (troppo corta?): prova con una frase più lunga');
       if (gw.length && (k === 'gap' || k === 'gapbank')) {
+        // v146 (screenshot di Edoardo: "Non trovo nella frase: ragazzo simpatico" con la frase che lo contiene): dalla v138 una
+        // risposta di più parole diventa uno spazio per parola, quindi il confronto va fatto parola per parola.
         const found = (it.data.answers || []).map(function (a) { return L.normalize(a); });
-        const miss = gw.filter(function (w) { return found.indexOf(L.normalize(w)) === -1; });
+        const miss = gw.filter(function (w) { return !w.split(/\s+/).filter(Boolean).every(function (x) { return found.indexOf(L.normalize(x)) !== -1; }); });
         if (miss.length) return toast('Non trovo nella frase: ' + miss.join(', ') + '. Scrivila esattamente come nella frase.', 6000);
       }
     }
