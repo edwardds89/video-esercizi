@@ -8789,6 +8789,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           if (i < arr.length - 1) {
             const r = (pub.runs || [])[i] || { words: 1 };
             const inp = el('input', { type: 'text', class: 'chp-gap inline', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', 'aria-label': 'spazio ' + (i + 1), style: 'width:' + Math.min(9 * r.words + 2, 30) + 'ch' });
+            // v191: la casella si allarga con quello che si scrive (mai più stretta della partenza, mai più larga della riga)
+            (function (inp, base) { inp.addEventListener('input', function () { inp.style.width = Math.max(base, Math.ceil(inp.value.length * 1.2) + 2) + 'ch'; }); })(inp, Math.min(9 * r.words + 2, 30));
             inputs.push(inp);
             q.appendChild(inp);
           }

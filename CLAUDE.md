@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- CASELLA DA SCRIVERE: TESTO AL CENTRO, LARGHEZZA ELASTICA (v191, 3/10). Edoardo: "la scritta 'prendi' dovrebbe essere
+  centrata... ricorda sempre che lo spazio deve essere flessibile qualora la parola fosse troppo lunga". .chp-gap.inline ha
+  text-align:center e max-width:100%; a ogni tasto la larghezza diventa max(base, lettere*1.2+2)ch. La larghezza di
+  partenza resta quella di prima (non dipende dalla risposta: non deve suggerire quanto è lunga). REGOLA GENERALE: ogni
+  casella/spazio per una risposta deve allargarsi con il contenuto, mai tagliarlo.
 - PARLIAMONE: NIENTE DOMANDE SIMILI A QUELLE GIÀ PRESENTI (v190, 3/10). Edoardo: "a volte vengono riproposte domande
   simili a quelle che ci sono già... devono essere capite le domande già presenti e se ne devono fare di nuove". Tre cose
   in AI.suggestDiscussion quando arriva avoid: (1) il prompt elenca le domande presenti come "punti già coperti" e vieta lo
