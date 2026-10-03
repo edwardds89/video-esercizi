@@ -221,6 +221,51 @@
     var res = EX.check({ type: item.kind, data: item.data }, value, { strict: !!item.strict });
     return { correct: !!res.correct, frac: res.correct ? 1 : 0, detail: res.detail };
   }
+  /** v180: una sola battitura sbagliata (una lettera cambiata, in più, in meno o due scambiate). */
+  function oneEdit(a, b) {
+    if (a === b) return false;
+    var la = a.length, lb = b.length;
+    if (Math.abs(la - lb) > 1) return false;
+    var i = 0; while (i < la && i < lb && a.charAt(i) === b.charAt(i)) i++;
+    if (la === lb) {
+      if (a.slice(i + 1) === b.slice(i + 1)) return true;                                   // una lettera cambiata
+      return a.charAt(i) === b.charAt(i + 1) && a.charAt(i + 1) === b.charAt(i) && a.slice(i + 2) === b.slice(i + 2);   // due scambiate
+    }
+    return la > lb ? a.slice(i + 1) === b.slice(i) : a.slice(i) === b.slice(i + 1);         // una in più / una in meno
+  }
+  /** v180 (Edoardo, "maestea" per "maestra": 'solo una lettera era sbagliata e perde il punto, non perché non sapesse la
+   *  parola ... oppure si rischia di far passare tutti? l'importante qui era azzeccare la -a finale').
+   *  true = la risposta sbagliata sembra un ERRORE DI BATTITURA e merita un "controlla come hai scritto" (NON viene
+   *  accettata: si riprova). Regole strette, per non regalare il punto di grammatica:
+   *  - solo dove si scrive (gap); ogni spazio è giusto oppure ha UNA battitura sbagliata;
+   *  - la parola giusta ha almeno 5 lettere;
+   *  - l'ULTIMA lettera scritta è quella giusta (in italiano la desinenza è quasi sempre il punto: maestro/maestra,
+   *    parlo/parla, ragazza/ragazze non sono battiture);
+   *  - quello che ha scritto non è una parola già presente nella domanda (es. la forma base data come spunto). */
+  function typoOf(item, value) {
+    if (!item || item.kind !== 'gap' || !item.data) return false;
+    var norm = function (x) { return String(x == null ? '' : x).toLowerCase().replace(/\s+/g, ' ').trim(); };
+    var runs = EX.gapRuns(item.data), vals = Array.isArray(value) ? value : [value];
+    if (!runs.length || vals.length !== runs.length) return false;
+    var shown = {}; (item.data.tokens || []).forEach(function (t) { shown[norm(t).replace(/[.,;:!?()«»"']/g, '')] = 1; });
+    var typos = 0;
+    for (var k = 0; k < runs.length; k++) {
+      // parola per parola: in "ragazze belle" ogni parola ha la SUA desinenza ("ragazza belle" non è una battitura)
+      var ww = norm(runs[k].answer).replace(/[.,;:!?]+$/, '').split(' '), gw = norm(vals[k]).split(' ');
+      if (ww.length !== gw.length) return false;
+      for (var j = 0; j < ww.length; j++) {
+        var want = ww[j], got = gw[j];
+        if (got === want) continue;
+        if (want.length < 5 || !got) return false;
+        if (got.charAt(got.length - 1) !== want.charAt(want.length - 1)) return false;
+        if (shown[got]) return false;
+        if (!oneEdit(got, want)) return false;
+        typos++;
+      }
+    }
+    if (typos > 1) return false;   // due parole sbagliate non sono più una svista
+    return typos > 0;
+  }
   /** Testo della soluzione per la rivelazione sullo schermo. */
   function solutionText(item) {
     if (item.kind === 'match') return item.pairs.map(function (p) { return p.a + ' ↔ ' + p.b; }).join(' · ');
@@ -268,6 +313,6 @@
   }
 
   return { makePin: makePin, validPin: validPin, MODES: MODES, pointsFor: pointsFor, newState: newState, reduce: reduce, kick: kick, leaderboard: leaderboard, memBus: memBus, localBus: localBus,
-    ITEM_KINDS: ITEM_KINDS, itemLabel: itemLabel, buildItem: buildItem, pubItem: pubItem, checkItem: checkItem, gapText: gapText, solutionText: solutionText, shuffleArr: shuffleArr, wire: wire,
+    ITEM_KINDS: ITEM_KINDS, itemLabel: itemLabel, buildItem: buildItem, pubItem: pubItem, checkItem: checkItem, typoOf: typoOf, gapText: gapText, solutionText: solutionText, shuffleArr: shuffleArr, wire: wire,
     tpNew: tpNew, tpUndo: tpUndo, tpJoin: tpJoin, tpOpen: tpOpen, tpAnswer: tpAnswer, tpAllAnswered: tpAllAnswered, tpReveal: tpReveal };
 });

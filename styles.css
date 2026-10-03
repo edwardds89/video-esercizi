@@ -1846,3 +1846,15 @@ a.btnlink.primary:hover{background:#185dc9}
 .rv-item.big .rv-pie span{width:120px;height:120px;font-size:40px}
 .rv-item.big .rv-pietxt{font-size:28px}
 .rv-item.big .rv-statbtn{font-size:18px;padding:8px 18px}
+
+/* v180: invito a ricontrollare la battitura */
+.chp-typo{margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff4e5;border:1px solid #f5c27a;color:#6b3d00;font-weight:600;text-align:center}
+
+/* v180: nella revisione "una alla volta" la torta sta di lato, piccola (a schermo intero sotto non ci stava) */
+@media (min-width: 900px) {
+  .rv-item.big { position: relative; }
+  .rv-item.big .rv-piebox { position: absolute; right: 18px; top: 18px; flex-direction: column; gap: 8px; margin: 0; padding: 12px 14px; background: #fff; border: 1px solid #e3e7ef; border-radius: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.10); max-width: 190px; z-index: 2; }
+  .rv-item.big .rv-pie { width: 120px; height: 120px; }
+  .rv-item.big .rv-pie span { width: 78px; height: 78px; font-size: 24px; }
+  .rv-item.big .rv-pietxt { font-size: 15px; text-align: center; }
+}

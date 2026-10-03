@@ -8749,8 +8749,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const v = getVal();
       if (v == null) return toast(opts.answerFirst || 'Prima rispondi · Answer first');
       send.disabled = true;
-      $$('button, input', box).forEach(function (x) { if (x !== send) x.disabled = true; });
-      opts.onSubmit(v);
+      const locked = $$('button, input', box).filter(function (x) { return x !== send && !x.disabled; });
+      locked.forEach(function (x) { x.disabled = true; });
+      // v180: onSubmit può rispondere 'retry' (errore di battitura: "controlla come hai scritto") → si riscrive qui
+      if (opts.onSubmit(v) === 'retry') { send.disabled = false; locked.forEach(function (x) { x.disabled = false; }); const f = box.querySelector('input[type=text]'); if (f) f.focus(); }
     });
     box.appendChild(send);
     if (opts.inline) {
@@ -8881,6 +8883,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     let i = 0, score = 0, right = 0, streak = 0;
     const pts = VLChal.pointsFor(mode);
     let last = null;
+    const typoAsked = {};   // v180
     const skipped = {};   // v177: domande saltate (per posizione nel set): tornano in fondo, una volta sola
     const sendScore = function (done) {
       me.conn.send('score', { id: me.id, nick: me.nick, score: score, right: right, at: i, total: items.length, done: !!done, last: last });
@@ -8905,6 +8908,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       stage.appendChild(trBar((trValid(item) || {}).t, null, item.kind));   // v166, v169
       stage.appendChild(chpItemInput(pub, { onSubmit: function (v) {
         const res = VLChal.checkItem(item, v, pub);
+        // v180: una battitura sbagliata (non la desinenza) = un invito a ricontrollare, una volta sola per domanda
+        if (!res.correct && !typoAsked[orig[i]] && VLChal.typoOf(item, v)) {
+          typoAsked[orig[i]] = 1;
+          let n = stage.querySelector('.chp-typo'); if (!n) { n = el('div', { class: 'chp-typo' }); stage.appendChild(n); }
+          n.textContent = '✏️ Quasi! Controlla come hai scritto: c\'è un errore di battitura · Almost! Check your spelling: there is a typo';
+          return 'retry';
+        }
         last = { i: orig[i], a: chalAnswerText(item, v, pub).slice(0, 300), ok: !!res.correct, frac: res.frac };   // v135: per il report del prof
         if (res.frac === 1) { right++; score += pts(streak, Date.now() - t0); streak++; if (typeof playWinSound === 'function') playWinSound(); }
         else if (res.frac > 0) { score += Math.round(100 * res.frac); streak = 0; }
@@ -9283,7 +9293,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     it: { name: 'Il tuo nome e cognome', namePh: 'Nome e cognome', privacy: 'Il tuo nome e le tue risposte li vede solo il docente. Non serve un account.', start: 'Inizia ▶', exercises: 'esercizi', needName: 'Scrivi nome e cognome',
       check: 'Controlla', retry: '✗ Non è giusto: riprova.', almost: '✗ Quasi ({p}% giusto): riprova.', ok: '✓ Giusto!', okLate: '✓ Giusto al secondo tentativo', wrong: '✗ Sbagliato', solution: 'Soluzione: ', next: 'Avanti ▶', result: 'Vedi il risultato ▶',
       review: 'Da ripassare', youWrote: 'Hai scritto: ', correct: 'Giusto: ', again: '↻ Rifai da capo', accents: ' Attenzione agli accenti (è ≠ e).', answerFirst: 'Prima rispondi', wrongPh: 'Scrivi la parola giusta', missPh: 'La parola che manca', scrHint: 'Tocca le parole qui sotto nell’ordine giusto',
-      hint: '💡 Aiuto', typeIt: '✗ Non ancora. La risposta giusta è:', typeIt2: 'Scrivila qui sotto per andare avanti.', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
+      typo: '✏️ Quasi! Controlla come hai scritto: c\'è un errore di battitura.', hint: '💡 Aiuto', typeIt: '✗ Non ancora. La risposta giusta è:', typeIt2: 'Scrivila qui sotto per andare avanti.', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
       hExtraA: 'La parola in più è nella prima metà della frase', hExtraB: 'La parola in più è nella seconda metà della frase', hScr: 'La frase comincia con «{w}»', hMatch: 'Una coppia giusta: {w}', hMc: 'Ho tolto {n} risposte sbagliate', okHelp: '✓ Giusto, con l\'aiuto', koHelp: '✗ Sbagliato anche con l\'aiuto',
       me: '📚 I miei compiti', meSub: 'Entra con la tua email: ritrovi i compiti fatti e gli errori da ripassare, dal telefono o dal PC.', meOpt: '👤 Entra per ritrovare i tuoi compiti (facoltativo)', signedAs: 'Collegato come {e}', logout: 'Esci', email: 'La tua email', sendCode: 'Inviami il codice', codeSent: 'Ti ho mandato un codice a {e}: scrivilo qui (guarda anche nello spam).', code: 'Codice', enter: 'Entra', badCode: 'Codice sbagliato o scaduto', none: 'Non hai ancora compiti collegati al tuo profilo.', review2: 'Rivedi', redo: 'Rifai', done2: 'consegnato', inProgress: 'in corso', yourName: 'Nome e cognome', backList: '← I miei compiti', linked: '{n} compiti fatti su questo dispositivo collegati al tuo profilo',
       waitTitle: 'Sei dentro! ✓', waitMsg: 'Aspetta: il quiz parte quando lo dice il docente…', ended: 'La sessione è finita: il docente ha chiuso il quiz.', timeUp: '⏰ Tempo scaduto!', stopped: '⏹ Il docente ha fermato il quiz.',
@@ -9293,7 +9303,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. You don\'t need an account.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
       check: 'Check', retry: '✗ Not quite: try again.', almost: '✗ Almost ({p}% right): try again.', ok: '✓ Correct!', okLate: '✓ Correct on the second try', wrong: '✗ Wrong', solution: 'Answer: ', next: 'Next ▶', result: 'See your result ▶',
       review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
-      hint: '💡 Hint', typeIt: '✗ Not yet. The right answer is:', typeIt2: 'Write it below to continue.', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
+      typo: '✏️ Almost! Check your spelling: there is a typo.', hint: '💡 Hint', typeIt: '✗ Not yet. The right answer is:', typeIt2: 'Write it below to continue.', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
       hExtraA: 'The extra word is in the first half of the sentence', hExtraB: 'The extra word is in the second half of the sentence', hScr: 'The sentence starts with «{w}»', hMatch: 'One right pair: {w}', hMc: 'I removed {n} wrong answers', okHelp: '✓ Correct, with the hint', koHelp: '✗ Wrong, even with the hint',
       me: '📚 My assignments', meSub: 'Sign in with your email: find the assignments you did and the mistakes to review, on your phone or computer.', meOpt: '👤 Sign in to keep your assignments (optional)', signedAs: 'Signed in as {e}', logout: 'Sign out', email: 'Your email', sendCode: 'Send me the code', codeSent: 'We sent a code to {e}: type it here (check your spam folder too).', code: 'Code', enter: 'Sign in', badCode: 'Wrong or expired code', none: 'No assignments linked to your profile yet.', review2: 'Review', redo: 'Do it again', done2: 'submitted', inProgress: 'in progress', yourName: 'First and last name', backList: '← My assignments', linked: '{n} assignments done on this device linked to your profile',
       waitTitle: 'You\'re in! ✓', waitMsg: 'Wait: the quiz starts when your teacher says so…', ended: 'The session is over: your teacher closed the quiz.', timeUp: '⏰ Time\'s up!', stopped: '⏹ Your teacher stopped the quiz.',
@@ -9891,6 +9901,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const ask = function () {
         const inputBox = chpItemInput(pub, { inline: true, mcOff: mcOff, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
           const res = VLChal.checkItem(item, v, pub);
+          // v180: errore di battitura = "controlla come hai scritto", non consuma il tentativo (una volta sola)
+          if (!res.correct && !cell.typo && VLChal.typoOf(item, v)) { cell.typo = 1; msg.className = 'as-msg no'; msg.textContent = T.typo; return 'retry'; }
           if (cell.tries.length < 30) cell.tries.push({ a: answerOf(item, v, pub).slice(0, 300), ok: !!res.correct });
           if (res.correct) {
             cell.ok = true; cell.how = 'solved';

@@ -1,5 +1,13 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- ERRORE DI BATTITURA = "CONTROLLA COME HAI SCRITTO" (v180, 3/10). Edoardo, "maestea" per "maestra": 'c'è un modo per
+  invitare lo studente a scrivere meglio se ha fatto un typo? ... oppure si rischia di far passare tutti? l'importante
+  qui era azzeccare la -a finale'. VLChal.typoOf(item, value): solo gap; una battitura sola (oneEdit: lettera cambiata,
+  in più, in meno, due scambiate); parola giusta ≥ 5 lettere; ULTIMA LETTERA GIUSTA (la desinenza è il punto di
+  grammatica: maestro/maestra NON è una battitura); non una parola già nella domanda. NON accetta la risposta: lo
+  studente la riscrive, una volta sola per domanda. Sfida al proprio ritmo (chpPlaySelf) e compiti (non consuma il
+  tentativo). chpItemInput: onSubmit che restituisce 'retry' riapre le caselle. NON c'è nella sfida guidata (lì corregge
+  il computer del prof a domanda chiusa). Limite noto: forme che differiscono dentro la parola (abbiamo/abbiano).
 - IMPORTA DA WORDWALL (v179, 3/10). Edoardo: "questo pulsante funziona su wordwall?" + link a una sua attività. Guardata
   dal vero (wordwall.net/resource/116013390, Match up): window.pageData ha activityGuid/authorUserId/activityTitle; il
   contenuto è https://user.cdn.wordwall.net/content-models/<authorUserId>/<guid>.json (CORS aperto dalla pagina) =
