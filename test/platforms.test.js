@@ -92,7 +92,7 @@ test('dati incoerenti (risposta non al posto del segnaposto) → skipped, non un
   assert.strictEqual(r.skipped.length, 1);
 });
 test('piattaforma sconosciuta → errore chiaro', function () {
-  assert.throws(function () { P.convert({ site: 'wordwall' }); }, /non supportata/);
+  assert.throws(function () { P.convert({ site: 'kahoot' }); }, /non supportata/);
 });
 test('islSlim: dalla risorsa ISL al payload piccolo, domande nascoste escluse', function () {
   const s = P.islSlim({ resourceId: 9, videoTitle: 'T', videoUrl: 'u', duration: 10, levels: [{ text: 'A2' }], skips: [], questions: [{ questionType: 'Q_SORTABLE', time: 3, hint: 1, questionData: { sentence: 'a b c d' } }, { hidden: true, questionType: 'Q_SORTABLE', time: 4, questionData: {} }] });
@@ -187,6 +187,24 @@ test('Wayground: MSQ con più giuste, risposte solo-immagine → skipped', funct
     { id: 'c', type: 'MSQ', html: 'Quale?', options: [{ id: '1', text: 'x' }, { id: '2', text: 'y' }], answer: [1] }] });
   assert.strictEqual(r.set.items.length, 1); assert.strictEqual(r.set.items[0].data.correct, 1);
   assert.strictEqual(r.skipped.length, 2);
+});
+
+test('Wordwall: coppie con ___ → completa gli spazi (con foto), coppie semplici → abbina', function () {
+  const model = { templateId: 3, content: { pairs: [
+    { primary: { text: '<n>rimango</n>', image: null }, secondary: { text: '<n>Io (rimanere) ___ a scuola nel pomeriggio.</n>', image: 'user/1/abc' } },
+    { primary: { text: '<n>dici</n>' }, secondary: { text: '<n>Tu non (dire) ___ la verità!</n>' } },
+    { primary: { text: '<n>casa</n>' }, secondary: { text: '<n>house</n>' } }, { primary: { text: '<n>cane</n>' }, secondary: { text: '<n>dog</n>' } } ] } };
+  const slim = P.wwSlim({ activityId: 7, activityTitle: 'Presente' }, model);
+  assert.strictEqual(slim.site, 'wordwall'); assert.strictEqual(slim.pairs.length, 4); assert.strictEqual(slim.pairs[0].a, 'rimango');
+  const r = P.convert(slim, { lang: 'it' });
+  assert.strictEqual(r.set.items.length, 3);
+  assert.strictEqual(r.set.items[0].kind, 'gap'); assert.strictEqual(r.set.items[0].sentence, 'Io (rimanere) rimango a scuola nel pomeriggio.');
+  assert.deepStrictEqual(r.set.items[0].data.answers, ['rimango']);
+  assert.strictEqual(r.set.items[0].image, 'https://user.cdn.wordwall.net/content-images/user/1/abc');
+  assert.strictEqual(r.set.items[1].sentence, 'Tu non (dire) dici la verità!');
+  assert.strictEqual(r.set.items[2].kind, 'match'); assert.strictEqual(r.set.items[2].pairs.length, 2);
+  assert.strictEqual(r.set.importedFrom.site, 'wordwall');
+  assert.strictEqual(P.wwSlim({ activityId: 7 }, { templateId: 5, content: { questions: [] } }), null);
 });
 
 console.log('\n' + passed + ' test passati' + (process.exitCode ? ', con errori' : ''));
