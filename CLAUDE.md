@@ -1,5 +1,9 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- "APRI" È UN LINK VERO (v174, 3/10). Edoardo: "voglio poter cliccare con il destro e aprire in un'altra scheda, oppure
+  con il click centrale della rotella". Miniatura e titolo erano già link (v115, localOpenHref); il pulsante "▶ Apri"
+  no. Ora "▶ Apri", "▶ Gioca" e "🖨 Foglio A4" sono <a class="btnlink"> con href: clic sinistro come prima (stessa scheda),
+  destro / rotella / Ctrl+clic = nuova scheda. Le esercitazioni non hanno "Apri" (si aprono da Modifica).
 - TELEFONO DELLA SFIDA BILINGUE (v173, 2/10). Gli studenti PoliMi non parlano italiano e il telefono della sfida era tutto
   in italiano ("Completa gli spazi", "spazio 1", "Invia", "Rispondi al tuo ritmo…"); Edoardo ha detto sì alla proposta.
   Tutte le scritte del lato studente (ingresso, risposta, esito, attesa, classifica finale) ora sono "italiano · English";

@@ -1336,7 +1336,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('div', { class: 'meta', text: t.label + ' · ' + nItems + ' elementi' + (th ? ' · tema ' + th.name : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
             publishNudge(ls),
             el('div', { class: 'actions' },
-              el('button', { class: 'small primary', text: '▶ Gioca', onclick: openA }),
+              el('a', { class: 'btnlink small primary', href: hrefA, text: '▶ Gioca', title: 'Tasto destro o rotella del mouse: apri in un\'altra scheda', onclick: function (e) { if (e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); openA(); } }),
               el('button', { class: 'small', text: '✎ Modifica', onclick: function () { openActEditor(ls.id); } }),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'attivita') + '.json', JSON.stringify(actPayload(ls), null, 1)); } }),
               publishBtn(ls),
@@ -1379,7 +1379,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('div', { class: 'meta', text: 'Conversazione \u00b7 ' + (u.questions || []).length + ' domande \u00b7 livello ' + (u.level || 'B1') + (u.focus ? ' \u00b7 ' + u.focus : '') + (ls.updatedAt ? ' \u00b7 ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
             publishNudge(ls),
             el('div', { class: 'actions' },
-              el('button', { class: 'small primary', text: '\uD83D\uDDA8 Foglio A4', onclick: openC }),
+              el('a', { class: 'btnlink small primary', href: hrefC, text: '\uD83D\uDDA8 Foglio A4', title: 'Tasto destro o rotella del mouse: apri in un\'altra scheda', onclick: function (e) { if (e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); openC(); } }),
               el('button', { class: 'small', text: '\u270E Modifica', onclick: function () { openConvEditor(ls.id); } }),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'conversazione') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, conv: ls.conv }, null, 1)); } }),
               publishBtn(ls),
@@ -1398,7 +1398,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('div', { class: 'meta', text: (ls.exercises || []).length + ' esercizi · ' + fmtMin(eff) + (eff < ls.duration - 1 ? ' (video ' + fmtMin(ls.duration) + ')' : '') + (LEVEL_LABELS[ls.levelBand] ? ' · ' + LEVEL_LABELS[ls.levelBand] : '') + (audienceLabel(ls.audience) ? ' · ' + audienceLabel(ls.audience) : '') + (ls.ai && ls.ai.model ? ' · AI' : '') + (ls.updatedAt ? ' · ' + new Date(ls.updatedAt).toLocaleDateString('it-IT') : '') }),
           publishNudge(ls),
           el('div', { class: 'actions' },
-            el('button', { class: 'small primary', text: '▶ Apri', onclick: open }),
+            el('a', { class: 'btnlink small primary', href: href, text: '▶ Apri', title: 'Tasto destro o rotella del mouse: apri in un\'altra scheda', onclick: function (e) { if (e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); open(); } }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { if (lessonEditLocked()) return openEditLockedDialog(ls); openEditor(ls.id); } }),
             el('button', { class: 'small', text: '🔗 Condividi', title: 'Link studente', onclick: function () { openShare(ls); } }),   // v78
             el('button', { class: 'small', text: '📋 Assegna', title: 'Assegna a una classe come compito: vedi chi l\'ha fatto e cosa ha sbagliato', onclick: function () { openAssignDialog(ls); } }),   // v125
