@@ -7257,7 +7257,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     } });
     const on = function () {
       if (!document.body.contains(btn)) { document.removeEventListener('fullscreenchange', on); document.removeEventListener('webkitfullscreenchange', on); return; }
-      btn.textContent = isFs() ? '🗗 Esci da schermo intero' : '⛶ Schermo intero';
+      btn.textContent = isFs() ? '✕ Esci da schermo intero' : '⛶ Schermo intero';
     };
     document.addEventListener('fullscreenchange', on); document.addEventListener('webkitfullscreenchange', on);
     return btn;

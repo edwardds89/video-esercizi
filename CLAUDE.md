@@ -1,5 +1,8 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- SCHERMO INTERO CENTRATO (v188, 3/10). Edoardo: "non mi piace che ci sia tanto spazio sotto, mettilo centrato".
+  .as-card:fullscreen è una colonna flex e #as-box ha margin:auto: l'esercizio sta al centro in verticale, i due bottoni
+  restano in alto. L'icona "🗗" sul Mac non si vedeva bene: ora "✕ Esci da schermo intero".
 - SCHERMO INTERO IN "FAI QUI" (v187, 3/10). Edoardo: "manca il pulsante schermo intero". asFsBtn(card): bottone accanto a
   "◀ Torna all'esercitazione" (#as-back, che sta DENTRO .as-card e quindi resta visibile), manda a tutto schermo .as-card;
   CSS .as-card:fullscreen ingrandisce frase, opzioni e bottoni. "Torna" esce dallo schermo intero. Solo in Fai qui: nei
