@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- FEEDBACK CON LA FRASE ANCORA VISIBILE (v185, 3/10). Edoardo: "non mi piace questo feedback perché viene tolta la frase e
+  non si vede più la scelta corretta". In compiti / Fai qui, done() ora mette sotto "Correct!" (riquadro .chp-reveal.slim)
+  la foto e chpSolvedNode(item): la frase con la soluzione nella casella verde (.chp-blank.fill; chpQNode(text, fills)) e,
+  nella scelta multipla, le 4 opzioni con quella giusta accesa (.good, ✓) e le altre sbiadite. La riga "Answer: ..." non
+  serve più. NON usare la classe "right" sui pulsanti: esiste già altrove e li rimpicciolisce. Sfida dal vivo non toccata.
 - LA DOMANDA IN EVIDENZA (v184, 3/10). Edoardo, "Fai qui" con scelta multipla: "voglio che la frase in questione sia più
   outstanding". chpQNode(text): riquadro azzurro, testo grande e centrato (.chp-qbig); "_____" diventa una casella
   tratteggiata con "?" (.chp-blank); con una freccia ("partenza -> da completare") la partenza va sopra piccola e la frase

@@ -1880,3 +1880,12 @@ a.btnlink.primary:hover{background:#185dc9}
 .chp-qbig .chp-qarrow{font-size:18px;color:#8a9ab8;line-height:1.2;margin:2px 0}
 .chp-blank{display:inline-block;min-width:2.6em;margin:0 .18em;padding:0 .5em;border-radius:10px;background:#fff;border:2px dashed #3b6fe0;color:#3b6fe0;font-weight:800;line-height:1.25}
 .chp-q.chp-inline{font-size:clamp(20px,2.6vw,28px);font-weight:700;padding:14px 14px;border-radius:16px;background:linear-gradient(180deg,#f3f7ff,#e9f0ff);border:2px solid #c9d8f5;margin-bottom:14px}
+
+/* v185: feedback con la frase e la risposta giusta ancora visibili */
+.chp-reveal.slim{padding:12px 14px;margin:10px 0}
+.chp-blank.fill{border-style:solid;border-color:#1c7c3e;background:#e7f6ec;color:#1c7c3e}
+.chp-solved .chp-mc{cursor:default}
+.chp-solved .chp-mc.good{outline:4px solid #1c7c3e;outline-offset:2px;box-shadow:0 0 0 8px rgba(28,124,62,.15)}
+.chp-solved .chp-mc.off{opacity:.3}
+.chp-qsol{color:#1c7c3e}
+.chp-qpair{font-size:clamp(17px,2.2vw,24px);font-weight:700;margin:4px 0}

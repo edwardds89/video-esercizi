@@ -8637,11 +8637,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
    *  outstanding"): la domanda sta in un riquadro suo, grande e centrata; lo spazio "_____" è una casella evidenziata.
    *  Con una freccia ("frase di partenza -> frase da completare") la partenza va sopra, più piccola, e quella da
    *  completare sotto, grande: è lì che si guarda. */
-  function chpQNode(text) {
+  function chpQNode(text, fills) {
     const box = el('div', { class: 'chp-q chp-qbig' });
+    let fk = 0;
     const fill = function (node, t) {
       String(t).split(/(_{3,})/).forEach(function (part) {
-        if (/^_{3,}$/.test(part)) node.appendChild(el('span', { class: 'chp-blank', text: '?' }));
+        if (/^_{3,}$/.test(part)) { const f = fills && fills[fk++]; node.appendChild(el('span', { class: 'chp-blank' + (f ? ' fill' : ''), text: f || '?' })); }
         else if (part) node.appendChild(document.createTextNode(part));
       });
       return node;
@@ -8652,6 +8653,38 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(el('div', { class: 'chp-qarrow', text: '↓' }));
       box.appendChild(fill(el('div', { class: 'chp-qto' }), m[2]));
     } else box.appendChild(fill(el('div', { class: 'chp-qto' }), text));
+    return box;
+  }
+  /** v185: dopo la risposta la frase resta sullo schermo, con la soluzione al suo posto (e, nella scelta multipla,
+   *  le opzioni con quella giusta accesa): prima spariva tutto e restava solo "Correct!". */
+  function chpSolvedNode(item) {
+    const box = el('div', { class: 'chp-item chp-solved' });
+    const d = item.data || {};
+    if (item.kind === 'mc') {
+      const q = String(d.question || ''), nb = (q.match(/_{3,}/g) || []).length;
+      const right = d.options[d.correct];
+      if (q) box.appendChild(chpQNode(q, nb === 1 ? [right] : null));
+      const grid = el('div', { class: 'chp-mcgrid' });
+      (d.options || []).forEach(function (o, k) {
+        if (!o) return;
+        grid.appendChild(el('div', { class: 'chp-mc o' + k + (k === d.correct ? ' good' : ' off') }, el('span', { class: 'lt', text: k === d.correct ? '✓' : 'ABCD'[k] }), el('span', { class: 'tx', text: o })));
+      });
+      box.appendChild(grid);
+    } else if (item.kind === 'gap' || item.kind === 'gapbank') {
+      box.appendChild(chpQNode(VLChal.gapText(item), EX.gapRuns(d).map(function (r) { return r.answer; })));
+    } else if (item.kind === 'match') {
+      const q = el('div', { class: 'chp-q chp-qbig' });
+      item.pairs.forEach(function (pr) { q.appendChild(el('div', { class: 'chp-qpair' }, el('span', { text: pr.a }), el('span', { class: 'chp-qarrow', text: ' ↔ ' }), el('span', { class: 'chp-blank fill', text: pr.b }))); });
+      box.appendChild(q);
+    } else if (item.kind === 'missing' && d.tokens) {
+      const q = el('div', { class: 'chp-q chp-qbig' }), line = el('div', { class: 'chp-qto' });
+      d.tokens.forEach(function (t, j) { if (j === d.missingIndex) line.appendChild(el('span', { class: 'chp-blank fill', text: t })); else line.appendChild(document.createTextNode((j ? ' ' : '') + t + ' ')); });
+      q.appendChild(line); box.appendChild(q);
+    } else {
+      const q = el('div', { class: 'chp-q chp-qbig' });
+      q.appendChild(el('div', { class: 'chp-qto chp-qsol', text: VLChal.solutionText(item) }));
+      box.appendChild(q);
+    }
     return box;
   }
   function chpItemInput(pub, opts) {
@@ -10013,11 +10046,12 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         S.assign.timer = setTimeout(function () { assignSend(false); }, 400);
         box.innerHTML = '';
         box.appendChild(head());
-        const fb = el('div', { class: 'chp-reveal ' + (ok ? 'ok' : 'no soft') },
+        const fb = el('div', { class: 'chp-reveal slim ' + (ok ? 'ok' : 'no soft') },
           el('div', { class: 'big', text: ok ? (cell.hints ? T.okHelp : cell.tries.length > 1 ? T.okLate : T.ok) : kindWord(a.lesson.uiLang) }),
-          ok ? null : el('div', { class: 'sol', text: T.solution + VLChal.solutionText(item) }),
           item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null);
         box.appendChild(fb);
+        if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
+        box.appendChild(chpSolvedNode(item));   // v185
         const next = el('button', { class: 'primary big chp-send', text: i + 1 < items.length ? T.next : T.result, onclick: function () { i++; step(); } });
         box.appendChild(next);
         setTimeout(function () { next.focus(); }, 30);
