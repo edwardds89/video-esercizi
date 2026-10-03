@@ -1358,6 +1358,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('div', { class: 'actions' },
               el('button', { class: 'small primary', text: '📋 Assegna', title: 'Compito o esercitazione per una classe: vedi chi l\'ha fatto e cosa ha sbagliato', onclick: function () { openAssignDialog(ls); } }),   // v126
               el('button', { class: 'small', text: '📱 Sfida in classe', title: 'Gioco dal vivo con classifica, come Kahoot', onclick: function () { openChalNew(ls.id); } }),
+              el('button', { class: 'small', text: '▶ Fai qui', title: 'Fai gli esercizi su questo schermo, senza QR e senza classe: per una lezione individuale o per provarli (non salva risultati)', onclick: function () { playSetHere(ls, true); } }),   // v192
               el('button', { class: 'small', text: '✎ Modifica', onclick: openS }),
               folderSelect(ls),
               el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title || 'sfida') + '.json', JSON.stringify({ v: 1, id: ls.id, title: ls.title, chal: ls.chal }, null, 1)); } }),
@@ -7310,14 +7311,14 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     document.addEventListener('fullscreenchange', on); document.addEventListener('webkitfullscreenchange', on);
     return btn;
   }
-  function playSetHere(ls) {
+  function playSetHere(ls, fromList) {
     if (!ls || !ls.chal || !chalSetReady(ls)) return toast('Il set è vuoto: aggiungi almeno un esercizio');
     const lesson = asgPayload(ls);
     show('assign');
     document.body.classList.add('as-local');
     const box = $('#as-box'); box.innerHTML = '';
     const oldBack = $('#as-back'); if (oldBack) oldBack.remove();
-    box.parentNode.insertBefore(el('div', { id: 'as-back', style: 'margin-bottom:10px' }, el('button', { class: 'small', text: '◀ Torna all\'esercitazione', onclick: function () { if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document); document.body.classList.remove('as-local'); const b = $('#as-back'); if (b) b.remove(); clearTimeout(S.assign && S.assign.timer); S.assign = null; openChalSet(ls.id); } }), asFsBtn(box.parentNode)), box);
+    box.parentNode.insertBefore(el('div', { id: 'as-back', style: 'margin-bottom:10px' }, el('button', { class: 'small', text: fromList ? '◀ Torna alle lezioni' : '◀ Torna all\'esercitazione', onclick: function () { if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document); document.body.classList.remove('as-local'); const b = $('#as-back'); if (b) b.remove(); clearTimeout(S.assign && S.assign.timer); S.assign = null; if (fromList) { show('home'); renderHome(); } else openChalSet(ls.id); } }), asFsBtn(box.parentNode)), box);
     S.assign = { local: true, backId: ls.id, be: null, code: '', id: VLClass.uuid(), name: '', detail: {}, lesson: lesson, status: 'local', timer: null, err: '' };
     playAssignSet({ title: ls.title || 'Esercitazione', code: '', lesson: lesson });
   }

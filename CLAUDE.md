@@ -1,5 +1,8 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- "FAI QUI" ANCHE SULLA SCHEDA DEL SET (v192, 3/10). Edoardo: "perché non c'è l'opzione 'fai qui' in questa schermata?".
+  Il bottone stava solo dentro l'editor del set (#cs-here). Ora è anche sulla scheda in "Le tue lezioni", dopo "Sfida in
+  classe": playSetHere(ls, true), e il bottone di ritorno diventa "◀ Torna alle lezioni" (torna alla lista, non all'editor).
 - CASELLA DA SCRIVERE: TESTO AL CENTRO, LARGHEZZA ELASTICA (v191, 3/10). Edoardo: "la scritta 'prendi' dovrebbe essere
   centrata... ricorda sempre che lo spazio deve essere flessibile qualora la parola fosse troppo lunga". .chp-gap.inline ha
   text-align:center e max-width:100%; a ogni tasto la larghezza diventa max(base, lettere*1.2+2)ch. La larghezza di
