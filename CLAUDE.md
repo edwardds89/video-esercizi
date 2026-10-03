@@ -1,5 +1,31 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- REPORT E REVISIONE CON LA ROTELLA, IN SECONDO PIANO (v178, 3/10). Edoardo: "voglio poter cliccare anche con la rotella
+  del mouse in modo che la scheda si apra ma non venga messa in primo piano". Erano <button> + window.open (la rotella
+  non faceva niente, e window.open porta sempre davanti). Ora sono <a class="btnlink" target="_blank"> con href vero:
+  #chal-report, #chal-report2, #chal-review, "Revisione" dentro il report, "📊 Report" di sfide e compiti in Classi.
+  La revisione salva la lista in localStorage a pointerdown/keydown/contextmenu (prima del clic). chalOpenReport resta
+  ma non è più collegata ai pulsanti.
+  Stessa versione, TORTA DELLE RISPOSTE GIUSTE (Edoardo: "un pulsante che mi permetta di mostrare agli studenti in
+  percentuale quanti di loro nella classe hanno azzeccato, magari un grafico a torta"): chalStats(log, n, giocatori) ->
+  [{ok, n}] viaggia in pl-chalrev.stats; chalReview(list, host, stats) mostra per ogni domanda "📊 Quanti l'hanno
+  azzeccata?" (chiuso di default) e in alto "📊 Mostra le %". Chi non ha risposto conta come sbagliato. Sui telefoni
+  degli studenti (revisione dell'evento 'end') le statistiche NON ci sono.
+- NIENTE TITOLO/AUTORE SOTTO LE FOTO (v177, 3/10). Edoardo, telefono: 'perché c'è scritto "fountain pen" etc etc?
+  rimuovi quei testi, non te li avevo mai chiesti'. Li avevo messi io nella v139 per l'attribuzione (CC BY, Unsplash).
+  Sotto la foto distraevano e SUGGERIVANO la risposta. Ora durante l'esercizio non c'è niente (sfida: telefono e schermo;
+  compiti). L'attribuzione resta, perché la licenza la chiede: noteCredit raccoglie gli autori e creditsNote li mostra in
+  una riga chiusa "📷 Foto · Photo credits (n)" a fine attività (classifica finale su telefono e schermo, fine compito).
+  Nell'editor del set l'insegnante li vede come prima. NON togliere creditsNote senza passare a foto senza obbligo.
+  Stessa versione, SALTA LA DOMANDA (Edoardo: "se non sa la risposta 4 e vuole andare alla 5 può farlo e poi la 4 gli
+  verrà riproposta alla fine ... solo nella modalità che ognuno fa per conto proprio"): in chpPlaySelf il pulsante
+  "Salta, la faccio dopo · Skip for now ⏭" sposta la domanda in fondo (items e orig insieme, così il report resta giusto).
+  Una volta sola per domanda, mai sull'ultima rimasta; saltare azzera la serie. Non c'è nei compiti né nella sfida guidata.
+- "SALTA IL VIDEO → PARLIAMONE" (v176, 3/10). Edoardo: 'durante il video ci sia il pulsante tipo "skip video" che ti fa
+  andare direttamente alla sezione "parliamone" qualora questa sezione sia disponibile'. #btn-skipvideo nella barra sotto
+  il video: visibile solo a video partito (st.phase === 'video') e solo se nella coda c'è un Parliamone con domande
+  (talkAhead; skipVideoSync gira a ogni studentTick). Due clic (il primo arma). Ferma il video, chiude l'esercizio aperto,
+  toglie dalla coda le sezioni prima del Parliamone, st.ended = true, advancePhase(). Test: e2e176.js.
 - STELLA SOLO A ESERCIZIO RISOLTO (v175, 3/10). Edoardo: nella "parola mancante" lo studente clicca per sbaglio su una
   parola invece che tra due parole e si ritrova la stella. Le frasi di "completa gli spazi" e "parola mancante" nascono
   con la classe .nostar: starSpan ignora il clic (e non lo ferma) finché c'è; markResult la toglie a risposta giusta.

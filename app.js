@@ -4628,8 +4628,42 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const next = (ls.cuts || []).filter(function (c) { return c.start > t && c.start - t <= 0.5; }).sort(function (a, b) { return a.start - b.start; })[0];
     if (next) scheduleJump(st, next, t, function (from) { return S.student === st ? cutTarget(ls, st, next, from) : from; });
   }
+  /** v176: la prima sezione "Parliamone" (con domande) che viene DOPO il video, e quante sezioni saltare per arrivarci. */
+  function talkAhead(st) {
+    let list = st.queue;
+    if (!list) { const f = lessonFlow(st.lesson); list = f.slice(f.findIndex(function (s) { return s.kind === 'video'; }) + 1); }
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].kind !== 'talk') continue;
+      const sec = talkSection(st.lesson, list[i].id);
+      if (sec && sec.questions.some(function (q) { return q.text; })) return i;
+    }
+    return -1;
+  }
+  /** v176 (Edoardo: 'voglio che durante il video ci sia il pulsante tipo "skip video" che ti fa andare direttamente alla
+   *  sezione "parliamone" qualora questa sezione sia disponibile'). Compare solo a video partito e solo se dopo c'è un Parliamone. */
+  function skipVideoSync() {
+    const b = $('#btn-skipvideo'), st = S.student; if (!b) return;
+    b.style.display = st && st.started && !st.ended && st.phase === 'video' && talkAhead(st) !== -1 ? '' : 'none';
+  }
+  $('#btn-skipvideo').addEventListener('click', function () {
+    const b = this, st = S.student; if (!st || !S.player) return;
+    // due clic: il primo arma (un tocco per sbaglio non deve far perdere il video e gli esercizi rimasti)
+    if (!b.dataset.arm) { b.dataset.arm = '1'; b.textContent = 'Sicuro? Clicca ancora per saltare'; setTimeout(function () { delete b.dataset.arm; b.textContent = '⏭ Salta il video → Parliamone'; }, 3000); return; }
+    delete b.dataset.arm; b.textContent = '⏭ Salta il video → Parliamone';
+    const k = talkAhead(st); if (k === -1) return;
+    if (!st.queue) { const f = lessonFlow(st.lesson); st.queue = f.slice(f.findIndex(function (s) { return s.kind === 'video'; }) + 1); }
+    st.queue.splice(0, k);   // dritti al Parliamone: le sezioni in mezzo (giochi) si saltano
+    S.player.pause();
+    st.replay = null; st.blocked = false; st.activeId = null; st.endPending = false;
+    $('#s-panel').innerHTML = '';
+    renderStudentTimeline(); renderProgress();
+    st.ended = true; st.talkIdx = 0;
+    b.style.display = 'none';
+    advancePhase();
+  });
   function studentTick() {
     const st = S.student; if (!st || !S.player) return;
+    skipVideoSync();
     const ls = st.lesson;
     if (st.warmAd) {
       // spot in corso (o in arrivo) durante le schede: gira in muto, niente cursore e niente esercizi
@@ -8032,10 +8066,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('span', { class: 'muted', text: (cls ? cls.name + ' · ' : '') + fmtDate(saved.created_at) })));
       }
       root.appendChild(el('h2', { style: 'margin-top:0', text: '📊 ' + R.title + ' · PIN ' + R.pin + (R.ended ? ' · chiusa' : ' · in corso') }));
-      root.appendChild(el('div', { class: 'row', style: 'margin:0 0 8px' }, el('button', { class: 'small', text: '📖 Revisione (nuova scheda)', onclick: function () {
-        try { localStorage.setItem('pl-chalrev', JSON.stringify({ title: R.title, at: Date.now(), list: R.items })); } catch (e) { return toast('Non riesco ad aprire la revisione'); }
-        window.open(location.pathname + location.search + '#chalrev', '_blank');
-      } })));
+      root.appendChild(el('div', { class: 'row', style: 'margin:0 0 8px' }, (function () {
+        const store = function () { try { localStorage.setItem('pl-chalrev', JSON.stringify({ title: R.title, at: Date.now(), list: R.items, stats: chalStats(R.log, R.items.length, (R.players || []).length) })); } catch (e) { toast('Non riesco ad aprire la revisione'); } };
+        return el('a', { class: 'btnlink small', href: location.pathname + location.search + '#chalrev', target: '_blank', text: '📖 Revisione (nuova scheda)', onpointerdown: store, onkeydown: store, oncontextmenu: store });
+      })()));
       root.appendChild(el('p', { class: 'hint', text: saved ? 'Report salvato nel tuo account. Clicca una casella per vedere la risposta.' : 'Solo per te: si aggiorna da sola. Clicca una casella per vedere la risposta.' }));
       const det = el('div', { class: 'rep-detail' });
       const tb = el('table', { class: 'rep-table' });
@@ -8083,9 +8117,19 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
    *  per frase, scegliere se una alla volta o tutte insieme, e vedere la foto"): due viste (📋 Tutte insieme / 1️⃣ Una alla
    *  volta con ◀ ▶ e frecce della tastiera), "Mostra tutte" ↔ "Nascondi tutte", ogni soluzione si apre e si richiude,
    *  e la foto dell'esercizio accanto alla frase. Lo stato (aperte/chiuse) resta passando da una vista all'altra. */
-  function chalReview(list, host) {
+  /** v178: per ogni domanda, quanti l'hanno azzeccata: [{ ok, n }] (n = studenti entrati; chi non ha risposto conta come no). */
+  function chalStats(log, nItems, nPlayers) {
+    const out = [];
+    for (let i = 0; i < nItems; i++) {
+      const cells = Object.keys((log && log[i]) || {}).map(function (k) { return log[i][k]; });
+      out.push({ ok: cells.filter(function (c) { return c && c.ok; }).length, n: Math.max(nPlayers || 0, cells.length) });
+    }
+    return out;
+  }
+  function chalReview(list, host, stats) {
     const box = el('div', { class: 'chal-review' });
-    const st = { mode: 'all', i: 0, open: list.map(function () { return false; }) };
+    const st = { mode: 'all', i: 0, open: list.map(function () { return false; }), pie: list.map(function () { return false; }) };
+    const hasStats = Array.isArray(stats) && stats.some(function (x) { return x && x.n > 0; });
     const item = function (it, i, big) {
       // v160 (Edoardo: "quando clicco su soluzione la parola in verde appaia sul gap e non al posto della parola soluzione"):
       // negli esercizi con gli spazi la risposta si scrive DENTRO la frase, al posto della riga; il bottone resta un
@@ -8113,7 +8157,24 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const drawExp = function () { exp.style.display = it.x && st.open[i] ? '' : 'none'; };
       sol.addEventListener('click', function () { st.open[i] = !st.open[i]; drawQ(); drawSol(); drawExp(); head(); });
       drawQ(); drawSol(); drawExp();
-      const txt = el('div', { class: 'rv-body' }, q, sol, exp);
+      // v178 (Edoardo: 'un pulsante che mi permetta di mostrare agli studenti in percentuale quanti di loro nella classe
+      // hanno azzeccato, magari un grafico a torta'): NON sempre visibile, si apre con il suo pulsante, domanda per domanda
+      let pie = null;
+      const sx = hasStats && stats[i] && stats[i].n > 0 ? stats[i] : null;
+      if (sx) {
+        const pct = Math.round(100 * sx.ok / sx.n);
+        pie = el('div', { class: 'rv-stat' });
+        const drawPie = function () {
+          pie.innerHTML = '';
+          pie.appendChild(el('button', { class: 'rv-statbtn' + (st.pie[i] ? ' open' : ''), text: st.pie[i] ? '📊 Nascondi' : '📊 Quanti l\'hanno azzeccata?', onclick: function () { st.pie[i] = !st.pie[i]; drawPie(); head(); } }));
+          if (!st.pie[i]) return;
+          const disc = el('div', { class: 'rv-pie', title: sx.ok + ' su ' + sx.n }, el('span', { text: pct + '%' }));
+          disc.style.background = 'conic-gradient(#2f9e44 0 ' + pct + '%, #f1b0b0 0)';
+          pie.appendChild(el('div', { class: 'rv-piebox' }, disc, el('div', { class: 'rv-pietxt' }, el('b', { text: sx.ok + ' su ' + sx.n }), el('span', { text: ' ' + (sx.ok === 1 ? 'ha risposto giusto' : 'hanno risposto giusto') }))));
+        };
+        drawPie();
+      }
+      const txt = el('div', { class: 'rv-body' }, q, sol, exp, pie);
       const row = el('div', { class: 'rv-item' + (big ? ' big' : '') });
       if (it.img) {
         const im = el('img', { class: 'rv-img', src: it.img, alt: '', title: it.c || '', referrerpolicy: 'no-referrer' });
@@ -8139,6 +8200,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (r && r.catch) r.catch(function () { toast('Il browser non permette lo schermo intero qui'); });
       } }));
       headBox.appendChild(el('button', { class: 'small rv-all', text: allOpen ? '🙈 Nascondi tutte' : '👁 Mostra tutte', onclick: function () { const v = !allOpen; st.open = st.open.map(function () { return v; }); paint(); } }));
+      if (hasStats) { const allPie = st.pie.every(Boolean); headBox.appendChild(el('button', { class: 'small rv-allpie', text: allPie ? '📊 Nascondi le %' : '📊 Mostra le %', title: 'Per ogni domanda: quanti studenti hanno risposto giusto', onclick: function () { const v = !allPie; st.pie = st.pie.map(function () { return v; }); paint(); } })); }
     };
     const go = function (d) { st.i = Math.max(0, Math.min(list.length - 1, st.i + d)); paint(); };
     const paint = function () {
@@ -8288,7 +8350,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   function chalScreenItem(item, pub) {
     const box = el('div', { class: 'chal-screen' });
     if (item.image) box.appendChild(el('img', { class: 'chal-img', src: item.image, alt: '' }));   // v127
-    if (item.image && item.imageCredit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + item.imageCredit }));   // v139
+    if (item.image && item.imageCredit) noteCredit(item.imageCredit);   // v139, v177: il nome dell'autore non sta più sotto la foto
     box.appendChild(el('div', { class: 'instr', text: ({
       // v170 (Edoardo, schermo della sfida: 'che vuol dire "ascolta"? e non ha senso dire "la parola mancante" qui'): le
       // consegne di EX.INSTRUCTIONS sono quelle delle video-lezioni (si ascolta il video). Nella sfida non c'è audio e la
@@ -8371,6 +8433,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('span', { class: 'sub', text: r.right + '/' + (CHAL.items.length || r.total || '?') + ' giuste' })));
       });
       if (!rows.length) box.appendChild(el('div', { class: 'hint', text: 'Nessuno ha partecipato.' }));
+      const crH = creditsNote(CHAL.items.map(function (it) { return it.image && it.imageCredit; }).filter(Boolean)); if (crH) box.appendChild(crH);
       return;
     }
     rows.forEach(function (r) {
@@ -8444,24 +8507,20 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     renderHome();
   }
   $('#chal-exit').addEventListener('click', closeChal);
-  $('#chal-report').addEventListener('click', chalOpenReport);
-  $('#chal-report2').addEventListener('click', chalOpenReport);
-  $('#chal-review').addEventListener('click', function () {
+  // v178 (Edoardo: "voglio poter cliccare anche con la rotella del mouse in modo che la scheda si apra ma non venga messa in
+  // primo piano"): una scheda in secondo piano la apre solo il browser, da un LINK vero; window.open la porta sempre
+  // davanti. Quindi Report e Revisione sono <a target="_blank"> con href: sinistro = nuova scheda davanti, rotella o
+  // Ctrl+clic = nuova scheda dietro, destro = menu del browser. I dati che la scheda legge si salvano a pointerdown.
+  const tabBase = function () { return location.pathname + location.search; };
+  ['#chal-report', '#chal-report2'].forEach(function (q) { $(q).href = tabBase() + '#chalrep'; });
+  $('#chal-review').href = tabBase() + '#chalrev';
+  const chalReviewStore = function () {
     if (!CHAL) return;
-    // v158 (Edoardo: 'voglio che quando clicco su "revisione" si apra un'altra tab'): la revisione va in una scheda sua
-    // (#chalrev), a tutta pagina, così la classifica resta dov'è. La lista passa da localStorage (stesso browser); se le
-    // immagini incollate non ci stanno si salva la versione leggera. Se il browser blocca la scheda, si apre qui sotto.
-    const pack = function (light) { return JSON.stringify({ title: CHAL.title, at: Date.now(), list: chalReviewList(CHAL.items, light) }); };
-    let saved = false;
-    try { localStorage.setItem('pl-chalrev', pack(false)); saved = true; } catch (e) { try { localStorage.setItem('pl-chalrev', pack(true)); saved = true; } catch (e2) { /* niente spazio */ } }
-    const w = saved ? window.open(location.pathname + location.search + '#chalrev', '_blank') : null;
-    if (w) return;
-    $('#chal-stagebox').style.display = '';
-    $('#chal-progress').textContent = ''; $('#chal-answered').textContent = ''; $('#chal-clock').textContent = '';
-    $('#chal-stage-actions').innerHTML = '';
-    chalReview(chalReviewList(CHAL.items), $('#chal-qbox'));
-    $('#chal-stagebox').scrollIntoView({ behavior: 'smooth' });
-  });
+    // la lista passa da localStorage (stesso browser); se le immagini incollate non ci stanno si salva la versione leggera
+    const pack = function (light) { return JSON.stringify({ title: CHAL.title, at: Date.now(), list: chalReviewList(CHAL.items, light), stats: chalStats(CHAL.log, CHAL.items.length, VLChal.leaderboard(CHAL.state).length) }); };
+    try { localStorage.setItem('pl-chalrev', pack(false)); } catch (e) { try { localStorage.setItem('pl-chalrev', pack(true)); } catch (e2) { toast('Non riesco a preparare la revisione: troppe immagini incollate'); } }
+  };
+  ['pointerdown', 'keydown', 'contextmenu'].forEach(function (ev) { $('#chal-review').addEventListener(ev, chalReviewStore); });
   /** Scheda della revisione (#chalrev): tutta la pagina, pronta da proiettare. */
   function renderChalRevTab() {
     show('report');
@@ -8472,7 +8531,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     document.title = '📖 ' + (R.title || 'Revisione');
     root.appendChild(el('p', { class: 'hint', style: 'margin:0 0 8px', text: R.title || '' }));
     const host = el('div'); root.appendChild(host);
-    chalReview(R.list, host).focus();
+    chalReview(R.list, host, R.stats).focus();
   }
   $('#chal-assign').addEventListener('click', function () {   // v135: gli stessi esercizi come compito con link
     const ls = CHAL && S.lessons[CHAL.setId];
@@ -8736,12 +8795,24 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (pub.kind === 'scramble') return Array.isArray(v) ? v.join(' ') : '';
     return '';
   }
+  // v177 (Edoardo, telefono: 'perché c'è scritto "fountain pen" etc etc? rimuovi quei testi'): sotto la foto usciva
+  // titolo e autore ("«Fountain pen, cheap» di realblades (CC BY-SA 2.0, flickr)"): distrae e spesso SUGGERISCE la
+  // risposta (il titolo dice cos'è l'oggetto). Durante l'esercizio non si vede più niente. L'attribuzione però la
+  // licenza la chiede: resta in una riga chiusa "📷 Foto · Photo credits" a fine attività (classifica, fine compito)
+  // e nell'editor dell'insegnante.
+  const PHOTO_CREDITS = {};
+  function noteCredit(c) { if (c) PHOTO_CREDITS[String(c)] = 1; }
+  function creditsNote(extra) {
+    (extra || []).forEach(noteCredit);
+    const list = Object.keys(PHOTO_CREDITS); if (!list.length) return null;
+    return el('details', { class: 'photo-credits' }, el('summary', { text: '📷 Foto · Photo credits (' + list.length + ')' }), el('ul', {}, list.map(function (c) { return el('li', { text: c }); })));
+  }
   function chpImage(src, credit) {
     const box = el('div', { class: 'chp-imgbox' });
     const im = el('img', { class: 'chp-img', src: src, alt: '', referrerpolicy: 'no-referrer' });
     im.addEventListener('error', function () { box.remove(); });
     box.appendChild(im);
-    if (credit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + credit }));
+    if (credit) noteCredit(credit);
     return box;
   }
   function chpQuestion(me, p, tStart) {
@@ -8796,6 +8867,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   /** Ognuno al suo ritmo: il set intero sul telefono, correzione locale, punteggio come nel v68. */
   function chpPlaySelf(me, items, mode, shuffle) {
     // v162: ordine casuale per questo telefono; orig[i] = posizione nel set del prof (serve al report)
+    items = items.slice();
     let orig = items.map(function (x, k) { return k; });
     if (shuffle) { orig = VLChal.shuffleArr(orig, Math.random); items = orig.map(function (k) { return items[k]; }); }
     const wrap = $('#chp-wrap'); wrap.innerHTML = '';
@@ -8809,6 +8881,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     let i = 0, score = 0, right = 0, streak = 0;
     const pts = VLChal.pointsFor(mode);
     let last = null;
+    const skipped = {};   // v177: domande saltate (per posizione nel set): tornano in fondo, una volta sola
     const sendScore = function (done) {
       me.conn.send('score', { id: me.id, nick: me.nick, score: score, right: right, at: i, total: items.length, done: !!done, last: last });
     };
@@ -8847,6 +8920,16 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         if (item.explain) { fb.appendChild(el('button', { class: 'primary chp-next', text: 'Avanti · Next ▶', onclick: step })); return; }   // con la spiegazione si va avanti a mano: serve il tempo di leggerla
         setTimeout(step, res.correct ? 900 : 2200);
       } }));
+      // v177 (Edoardo: "se non sa la risposta 4 e vuole andare alla 5 può farlo e poi la 4 (e quelle skippate) gli verranno
+      // riproposte alla fine ... solo nella modalità che ognuno fa per conto proprio"): la domanda va in fondo alla fila.
+      // Si può saltare una volta sola per domanda (quando torna bisogna rispondere) e non l'ultima rimasta.
+      if (!skipped[orig[i]] && i < items.length - 1) {
+        stage.appendChild(el('button', { class: 'chp-skip', type: 'button', text: 'Salta, la faccio dopo · Skip for now ⏭', onclick: function () {
+          skipped[orig[i]] = 1; streak = 0;
+          items.push(items.splice(i, 1)[0]); orig.push(orig.splice(i, 1)[0]);
+          step();
+        } }));
+      } else if (skipped[orig[i]]) stage.insertBefore(el('div', { class: 'chp-skipnote', text: '↩ L\'avevi saltata · You skipped this one' }), stage.children[1] || null);
     };
     step();
   }
@@ -8864,6 +8947,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const me = rows.find(function (r) { return r.id === myId; });
     if (me) box.appendChild(el('p', { class: 'chp-me', text: me.rank === 1 ? 'Hai vinto · You won! 🏆' : me.rank + '°: bravo · well done!' }));
     wrap.appendChild(box);
+    const cr = creditsNote(); if (cr) wrap.appendChild(cr);
   }
 
   // ---------- avvio ----------
@@ -9147,7 +9231,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('span', { class: 'cls-tag chal', text: '📱 In classe' }), el('b', { text: r.title || 'Sfida' }),
           el('span', { class: 'muted', text: fmtDate(r.created_at) + ' · ' + r.players + (r.players === 1 ? ' studente' : ' studenti') + (r.ended ? '' : ' · non chiusa') }),
           el('span', { style: 'flex:1' }),
-          el('button', { class: 'small primary', text: '📊 Report', onclick: function () { window.open(location.pathname + location.search + '#chalrep=' + r.id, '_blank'); } }),
+          el('a', { class: 'btnlink small primary', href: location.pathname + location.search + '#chalrep=' + r.id, target: '_blank', text: '📊 Report' }),
           mv,
           twoStep('Elimina', function () { be.deleteChalReport(r.id).then(function () { toast('Report eliminato'); renderClasses(); }, function (e) { toast(e.message, 6000); }); }))));
     });
@@ -9183,7 +9267,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         el('div', { class: 'meta', text: fmtDate(a.created_at) + ' · codice ' + a.code + ' · ' + (nS ? nS + (nS === 1 ? ' studente' : ' studenti') + ', ' + nF + ' ' + (nF === 1 ? 'ha consegnato' : 'hanno consegnato') : 'nessuno ancora') })),
       el('div', { class: 'actions' },
         a.kind === 'live' ? el('button', { class: 'small primary', text: '🔴 Sessione dal vivo', onclick: function () { renderReport(a.id, 'live'); } }) : null,   // v131
-        el('button', { class: 'small' + (a.kind === 'live' ? '' : ' primary'), text: '📊 Report', title: 'Si apre in una nuova scheda', onclick: function () { if (!window.open(location.pathname + location.search + '#rep=' + a.id + '&m=table', '_blank')) renderReport(a.id); } }),   // v161 (Edoardo: "anche se clicco su report voglio che si apra sempre una nuova tab e mai sostituire quella attuale")
+        el('a', { class: 'btnlink small' + (a.kind === 'live' ? '' : ' primary'), href: location.pathname + location.search + '#rep=' + a.id + '&m=table', target: '_blank', text: '📊 Report', title: 'Si apre in una nuova scheda (con la rotella: in secondo piano)' }),   // v161 (Edoardo: "anche se clicco su report voglio che si apra sempre una nuova tab e mai sostituire quella attuale")
         el('button', { class: 'small', text: '🔗 Copia link', onclick: function () { copyText(url); } }),
         el('button', { class: 'small', text: 'QR', onclick: function () { CLS.qrOpen = CLS.qrOpen === a.id ? null : a.id; if (CLS.qrOpen) { qrBox.innerHTML = qrSvg(url); qrBox.hidden = false; } else qrBox.hidden = true; } }),
         toggle,
@@ -9790,7 +9874,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const pub = VLChal.pubItem(item, { showQ: true });
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
       if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
-      if (item.image && item.imageCredit) box.appendChild(el('div', { class: 'img-credit', text: '📷 ' + item.imageCredit }));
+      if (item.image && item.imageCredit) noteCredit(item.imageCredit);
       box.appendChild(el('div', { class: 'as-kind', text: T.both ? ((T.k[item.kind] || '').split('\n')[0] + ' · ' + (INSTR[item.kind] || '').split('\n')[0] + '\n' + (T.k[item.kind] || '').split('\n')[1] + ' · ' + (INSTR[item.kind] || '').split('\n')[1]) + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? '\n' + T.accents.trim() : '') : (T.k[item.kind] || VLChal.itemLabel(item.kind)) + ' · ' + (INSTR[item.kind] || '') + (item.strict && (item.kind === 'gap' || item.kind === 'gapbank' || item.kind === 'wrong' || item.kind === 'missing') ? T.accents : '') }));
       const trv = trValid(item);
       let hintShown = null;
@@ -9867,6 +9951,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(el('h2', { style: 'margin-top:0', text: a.title || 'Esercitazione' }));
       box.appendChild(el('div', { class: 'chp-reveal ' + (sc.score === sc.total ? 'ok' : '') }, el('div', { class: 'big', text: '🏁 ' + sc.score + (a.lesson.uiLang === 'en' ? ' / ' : ' su ') + sc.total })));
       box.appendChild(assignSummaryBox());
+      const crN = creditsNote(items.map(function (it) { return it.image && it.imageCredit; }).filter(Boolean));
       const wrong = items.filter(function (it) { const c = S.assign.detail[it.id]; return !c || c.ok !== true; });
       if (wrong.length) {
         box.appendChild(el('h3', { text: T.review }));
@@ -9880,6 +9965,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         })));
       }
       box.appendChild(el('p', { style: 'margin-top:12px' }, el('a', { href: '#me', text: T.me + (STU.user ? '' : ' · ' + T.meOpt.replace(/^👤 /, '')), onclick: function (ev) { ev.preventDefault(); openMine(); } })));
+      if (crN) box.appendChild(crN);
       if (!live) box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: T.again, onclick: function () { assignNewAttempt(); if (shuffleOn) items = VLChal.shuffleArr(items, Math.random); i = 0; over = false; step(); } })));
     };
     step();

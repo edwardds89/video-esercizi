@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PauseLearn · giochi, video-lezioni e sfide per la tua classe</title>
-<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-175">
+<link rel="icon" type="image/svg+xml" href="icona-play.svg?v=20260919-178">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260919-175">
+<link rel="stylesheet" href="styles.css?v=20260919-178">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-175" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-175" alt="PauseLearn" width="178" height="22"></div>
+  <div class="brand" data-view="home" role="button" tabindex="0" title="Torna alla home"><img class="brand-play" src="m-play.svg?v=20260919-178" alt="" width="30" height="34"><img class="brand-wm" src="wordmark.svg?v=20260919-178" alt="PauseLearn" width="178" height="22"></div>
   <button id="nav-toggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav" title="Menu">☰<span id="nav-toggle-dot" class="dot off" style="display:none"></span></button>
   <nav id="nav">
     <button data-view="home">Le tue lezioni</button>
@@ -329,6 +329,7 @@
       <div class="row s-controls">
         <button id="btn-start" class="primary" style="display:none">▶ Inizia</button>
         <div id="s-progress" class="progress"></div>
+        <button id="btn-skipvideo" class="small" style="display:none" title="Ferma il video e passa subito alle domande di conversazione (gli esercizi non fatti restano non fatti)">⏭ Salta il video → Parliamone</button>
         <label id="s-cover-label" class="chip right" style="margin:0" title="Per i video con i sottotitoli stampati nell'immagine: una fascia sfocata sopra il video, da spostare e ridimensionare col mouse (resta dove la metti)"><input type="checkbox" id="s-cover"> ▬ Copri sottotitoli</label>
         <label id="s-lock-label" class="chip" style="margin:0" title="Se attivo, non si può andare oltre un esercizio ancora da fare"><input type="checkbox" id="s-lock"> 🔒 Blocca la barra</label>
         <button id="btn-fullscreen" class="small" title="Video e esercizi a tutto schermo (Esc per uscire)">⛶ Schermo intero</button>
@@ -404,7 +405,7 @@
       <span id="chal-title" class="hint grow"></span>
       <button id="chal-start" class="primary" style="display:none">▶ Prima domanda</button>
       <span id="chal-class-box" class="chal-class-box"></span>
-      <button id="chal-report" title="Chi ha risposto cosa: solo per te, si apre in una nuova scheda">📊 Report</button>
+      <a id="chal-report" class="btnlink" target="_blank" title="Chi ha risposto cosa: solo per te, si apre in una nuova scheda (con la rotella: in secondo piano)">📊 Report</a>
       <button id="chal-end" class="primary">🏁 Termina la sfida</button>
     </div>
     <!-- modalità guidata: la domanda a tutto schermo -->
@@ -430,8 +431,8 @@
         <p class="hint">La classifica finale è anche sui telefoni degli studenti, con la revisione di tutte le frasi.</p>
         <p id="chal-cloud" class="hint" style="margin-top:0"></p>
         <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center">
-          <button id="chal-review" class="primary">📖 Revisione (nuova scheda)</button>
-          <button id="chal-report2">📊 Report (nuova scheda)</button>
+          <a id="chal-review" class="btnlink primary" target="_blank" title="Con la rotella del mouse si apre in secondo piano">📖 Revisione (nuova scheda)</a>
+          <a id="chal-report2" class="btnlink" target="_blank" title="Con la rotella del mouse si apre in secondo piano">📊 Report (nuova scheda)</a>
           <button id="chal-assign">📋 Dai come compito</button>
         </div>
       </div>
@@ -909,19 +910,19 @@
 <div id="toast"></div>
 <button id="btn-top" class="to-top" type="button" title="Torna in alto">↑ In alto</button>
 
-<script src="lang.js?v=20260919-175"></script>
-<script src="exercises.js?v=20260919-175"></script>
-<script src="generator.js?v=20260919-175"></script>
-<script src="activities.js?v=20260919-175"></script>
-<script src="ai.js?v=20260919-175"></script>
-<script src="demo-data.js?v=20260919-175"></script>
-<script src="platforms.js?v=20260919-175"></script>
-<script src="bookmarklet.js?v=20260919-175"></script>
-<script src="sync.js?v=20260919-175"></script>
-<script src="qr.js?v=20260919-175"></script>
-<script src="challenge.js?v=20260919-175"></script>
-<script src="classroom.js?v=20260919-175"></script>
-<script src="app.js?v=20260919-175"></script>
+<script src="lang.js?v=20260919-178"></script>
+<script src="exercises.js?v=20260919-178"></script>
+<script src="generator.js?v=20260919-178"></script>
+<script src="activities.js?v=20260919-178"></script>
+<script src="ai.js?v=20260919-178"></script>
+<script src="demo-data.js?v=20260919-178"></script>
+<script src="platforms.js?v=20260919-178"></script>
+<script src="bookmarklet.js?v=20260919-178"></script>
+<script src="sync.js?v=20260919-178"></script>
+<script src="qr.js?v=20260919-178"></script>
+<script src="challenge.js?v=20260919-178"></script>
+<script src="classroom.js?v=20260919-178"></script>
+<script src="app.js?v=20260919-178"></script>
 <!-- v98: il foglio delle Soluzioni da stampare. Vuoto e invisibile finche' non si stampa. -->
 <div id="print-area" aria-hidden="true"></div>
 

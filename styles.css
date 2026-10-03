@@ -1824,3 +1824,25 @@ a.btnlink.primary:hover{background:#185dc9}
 /* v175: finché l'esercizio non è risolto le parole non si stellano */
 .nostar .w{cursor:inherit}
 .nostar .w:not(.zone):hover{background:none}
+
+/* v177: crediti delle foto, chiusi, a fine attività */
+.photo-credits{margin-top:16px;font-size:12px;color:#889;text-align:left}
+.photo-credits summary{cursor:pointer}
+.photo-credits ul{margin:6px 0 0;padding-left:18px}
+
+/* v177: salta la domanda (sfida al proprio ritmo) */
+.chp-skip{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px dashed #b8c2d6;background:transparent;color:#556;font-size:16px}
+.chp-skipnote{text-align:center;color:#b45309;font-size:14px;font-weight:600;margin:4px 0 8px}
+
+/* v178: quanti l'hanno azzeccata (torta) nella revisione */
+.rv-stat{margin-top:10px;text-align:center}
+.rv-statbtn{border:1px dashed #c3cad8;background:transparent;border-radius:999px;padding:5px 14px;font-size:14px;color:#556}
+.rv-statbtn.open{border-style:solid}
+.rv-piebox{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:10px}
+.rv-pie{width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.rv-pie span{background:#fff;border-radius:50%;width:70px;height:70px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:#1f2937}
+.rv-pietxt{font-size:18px;text-align:left}
+.rv-item.big .rv-pie{width:190px;height:190px}
+.rv-item.big .rv-pie span{width:120px;height:120px;font-size:40px}
+.rv-item.big .rv-pietxt{font-size:28px}
+.rv-item.big .rv-statbtn{font-size:18px;padding:8px 18px}
