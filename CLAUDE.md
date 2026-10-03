@@ -1,5 +1,17 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- VIDEO DI GRUPPO CON I TELEFONI (v193, 3/10). Edoardo: "e se volessi fare anche i video di gruppo?... un gruppo che da
+  cellulare mi dà le risposte... tramite QR, solo in modalità insieme sullo schermo". Bottone "📱 In gruppo" sulla scheda
+  della video-lezione → startGroupVideo(ls): gli esercizi della lezione (stesso formato degli item: kind = type, data = data)
+  diventano una Sfida teacher-paced (startChal con cfg.video: niente dialogo, niente "ognuno al suo ritmo", punti "giuste +
+  serie", domanda visibile sui telefoni). Sala d'attesa = vista sfida con QR/PIN, bottone "▶ Avvia il video" →
+  groupVideoPlay() apre la vista studente con S.student.group. In studentTick, alla pausa di un esercizio non ancora fatto,
+  groupExercise() chiama chalOpenQuestion(idx) (la vista sfida resta nascosta ma aggiornata) e disegna nel pannello la
+  frase grande + "N su M hanno risposto" + "👁 Mostra la risposta" + "🔁 Riascolta". Ganci nuovi: CHAL.onAnswered e
+  CHAL.onReveal (chiamati da chalAnswered e chalCloseQuestion). Dopo la risposta: frase risolta, primi 5, "Continua il
+  video ▶". Al riepilogo → chalFinish() + vista sfida (classifica, report, revisione). Il telefono non è cambiato: è
+  quello della sfida. Limiti: niente timer, niente salvataggio in una classe (classId null), "Dai come compito" nascosto;
+  un esercizio rifatto dal segnaposto si fa a schermo, non sui telefoni.
 - "FAI QUI" ANCHE SULLA SCHEDA DEL SET (v192, 3/10). Edoardo: "perché non c'è l'opzione 'fai qui' in questa schermata?".
   Il bottone stava solo dentro l'editor del set (#cs-here). Ora è anche sulla scheda in "Le tue lezioni", dopo "Sfida in
   classe": playSetHere(ls, true), e il bottone di ritorno diventa "◀ Torna alle lezioni" (torna alla lista, non all'editor).

@@ -1942,3 +1942,14 @@ a.btnlink.primary:hover{background:#185dc9}
 /* v191: quello che si scrive nella casella sta al centro; la casella non esce mai dalla riga */
 .chp-gap.inline{text-align:center;max-width:100%;box-sizing:border-box}
 .chp-blank{max-width:100%;box-sizing:border-box}
+
+/* v193: video di gruppo (domande sui telefoni alle pause del video) */
+.grp-head{align-items:center;gap:10px}
+.grp-pin{font-weight:700;font-size:13px;background:#eef3ff;border:1px solid #c9d8f5;color:#12203a;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.grp-actions{justify-content:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+#s-panel .chal-screen{text-align:center}
+#s-panel .chal-top5{margin-top:10px}
+#s-panel .chp-solved .chp-qbig{padding:10px 12px;margin:6px 0 8px;line-height:1.55}
+#s-panel .chp-solved .chp-qbig .chp-qto{font-size:clamp(18px,2.3vw,30px)}
+#s-panel .chal-q{font-size:clamp(20px,2.6vw,34px);margin:8px 0}
+#s-panel .chp-solved{border:none;padding:0}

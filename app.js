@@ -1402,6 +1402,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           el('div', { class: 'actions' },
             el('a', { class: 'btnlink small primary', href: href, text: '▶ Apri', title: 'Tasto destro o rotella del mouse: apri in un\'altra scheda', onclick: function (e) { if (e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); open(); } }),
             el('button', { class: 'small', text: '✎ Modifica', onclick: function () { if (lessonEditLocked()) return openEditLockedDialog(ls); openEditor(ls.id); } }),
+            el('button', { class: 'small', text: '📱 In gruppo', title: 'Il video sul tuo schermo, le risposte dai telefoni degli studenti (QR), con classifica', onclick: function () { startGroupVideo(ls); } }),   // v193
             el('button', { class: 'small', text: '🔗 Condividi', title: 'Link studente', onclick: function () { openShare(ls); } }),   // v78
             el('button', { class: 'small', text: '📋 Assegna', title: 'Assegna a una classe come compito: vedi chi l\'ha fatto e cosa ha sbagliato', onclick: function () { openAssignDialog(ls); } }),   // v125
             el('button', { class: 'small', text: 'Esporta', onclick: function () { download(slugify(ls.title) + '.json', JSON.stringify(studentPayload(ls), null, 1)); } }),
@@ -4776,6 +4777,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       renderStudentTimeline();
       renderProgress();
       dock('#s-stage', true);
+      if (st.group && !st.done.has(next.id) && groupExercise($('#s-panel'), next)) return;   // v193: le risposte arrivano dai telefoni
       renderExerciseInto($('#s-panel'), next, {
         mode: 'student', lesson: ls, index: ls.exercises.indexOf(next), total: ls.exercises.length,
         replay: replaySegment, attempts: st.attempts, hints: st.hints,
@@ -6689,6 +6691,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
 
   function renderSummary() {
     const st = S.student; const ls = st.lesson;
+    if (st.group && CHAL && CHAL.video && !CHAL.ended) { if (S.player) S.player.pause(); if (document.fullscreenElement) document.exitFullscreen(); chalFinish(); show('chal'); return; }   // v193: video di gruppo → classifica finale
     const p = $('#s-panel'); p.innerHTML = '';
     dock('#s-stage', true);
     $('#s-stage').classList.add('cards');
@@ -7990,7 +7993,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       overlay(false);
       CHAL = { pin: pin, setId: setLs.id, title: setLs.title || 'Sfida', play: cfg.play, items: items, mode: cfg.mode, secs: cfg.secs, showQ: cfg.showQ,
         conn: conn, state: cfg.play === 'tp' ? VLChal.tpNew() : VLChal.newState(), pub: null, ended: false, boardAt: 0, boardTimer: null, clock: null, log: {},
-        repId: VLClass.uuid(), classId: cfg.classId || null, shuffle: !!cfg.shuffle, spStarted: false, cloud: { timer: null, ok: false, err: '', warned: false } };
+        repId: VLClass.uuid(), classId: cfg.classId || null, shuffle: !!cfg.shuffle, spStarted: false, video: !!cfg.video, cloud: { timer: null, ok: false, err: '', warned: false } };
       chalSaveReport();
       conn.on('hello', function (p) {
         if (!p || !p.id) return;
@@ -8041,6 +8044,66 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       show('chal');
       renderChal();
     }, function (err) { overlay(false); toast(err, 6000); });
+  }
+  /**
+   * v193 VIDEO DI GRUPPO (Edoardo: "e se volessi fare anche i video di gruppo?... un gruppo che da cellulare mi dà le
+   * risposte... tramite QR, solo in modalità insieme sullo schermo"). È una Sfida teacher-paced (stesso PIN, stesso canale,
+   * stesso telefono) in cui le domande non partono a comando ma quando il video arriva alla pausa di un esercizio:
+   * gli esercizi della lezione diventano gli item (stesso formato: kind = type, data = data), il video gira nella vista
+   * studente con S.student.group, e a ogni pausa groupExercise() apre la domanda sui telefoni invece dell'esercizio a schermo.
+   * Alla fine (riepilogo) → classifica finale e report della sfida.
+   */
+  function startGroupVideo(ls) {
+    const kinds = ['gap', 'gapbank', 'mc', 'scramble', 'extra', 'missing', 'wrong'];
+    const items = (ls.exercises || []).filter(function (e) { return exerciseReady(e) && kinds.indexOf(e.type) !== -1; })
+      .map(function (e) { return { id: e.id, kind: e.type, data: JSON.parse(JSON.stringify(e.data)) }; });
+    if (!items.length) return toast('Questa lezione non ha esercizi: aggiungine almeno uno per farla in gruppo');
+    startChal({ id: ls.id, title: ls.title || 'Video', chal: { items: items } }, { play: 'tp', mode: 'streak', secs: 0, showQ: true, shuffle: false, classId: null, video: true });
+  }
+  function groupVideoPlay() {
+    if (!CHAL || !CHAL.video) return;
+    const ls = S.lessons[CHAL.setId];
+    if (!ls) return toast('Lezione non trovata');
+    openStudent(ls.id);
+    if (S.student) S.student.group = true;
+    toast('Video di gruppo: a ogni pausa la domanda arriva sui telefoni · PIN ' + CHAL.pin, 5000);
+  }
+  /** Apre sui telefoni la domanda dell'esercizio ex e disegna nel pannello la versione "da schermo". false = non è fra gli item (si fa a schermo). */
+  function groupExercise(p, ex) {
+    if (!CHAL || !CHAL.video || CHAL.ended) return false;
+    const idx = CHAL.items.findIndex(function (it) { return it.id === ex.id; });
+    if (idx === -1) return false;
+    const st = S.student, item = CHAL.items[idx];
+    const head = function (txt) {
+      return el('div', { class: 'row ex-head grp-head' },
+        el('span', { class: 'badge', text: (idx + 1) + ' di ' + CHAL.items.length }),
+        el('span', { class: 'hint grow', id: 'grp-answered', text: txt || '' }),
+        el('span', { class: 'grp-pin', title: 'Chi arriva in ritardo entra da qui', text: chalUrl(CHAL.pin).replace(/^https?:\/\//, '').replace(/[#?].*$/, '') + ' · PIN ' + CHAL.pin }));
+    };
+    const again = function () { return el('button', { class: 'big', text: '🔁 Riascolta', title: 'Fa risentire la frase del video', onclick: function () { replaySegment(ex); } }); };
+    CHAL.onAnswered = function (txt) { const n = $('#grp-answered'); if (n) n.textContent = txt; };
+    CHAL.onReveal = function (rev) {
+      CHAL.onReveal = null; CHAL.onAnswered = null;
+      if (!S.student || S.student !== st) return;
+      p.innerHTML = '';
+      const right = Object.keys(rev.perPlayer || {}).filter(function (id) { return rev.perPlayer[id] && rev.perPlayer[id].ok; }).length, tot = Object.keys(rev.perPlayer || {}).length;
+      p.appendChild(head(tot ? right + ' su ' + tot + (right === 1 ? ' ha risposto giusto' : ' hanno risposto giusto') : 'Nessuna risposta'));
+      p.appendChild(chpSolvedNode(item));
+      const wrap = el('div', { class: 'chal-top5' });
+      (rev.top || []).forEach(function (r) { wrap.appendChild(el('div', { class: 'chal-row' }, el('span', { class: 'rk', text: r.rank + '°' }), el('span', { class: 'nick', text: r.nick }), el('span', { class: 'pts', text: r.score + ' pt' }))); });
+      p.appendChild(wrap);
+      const go = el('button', { class: 'primary big', text: 'Continua il video ▶', onclick: function () { finishExercise(ex, true, 'solved'); continueVideo(); } });
+      p.appendChild(el('div', { class: 'row grp-actions' }, go, again()));
+      setTimeout(function () { try { go.focus({ preventScroll: true }); } catch (e) { /* ignora */ } }, 30);
+    };
+    chalOpenQuestion(idx);   // manda la domanda ai telefoni (e aggiorna la vista sfida, che qui resta nascosta)
+    p.innerHTML = '';
+    p.appendChild(head($('#chal-answered').textContent));
+    p.appendChild(chalScreenItem(item, CHAL.pub));
+    p.appendChild(el('div', { class: 'row grp-actions' },
+      el('button', { class: 'primary big', text: '👁 Mostra la risposta', title: 'Chiude la domanda adesso, anche se non hanno risposto tutti', onclick: chalCloseQuestion }),
+      again()));
+    return true;
   }
   /** v135 (Edoardo: "manca funzione report che vedo solo io e si apre in una nuova tab, così vedo chi ha detto cosa"):
    *  l'host registra ogni risposta (CHAL.log[i][id] = {nick, a, ok, frac}) e salva un'istantanea in localStorage
@@ -8352,14 +8415,15 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     $('#chal-pin').textContent = CHAL.pin;
     $('#chal-url').textContent = chalUrl(CHAL.pin).replace(/^https?:\/\//, '');
     const modeLbl = (VLChal.MODES.find(function (m) { return m[0] === CHAL.mode; }) || VLChal.MODES[1])[1];
-    $('#chal-title').textContent = CHAL.title + ' · ' + (CHAL.play === 'tp' ? 'insieme sullo schermo' : 'ognuno al suo ritmo') + ' · ' + modeLbl;
+    $('#chal-title').textContent = CHAL.title + ' · ' + (CHAL.video ? 'video di gruppo · ' : '') + (CHAL.play === 'tp' ? 'insieme sullo schermo' : 'ognuno al suo ritmo') + ' · ' + modeLbl;
+    $('#chal-assign').style.display = CHAL.video ? 'none' : '';
     const q = qrcode(0, 'M');
     q.addData(chalUrl(CHAL.pin));
     q.make();
     $('#chal-qr').innerHTML = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
     chalClassPicker();
     $('#chal-start').style.display = CHAL.play === 'tp' || !CHAL.spStarted ? '' : 'none';
-    $('#chal-start').textContent = CHAL.play === 'tp' ? '▶ Prima domanda' : '▶ Via! Fai partire la sfida';
+    $('#chal-start').textContent = CHAL.video ? '▶ Avvia il video' : CHAL.play === 'tp' ? '▶ Prima domanda' : '▶ Via! Fai partire la sfida';
     $('#chal-stagebox').style.display = 'none';
     $('#chal-live').style.display = '';
     $('#chal-after').style.display = 'none';
@@ -8371,6 +8435,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // v155: chi manca, per nome (se uno si è scollegato si vede subito chi è, e il prof va avanti lo stesso)
     const miss = Object.keys(CHAL.state.players).filter(function (id) { return !CHAL.state.answers[id]; }).map(function (id) { return CHAL.state.players[id].nick; });
     $('#chal-answered').textContent = n + ' su ' + tot + ' hanno risposto' + (CHAL.state.phase === 'question' && miss.length && miss.length <= 8 ? ' · mancano: ' + miss.join(', ') : '');
+    if (CHAL.onAnswered) CHAL.onAnswered($('#chal-answered').textContent);
     renderChalBoard();
   }
   /** Modalita' guidata (teacher-paced): apre la domanda i sullo schermo grande e la manda ai telefoni. */
@@ -8414,6 +8479,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const item = CHAL.items[CHAL.state.i];
     const rev = VLChal.tpReveal(CHAL.state);
     CHAL.conn.send('reveal', { i: CHAL.state.i, per: rev.perPlayer, top: rev.top, sol: VLChal.solutionText(item) });
+    if (CHAL.onReveal) CHAL.onReveal(rev, item);
     const box = $('#chal-qbox'); box.innerHTML = '';
     box.appendChild(el('div', { class: 'chal-sol' }, el('div', { class: 'lbl', text: 'Risposta' }), el('div', { class: 'val', text: VLChal.solutionText(item) })));
     const wrap = el('div', { class: 'chal-top5' });
@@ -8572,6 +8638,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   $('#chal-start').addEventListener('click', function () {
     if (!CHAL || CHAL.counting) return;
+    if (CHAL.video) return groupVideoPlay();   // v193: video di gruppo: parte il video, le domande arrivano alle pause
     if (CHAL.play === 'tp' && CHAL.state.phase !== 'lobby') return;
     if (CHAL.play !== 'tp' && CHAL.spStarted) return;
     CHAL.counting = true;
