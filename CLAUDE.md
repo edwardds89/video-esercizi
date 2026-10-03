@@ -1,5 +1,9 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- SCHERMO INTERO IN "FAI QUI" (v187, 3/10). Edoardo: "manca il pulsante schermo intero". asFsBtn(card): bottone accanto a
+  "◀ Torna all'esercitazione" (#as-back, che sta DENTRO .as-card e quindi resta visibile), manda a tutto schermo .as-card;
+  CSS .as-card:fullscreen ingrandisce frase, opzioni e bottoni. "Torna" esce dallo schermo intero. Solo in Fai qui: nei
+  compiti dello studente il bottone non c'è.
 - SCELTA MULTIPLA: IL CLIC È LA RISPOSTA, FEEDBACK SUL POSTO (v186, 3/10). Edoardo: "quando clicco su un'opzione, se è
   corretta mi viene messa a fianco a 'spedisco', poi sotto anziché 'check' ci sarà 'next'". In compiti / Fai qui
   chpItemInput riceve instant:true: il clic su un'opzione fa partire subito il controllo (il bottone Check c'è ma è nascosto,

@@ -1895,3 +1895,14 @@ a.btnlink.primary:hover{background:#185dc9}
 .chp-reveal.slim.line .big{font-size:20px}
 .chp-reveal.slim.line.no.soft{background:none}
 .chp-instant > .chp-send{display:none}
+
+/* v187: "Fai qui" a schermo intero */
+#as-back{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.as-card:fullscreen{background:#f5f6f8;padding:24px max(24px,6vw);overflow-y:auto;width:100%;max-width:none;border-radius:0;font-size:120%}
+.as-card:fullscreen #as-box{max-width:1300px;margin:0 auto}
+.as-card:fullscreen .chp-qbig .chp-qto{font-size:clamp(30px,5vw,72px)}
+.as-card:fullscreen .chp-qbig .chp-qfrom{font-size:clamp(20px,3vw,40px)}
+.as-card:fullscreen .chp-mc{min-height:clamp(64px,11vh,120px);font-size:clamp(18px,2.4vw,34px)}
+.as-card:fullscreen .chp-q.chp-inline{font-size:clamp(26px,3.6vw,52px)}
+.as-card:fullscreen .as-img{max-height:36vh}
+.as-card:fullscreen .chp-send{font-size:clamp(18px,2vw,28px);min-height:64px}

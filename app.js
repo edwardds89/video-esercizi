@@ -7246,6 +7246,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
    *  la sfida in classe voglio che rimanga"): "▶ Fai qui" apre l'esercitazione su QUESTO schermo, con lo stesso giro dei
    *  compiti (aiuto con la regola, risposta da ricopiare, traduzione, riepilogo degli errori). Niente classe, niente
    *  codice, niente rete: S.assign.local = true, assignSend non manda niente e nessun risultato viene salvato. */
+  /** v187: "⛶ Schermo intero" in "Fai qui" (lezione one to one o proiettore): va a tutto schermo solo la scheda dell'esercizio. */
+  function asFsBtn(card) {
+    if (!(card.requestFullscreen || card.webkitRequestFullscreen)) return null;
+    const isFs = function () { return (document.fullscreenElement || document.webkitFullscreenElement) === card; };
+    const btn = el('button', { class: 'small as-fs', text: '⛶ Schermo intero', onclick: function () {
+      if (isFs()) return (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      const r = (card.requestFullscreen || card.webkitRequestFullscreen).call(card);
+      if (r && r.catch) r.catch(function () { toast('Schermo intero non disponibile in questo browser'); });
+    } });
+    const on = function () {
+      if (!document.body.contains(btn)) { document.removeEventListener('fullscreenchange', on); document.removeEventListener('webkitfullscreenchange', on); return; }
+      btn.textContent = isFs() ? '🗗 Esci da schermo intero' : '⛶ Schermo intero';
+    };
+    document.addEventListener('fullscreenchange', on); document.addEventListener('webkitfullscreenchange', on);
+    return btn;
+  }
   function playSetHere(ls) {
     if (!ls || !ls.chal || !chalSetReady(ls)) return toast('Il set è vuoto: aggiungi almeno un esercizio');
     const lesson = asgPayload(ls);
@@ -7253,7 +7269,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     document.body.classList.add('as-local');
     const box = $('#as-box'); box.innerHTML = '';
     const oldBack = $('#as-back'); if (oldBack) oldBack.remove();
-    box.parentNode.insertBefore(el('div', { id: 'as-back', style: 'margin-bottom:10px' }, el('button', { class: 'small', text: '◀ Torna all\'esercitazione', onclick: function () { document.body.classList.remove('as-local'); const b = $('#as-back'); if (b) b.remove(); clearTimeout(S.assign && S.assign.timer); S.assign = null; openChalSet(ls.id); } })), box);
+    box.parentNode.insertBefore(el('div', { id: 'as-back', style: 'margin-bottom:10px' }, el('button', { class: 'small', text: '◀ Torna all\'esercitazione', onclick: function () { if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document); document.body.classList.remove('as-local'); const b = $('#as-back'); if (b) b.remove(); clearTimeout(S.assign && S.assign.timer); S.assign = null; openChalSet(ls.id); } }), asFsBtn(box.parentNode)), box);
     S.assign = { local: true, backId: ls.id, be: null, code: '', id: VLClass.uuid(), name: '', detail: {}, lesson: lesson, status: 'local', timer: null, err: '' };
     playAssignSet({ title: ls.title || 'Esercitazione', code: '', lesson: lesson });
   }
