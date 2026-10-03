@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- COPERTINA DAL FONDO DI LEARNINGAPPS (v183, 3/10). Edoardo, set importato: "perché non c'è la foto?". L'app aveva uno
+  sfondo (initparameters.backgroundImage = "image|https://…") che scartavo. Ora laSlim/bookmarklet lo passano come bg,
+  fromLearningApps lo mette in set.cover, finishSetImport in ls.chal.coverUrl, e chalCoverThumb lo usa (img con
+  referrerpolicy no-referrer; se non carica, torna al colore con le iniziali). Una foto scelta con "🖼 Copertina" su un
+  esercizio vince sempre. COVER_BROKEN (in memoria) ricorda le immagini che non si caricano.
 - FOTO NELLA CORREZIONE DI GRUPPO (v182, 3/10). Edoardo: "nella correzione perché non c'è la foto? la voglio".
   VLClass.asgItems e la matrice del report ora portano image; la scheda "Correzione" (.fix-card) mostra la foto a
   sinistra della domanda (.fix-qrow / .fix-img). Vale per i compiti assegnati dalla v125 in poi: la foto è nel compito.

@@ -1144,6 +1144,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!out.set.items.length) return toast('Nessuna domanda convertibile in questo quiz' + (out.skipped.length ? ' (' + out.skipped.length + ' di tipi che PauseLearn non ha)' : ''), 7000);
     const id = 'chal-' + Date.now().toString(36);
     S.lessons[id] = { id: id, title: out.set.title || 'Quiz importato', lang: out.set.lang || 'it', chal: { items: out.set.items }, importedFrom: src, updatedAt: new Date().toISOString() };
+    if (out.set.cover) S.lessons[id].chal.coverUrl = out.set.cover;   // v183: lo sfondo dell'app di LearningApps fa da copertina
     saveLessons();
     openChalSet(id);
     toast('Importato da ' + platformName(src.site) + ': ' + out.set.items.length + ' esercizi' + (out.skipped.length ? ' · ' + out.skipped.length + ' non convertibili (' + out.skipped.map(function (x) { return 'n.' + x.n; }).join(', ') + ')' : '') + '. Ora puoi assegnarlo a una classe (📋 Assegna) o giocarlo in classe.', 9000);
@@ -7088,12 +7089,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const items = (ls.chal && ls.chal.items) || [];
     return items.find(function (it) { return it && it.image && it.id === ls.chal.cover; }) || items.find(function (it) { return it && it.image; }) || null;
   }
+  const COVER_BROKEN = {};   // v183: immagini di copertina che non si caricano (solo in memoria)
   function chalCoverThumb(ls, open) {
     const it = chalCoverItem(ls);
     if (it) {
       const d = el('div', { class: 'thumb chal-thumb has-cover', onclick: open, title: 'Apri l\'esercitazione' });
       d.style.backgroundImage = 'url("' + String(it.image).replace(/["\\\n]/g, '') + '")';
       return d;
+    }
+    // v183 (Edoardo, set importato da LearningApps: "perché non c'è la foto?"): senza foto negli esercizi, la copertina
+    // può essere un'immagine del set (ls.chal.coverUrl: lo sfondo che l'app aveva su LearningApps)
+    if (ls.chal && /^https?:\/\//.test(ls.chal.coverUrl || '')) {
+      const d = el('div', { class: 'thumb chal-thumb has-cover', onclick: open, title: 'Apri l\'esercitazione' });
+      const im = el('img', { class: 'cover-img', src: ls.chal.coverUrl, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy' });
+      im.addEventListener('error', function () { COVER_BROKEN[ls.chal.coverUrl] = 1; d.replaceWith(chalCoverThumb(ls, open)); });
+      if (!COVER_BROKEN[ls.chal.coverUrl]) { d.appendChild(im); return d; }
     }
     const t = String(ls.title || 'Esercitazione');
     let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 360;

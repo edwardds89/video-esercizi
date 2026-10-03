@@ -286,15 +286,16 @@
      Si conosce SOLO il tool 140 (visto dal vero): gli altri hanno initparameters diversi. */
   function laSlim(appData, id) {
     if (!appData || !appData.initparameters) return null;
-    const p = {};
+    const p = {}; let bg = '';
     String(appData.initparameters).split('&').forEach(function (kv) {
       const i = kv.indexOf('='); if (i < 1) return;
       let k = kv.slice(0, i), v = kv.slice(i + 1);
       try { k = decodeURIComponent(k.replace(/\+/g, ' ')); v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { /* lascia com'è */ }
-      if (/^(backgroundImage|feedback)$/.test(k)) return;
+      if (k === 'backgroundImage') { const m = String(v).match(/https?:\/\/\S+/); if (m) bg = m[0]; return; }   // v183: lo sfondo dell'app = copertina
+      if (k === 'feedback') return;
       p[k] = v;
     });
-    return { site: 'learningapps', id: String(id || ''), title: clean(htmlText(appData.title)), tool: String(appData.tool || ''), task: clean(htmlText(appData.tasktext)), p: p, sample: clean(p.clozetext || '') };
+    return { bg: bg, site: 'learningapps', id: String(id || ''), title: clean(htmlText(appData.title)), tool: String(appData.tool || ''), task: clean(htmlText(appData.tasktext)), p: p, sample: clean(p.clozetext || '') };
   }
   function fromLearningApps(pl, opts) {
     opts = opts || {};
@@ -338,7 +339,7 @@
       if (!ok || !idx.length || tokens.length < 2) { skipped.push({ n: k + 1, type: 'lacuna senza risposta' }); return; }
       items.push({ id: 'i' + uid(), kind: 'gap', src: 'learningapps:' + pl.id + ':' + k, strict: true, sentence: raw(tokens).join(' '), data: { tokens: raw(tokens), gapIndices: idx, answers: idx.map(function (i) { return tokens[i].core; }) } });
     });
-    return { set: { title: clean(pl.title), items: items, lang: opts.lang || 'it', importedFrom: { site: 'learningapps', id: String(pl.id || ''), url: pl.id ? 'https://learningapps.org/display?v=' + pl.id : '', at: new Date().toISOString() } }, skipped: skipped };
+    return { set: { title: clean(pl.title), items: items, cover: /^https?:\/\//.test(pl.bg || '') ? pl.bg : '', lang: opts.lang || 'it', importedFrom: { site: 'learningapps', id: String(pl.id || ''), url: pl.id ? 'https://learningapps.org/display?v=' + pl.id : '', at: new Date().toISOString() } }, skipped: skipped };
   }
 
   /** v122: lingua di studio rilevata dalle frasi (parole funzionali per lingua: L.stopwords). Il campo `language` di

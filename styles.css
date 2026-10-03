@@ -1868,3 +1868,7 @@ a.btnlink.primary:hover{background:#185dc9}
 .fix-qrow .fix-q{margin:0;flex:1}
 .fix-img{width:min(34%,340px);max-height:300px;object-fit:cover;border-radius:12px;flex:0 0 auto}
 @media (max-width:700px){.fix-qrow{flex-direction:column;align-items:stretch}.fix-img{width:100%}}
+
+/* v183: copertina da immagine del set */
+.lesson-card .thumb.chal-thumb .cover-img{width:100%;height:100%;object-fit:cover;display:block}
+.lesson-card .thumb.chal-thumb.has-cover{overflow:hidden}

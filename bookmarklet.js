@@ -71,10 +71,10 @@ window.VL_BOOKMARKLET = function (APP) {
     var D = find(window, 0);
     if (!D) { alert('Apri su LearningApps la pagina di una app (quella dove si gioca), aspetta che sia caricata, poi clicca il pulsante.'); return; }
     if (String(D.tool) !== '140') { alert('Questo tipo di app di LearningApps non lo so ancora importare (tool ' + D.tool + '). Per ora importo "Testo con lacune". Manda questo messaggio a chi cura PauseLearn.'); return; }
-    var q = {}; String(D.initparameters).split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i < 1) return; var k = kv.slice(0, i), v = kv.slice(i + 1); try { k = decodeURIComponent(k.replace(/\+/g, ' ')); v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { /* com'è */ } if (!/^(backgroundImage|feedback)$/.test(k)) q[k] = v; });
+    var bgi = ''; var q = {}; String(D.initparameters).split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i < 1) return; var k = kv.slice(0, i), v = kv.slice(i + 1); try { k = decodeURIComponent(k.replace(/\+/g, ' ')); v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { /* com'è */ } if (k === 'backgroundImage') { var mm = String(v).match(/https?:\/\/\S+/); if (mm) bgi = mm[0]; } else if (k !== 'feedback') q[k] = v; });
     var st = function (h) { var d = document.createElement('div'); d.innerHTML = String(h || ''); return (d.textContent || '').replace(/\s+/g, ' ').trim(); };
     var lid = ''; try { var u = new URL(location.href); lid = u.searchParams.get('v') || u.searchParams.get('id') || ''; } catch (e) { /* ignore */ }
-    location.href = APP + '#platform=' + b64url(JSON.stringify({ site: 'learningapps', id: lid, title: st(D.title), tool: String(D.tool), task: st(D.tasktext), p: q, sample: String(q.clozetext || '').replace(/\s+/g, ' ').trim() }));
+    location.href = APP + '#platform=' + b64url(JSON.stringify({ bg: bgi, site: 'learningapps', id: lid, title: st(D.title), tool: String(D.tool), task: st(D.tasktext), p: q, sample: String(q.clozetext || '').replace(/\s+/g, ' ').trim() }));
     return;
   }
   var id = null;
