@@ -1820,3 +1820,7 @@ a.btnlink{display:inline-block;cursor:pointer;border:1px solid var(--line);backg
 a.btnlink.small{padding:4px 10px;font-size:14px}
 a.btnlink.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 a.btnlink.primary:hover{background:#185dc9}
+
+/* v175: finché l'esercizio non è risolto le parole non si stellano */
+.nostar .w{cursor:inherit}
+.nostar .w:not(.zone):hover{background:none}

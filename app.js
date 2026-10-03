@@ -4975,7 +4975,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     };
 
     if (ex.type === 'gap' || ex.type === 'gapbank') {
-      const sent = el('div', { class: 'sentence' });
+      const sent = el('div', { class: 'sentence nostar' });
       const inputs = [];
       let active = null;   // la casella su cui sta lavorando lo studente: la parola cliccata va LI'
       let onGapPick = null;   // v98: acceso dall'Aiuto del semplificato, ricalcola le parole possibili per la casella cliccata
@@ -5163,7 +5163,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         inputs.forEach(function (inp, k) { inp.classList.toggle('ok', !!res.detail[k]); inp.classList.toggle('bad', !res.detail[k]); });
         if (res.correct) {
           sent.style.color = 'var(--ok)';
-          sent.classList.remove('counts');
+          sent.classList.remove('counts', 'nostar');
           // le caselle lasciano il posto alle parole scritte, evidenziate e cliccabili per la stella: la frase sopra basta
           // (si sostituisce il wrapper intero: via anche il contatore e la ✕ della v76)
           inputs.forEach(function (inp) { const wrap = el('span', { class: 'filled' }); wrap.appendChild(starSpans(ls, inp.value.trim())); (inp.closest('.gwrap') || inp).replaceWith(wrap); });
@@ -5299,7 +5299,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       // lo studente sceglie DOVE manca la parola (tra due parole: passando col mouse si apre uno spazio, clic per sceglierlo)
       // e poi la scrive nello spazio. Giusto solo se posto E parola sono giusti.
       const visible = d.tokens.filter(function (t, i) { return i !== d.missingIndex; });
-      const sdiv = el('div', { class: 'sentence full gapfinder' });
+      const sdiv = el('div', { class: 'sentence full gapfinder nostar' });
       const slots = [];
       let selected = -1;
       const inp = el('input', { type: 'text', class: 'gap gapfind', placeholder: '…', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', 'aria-label': 'Parola mancante' });
@@ -5387,7 +5387,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           sl.replaceWith(ins);
           slots.forEach(function (x) { if (x !== sl) x.replaceWith(document.createTextNode(' ')); });
           ins.parentNode.insertBefore(document.createTextNode(' '), ins); ins.parentNode.insertBefore(document.createTextNode(' '), ins.nextSibling);
-          sdiv.classList.remove('gapfinder'); sdiv.style.color = 'var(--ok)';
+          sdiv.classList.remove('gapfinder', 'nostar'); sdiv.style.color = 'var(--ok)';
           gfHint.remove();
         } else {
           const dt = res.detail || {};
@@ -5773,7 +5773,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     if (!w) return document.createTextNode(word);
     const k = L.normalize(w);
     const sp = el('span', { class: 'w' + (isStarred(ls, w) ? ' starred' : ''), 'data-w': k, text: word, title: 'Clicca per mettere una stella (parola da ripassare); parole vicine stellate insieme = una frase' });
-    sp.addEventListener('click', function (e) { e.stopPropagation(); starClick(ls, sp); });
+    // v175 (Edoardo: "la funzione di cliccare con la stella deve essere disponibile solo dopo che si è cliccato su
+    // controlla e la risposta è corretta"): dentro una frase ancora da risolvere (.nostar) il clic sulla parola non fa
+    // niente e NON viene fermato, così nella "parola mancante" un clic impreciso non mette stelle per sbaglio.
+    sp.addEventListener('click', function (e) { if (sp.closest('.nostar')) return; e.stopPropagation(); starClick(ls, sp); });
+    sp.addEventListener('mouseenter', function () { if (sp.closest('.nostar')) { if (sp.title) { sp._t = sp.title; sp.title = ''; } } else if (sp._t) { sp.title = sp._t; sp._t = ''; } });
     return sp;
   }
   function starredSentence(ls, tokens) {

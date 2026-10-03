@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- STELLA SOLO A ESERCIZIO RISOLTO (v175, 3/10). Edoardo: nella "parola mancante" lo studente clicca per sbaglio su una
+  parola invece che tra due parole e si ritrova la stella. Le frasi di "completa gli spazi" e "parola mancante" nascono
+  con la classe .nostar: starSpan ignora il clic (e non lo ferma) finché c'è; markResult la toglie a risposta giusta.
+  La "frase completa" mostrata dopo (starredSentence) resta cliccabile come prima. Il title sulle parole resta, ma il
+  cursore e l'hover no (.nostar .w in styles.css).
 - "APRI" È UN LINK VERO (v174, 3/10). Edoardo: "voglio poter cliccare con il destro e aprire in un'altra scheda, oppure
   con il click centrale della rotella". Miniatura e titolo erano già link (v115, localOpenHref); il pulsante "▶ Apri"
   no. Ora "▶ Apri", "▶ Gioca" e "🖨 Foglio A4" sono <a class="btnlink"> con href: clic sinistro come prima (stessa scheda),
