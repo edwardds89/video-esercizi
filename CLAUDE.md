@@ -1,5 +1,17 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- PARLIAMONE: QUANTE DOMANDE (v189, 3/10). Edoardo: "quando clicco su proponi con IA deve apparire un pop up che mi fa
+  scegliere quante domande voglio, 3 di comprensione e 3 opinione o solo 2 opinione". talkAiAsk(before, go): dialogo creato
+  al volo con due contatori (comprensione, opinione; 0-8) dopo il video, uno solo (1-8) prima del video. AI.suggestDiscussion
+  accetta nCheck/nTalk: se uno dei due è 0 usa il ramo "un solo tipo", e in uscita taglia per tipo (mai più di quelle
+  chieste). Passa anche avoid = domande già presenti. Senza nCheck/nTalk si comporta come prima (n).
+- "CORRECT!" CHE SVANISCE, BOTTONE BLU FERMO (v189, 3/10). Edoardo: "la scritta correct può semplicemente apparire sullo
+  schermo con fading 1 secondo e il pulsante blu rimane dov'è già e ci mettiamo solo la scritta Next". asFlash(text, ok):
+  pillola fissa al centro (dentro l'elemento a schermo intero, se c'è), 1 s per "Correct!", 2,2 s per la frase amichevole
+  di chi sbaglia. Niente più riga di feedback: resta solo la spiegazione (item.explain) se c'è. Scelta multipla: il bottone
+  blu c'è dall'inizio, spento (.chp-wait) con scritto "Next"; a domanda chiusa si accende, stesso posto. La frase con la
+  casella (.chp-inline) e quella risolta hanno ora lo stesso stile, così non salta. A schermo intero i caratteri tengono
+  conto anche dell'altezza (vh) e la foto è max 30vh: sul MacBook "Next" finiva fuori schermo.
 - SCHERMO INTERO CENTRATO (v188, 3/10). Edoardo: "non mi piace che ci sia tanto spazio sotto, mettilo centrato".
   .as-card:fullscreen è una colonna flex e #as-box ha margin:auto: l'esercizio sta al centro in verticale, i due bottoni
   restano in alto. L'icona "🗗" sul Mac non si vedeva bene: ora "✕ Esci da schermo intero".

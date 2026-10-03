@@ -1894,7 +1894,6 @@ a.btnlink.primary:hover{background:#185dc9}
 .chp-reveal.slim.line{border:none;background:none;padding:6px 0 2px;margin:8px 0 0}
 .chp-reveal.slim.line .big{font-size:20px}
 .chp-reveal.slim.line.no.soft{background:none}
-.chp-instant > .chp-send{display:none}
 
 /* v187: "Fai qui" a schermo intero */
 #as-back{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -1911,3 +1910,25 @@ a.btnlink.primary:hover{background:#185dc9}
 .as-card:fullscreen{display:flex;flex-direction:column}
 .as-card:fullscreen #as-back{flex:0 0 auto}
 .as-card:fullscreen #as-box{width:100%;margin:auto}
+
+/* v189: "Correct!" che compare e svanisce; bottone blu fermo; frase uguale prima e dopo la risposta */
+.as-flash{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:9999;pointer-events:none;padding:14px 30px;border-radius:999px;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.22);font-weight:800;font-size:clamp(26px,4.5vw,60px);text-align:center;max-width:90vw;white-space:pre-line;animation:asFlash 1s ease forwards}
+.as-flash.ok{color:#1c7c3e;border:3px solid #1c7c3e}
+.as-flash.soft{color:#c2410c;border:3px solid #f5c27a;font-size:clamp(20px,3vw,40px);animation-duration:2.2s}
+@keyframes asFlash{0%{opacity:0;transform:translate(-50%,-50%) scale(.85)}15%{opacity:1;transform:translate(-50%,-50%) scale(1)}70%{opacity:1}100%{opacity:0}}
+.chp-send.chp-wait{opacity:.35}
+.chp-q.chp-inline{text-align:center;font-size:clamp(22px,3.4vw,36px);font-weight:800;color:#12203a;padding:18px 16px;line-height:1.7}
+.chp-q.chp-inline .chp-gap.inline{font-size:.85em;font-weight:700}
+.chp-solved.gapk .chp-qbig{line-height:1.7}
+.as-card:fullscreen .chp-qbig .chp-qto,.as-card:fullscreen .chp-q.chp-inline{font-size:clamp(26px,min(4.4vw,7vh),72px)}
+.as-card:fullscreen .chp-qbig .chp-qfrom{font-size:clamp(18px,min(2.8vw,4.5vh),40px)}
+.as-card:fullscreen .as-img{max-height:30vh}
+.as-card:fullscreen .chp-mc{min-height:clamp(56px,10vh,120px)}
+
+/* v189: pop-up "quante domande?" di Parliamone */
+#dlg-talk-ai{max-width:460px}
+.tai-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}
+.tai-lab{display:flex;flex-direction:column;gap:2px}
+.tai-step{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.tai-step button{width:36px;height:36px;font-size:20px;line-height:1;padding:0}
+.tai-n{min-width:1.4em;text-align:center;font-size:22px}

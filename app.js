@@ -2843,21 +2843,63 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(row);
       requestAnimationFrame(function () { grow(qi); grow(hi); });   // dopo l'inserimento nel DOM: l'altezza si misura solo da attaccati
     });
+    // v189 (Edoardo: "deve apparire un pop up che mi fa scegliere quante domande voglio, 3 di comprensione e 3 opinione
+    // o solo 2 opinione"): prima di chiamare l'AI si scelgono i numeri; le domande già scritte non vengono ripetute.
     aiBtn.addEventListener('click', function () {
       if (!S.settings.apiKey) return toast('Serve la chiave API (Impostazioni AI)');
-      status.textContent = 'Chiedo al modello…';
-      const chunks = ls.chunks && ls.chunks.length ? ls.chunks : G.annotate(G.buildChunks(ls.lines || [], { duration: ls.duration, lang: ls.lang }), { lang: ls.lang, duration: ls.duration });
-      AI.suggestDiscussion({ chunks: chunks, lang: ls.lang, level: ls.level, n: before ? 3 : 6, mode: before ? 'warmup' : 'after', focus: ls.params && ls.params.focus, apiKey: S.settings.apiKey, model: S.settings.model })
-        .then(function (r) {
-          const have = new Set(sec.questions.map(function (q) { return L.normalize(q.text); }));
-          let added = 0;
-          r.questions.forEach(function (q) { if (have.has(L.normalize(q.text))) return; sec.questions.push({ id: uid(), text: q.text, help: q.help, kind: q.kind }); added++; });
-          touch(ls); renderFlow(ls);
-          toast(added + ' domande proposte' + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''));
-        })
-        .catch(function (e) { status.textContent = 'AI: ' + e.message; toast('AI: ' + e.message, 6000); });
+      talkAiAsk(before, function (pick) {
+        status.textContent = 'Chiedo al modello…';
+        const chunks = ls.chunks && ls.chunks.length ? ls.chunks : G.annotate(G.buildChunks(ls.lines || [], { duration: ls.duration, lang: ls.lang }), { lang: ls.lang, duration: ls.duration });
+        const avoid = sec.questions.filter(function (x) { return x.text; }).map(function (x) { return x.text; });
+        const prm = { chunks: chunks, lang: ls.lang, level: ls.level, mode: before ? 'warmup' : 'after', avoid: avoid, focus: ls.params && ls.params.focus, apiKey: S.settings.apiKey, model: S.settings.model };
+        if (before) prm.n = pick.n; else { prm.nCheck = pick.check; prm.nTalk = pick.talk; }
+        AI.suggestDiscussion(prm)
+          .then(function (r) {
+            const have = new Set(sec.questions.map(function (q) { return L.normalize(q.text); }));
+            let added = 0;
+            r.questions.forEach(function (q) { if (have.has(L.normalize(q.text))) return; sec.questions.push({ id: uid(), text: q.text, help: q.help, kind: q.kind }); added++; });
+            touch(ls); renderFlow(ls);
+            toast(added + (added === 1 ? ' domanda proposta' : ' domande proposte') + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''));
+          })
+          .catch(function (e) { status.textContent = 'AI: ' + e.message; toast('AI: ' + e.message, 6000); });
+      });
     });
     return card;
+  }
+
+  /** v189: pop-up "quante domande?" per "✨ Proponi con l'AI" di Parliamone. Ricorda l'ultima scelta (finché la pagina resta aperta). */
+  const TALK_AI = { n: 3, check: 3, talk: 3 };
+  function talkAiAsk(before, go) {
+    const old = $('#dlg-talk-ai'); if (old) old.remove();
+    const dlg = el('dialog', { id: 'dlg-talk-ai' });
+    const pick = { n: TALK_AI.n, check: TALK_AI.check, talk: TALK_AI.talk };
+    const ok = el('button', { class: 'primary', text: '✨ Proponi' });
+    const total = el('span', { class: 'hint' });
+    const paint = function () {
+      const t = before ? pick.n : pick.check + pick.talk;
+      ok.disabled = t === 0;
+      total.textContent = t === 0 ? 'Scegli almeno una domanda' : t + (t === 1 ? ' domanda in tutto' : ' domande in tutto');
+    };
+    const stepper = function (key, label, sub, min) {
+      const num = el('b', { class: 'tai-n', text: String(pick[key]) });
+      const set = function (v) { pick[key] = Math.max(min, Math.min(8, v)); num.textContent = String(pick[key]); paint(); };
+      return el('div', { class: 'tai-row' },
+        el('div', { class: 'tai-lab' }, el('b', { text: label }), el('span', { class: 'hint', text: sub })),
+        el('div', { class: 'tai-step' },
+          el('button', { type: 'button', class: 'small', text: '−', 'aria-label': 'Meno ' + label, onclick: function () { set(pick[key] - 1); } }), num,
+          el('button', { type: 'button', class: 'small', text: '+', 'aria-label': 'Più ' + label, onclick: function () { set(pick[key] + 1); } })));
+    };
+    dlg.appendChild(el('h2', { text: 'Quante domande vuoi?' }));
+    if (before) dlg.appendChild(stepper('n', 'Per entrare nel tema', 'prima del video, senza svelare il contenuto', 1));
+    else {
+      dlg.appendChild(stepper('check', 'Comprensione', 'lo studente racconta quello che il video ha detto', 0));
+      dlg.appendChild(stepper('talk', 'Opinione', 'reazioni personali su un punto del video', 0));
+    }
+    dlg.appendChild(el('p', { class: 'hint', style: 'margin:10px 0 0', text: 'Si aggiungono a quelle che hai già: l\'AI non le ripete.' }));
+    dlg.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, ok, el('button', { text: 'Annulla', onclick: function () { dlg.close(); } }), total));
+    ok.addEventListener('click', function () { TALK_AI.n = pick.n; TALK_AI.check = pick.check; TALK_AI.talk = pick.talk; dlg.close(); go(pick); });
+    dlg.addEventListener('close', function () { dlg.remove(); });
+    document.body.appendChild(dlg); paint(); dlg.showModal();
   }
 
   // ---------- ATTIVITÀ (Memory, Quiz, Anagramma, Ruota): standalone nel portfolio o sezione della lezione ----------
@@ -8673,6 +8715,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   /** v185: dopo la risposta la frase resta sullo schermo, con la soluzione al suo posto (e, nella scelta multipla,
    *  le opzioni con quella giusta accesa): prima spariva tutto e restava solo "Correct!". */
+  function asFlash(text, ok) {
+    const host = document.fullscreenElement || document.webkitFullscreenElement || document.body;
+    $$('.as-flash').forEach(function (x) { x.remove(); });
+    const f = el('div', { class: 'as-flash ' + (ok ? 'ok' : 'soft'), text: text });
+    host.appendChild(f);
+    setTimeout(function () { f.remove(); }, ok ? 1100 : 2300);
+  }
   function chpSolvedNode(item) {
     const box = el('div', { class: 'chp-item chp-solved' });
     const d = item.data || {};
@@ -8687,6 +8736,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       });
       box.appendChild(grid);
     } else if (item.kind === 'gap' || item.kind === 'gapbank') {
+      box.classList.add('gapk');
       box.appendChild(chpQNode(VLChal.gapText(item), EX.gapRuns(d).map(function (r) { return r.answer; })));
     } else if (item.kind === 'match') {
       const q = el('div', { class: 'chp-q chp-qbig' });
@@ -8837,6 +8887,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       getVal = function () { return chosen.some(function (v) { return v !== -1; }) ? chosen.slice() : null; };
     }
     const send = el('button', { class: 'primary big chp-send', text: opts.sendLabel || 'Invia · Send ▶' });
+    // v189: scelta multipla col clic-risposta: il bottone blu c'è già, spento, con scritto "Next"; si accende a domanda chiusa
+    if (kind === 'mc' && opts.instant && opts.nextLabel) { send.textContent = opts.nextLabel; send.classList.add('chp-wait'); }
     // v164 (Edoardo, iPhone: 'se scrivo "maestra " con uno spazio dopo, non mi fa cliccare su check'): con la parola ancora
     // sottolineata dal correttore, iOS usa il primo tocco per confermarla e il clic sul bottone non arriva. Due rimedi:
     // autocorrect="off" sulle caselle (il correttore inglese cambiava anche le parole italiane) e il bottone che parte
@@ -10018,7 +10070,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const hintBox = el('div', { class: 'as-hint', style: 'display:none' });
       let mcOff = null, curInput = null;
       const ask = function () {
-        const inputBox = curInput = chpItemInput(pub, { inline: true, instant: true, mcOff: mcOff, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
+        const inputBox = curInput = chpItemInput(pub, { inline: true, instant: true, nextLabel: i + 1 < items.length ? T.next : T.result, mcOff: mcOff, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
           const res = VLChal.checkItem(item, v, pub);
           // v180: errore di battitura = "controlla come hai scritto", non consuma il tentativo (una volta sola)
           if (!res.correct && !cell.typo && VLChal.typoOf(item, v)) { cell.typo = 1; msg.className = 'as-msg no'; msg.textContent = T.typo; return 'retry'; }
@@ -10067,9 +10119,10 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const h2 = head(); headNode.replaceWith(h2); headNode = h2;
         msg.textContent = ''; msg.className = 'as-msg'; hintBox.style.display = 'none';
         const solved = chpSolvedNode(item);
-        solved.appendChild(el('div', { class: 'chp-reveal slim line ' + (ok ? 'ok' : 'no soft') },
-          el('div', { class: 'big', text: ok ? (cell.hints ? T.okHelp : cell.tries.length > 1 ? T.okLate : T.ok) : kindWord(a.lesson.uiLang) }),
-          item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null));
+        // v189: "Correct!" non occupa più una riga: compare sopra lo schermo e svanisce (1 s; 2,2 s la frase amichevole
+        // di chi ha sbagliato, che è più lunga). Così il bottone blu non si sposta: cambia solo la scritta in "Next".
+        asFlash(ok ? (cell.hints ? T.okHelp : cell.tries.length > 1 ? T.okLate : T.ok) : kindWord(a.lesson.uiLang), ok);
+        if (item.explain) solved.appendChild(el('div', { class: 'chp-reveal slim line' }, el('div', { class: 'sol as-explain', text: item.explain })));
         const next = el('button', { class: 'primary big chp-send', text: i + 1 < items.length ? T.next : T.result, onclick: function () { i++; step(); } });
         solved.appendChild(next);
         if (curInput && curInput.parentNode) curInput.replaceWith(solved); else box.appendChild(solved);

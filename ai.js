@@ -429,8 +429,13 @@
     const lang = params.lang || 'it';
     const level = params.level || 'B1';
     const warmup = params.mode === 'warmup';
-    const n = params.n || (warmup ? 3 : 6);
-    const nCheck = Math.ceil(n / 2);
+    // v189: il docente sceglie quante domande di comprensione e quante di opinione (params.nCheck / params.nTalk)
+    const counts = !warmup && (params.nCheck != null || params.nTalk != null);
+    const wantCheck = counts ? Math.max(0, params.nCheck | 0) : 0, wantTalk = counts ? Math.max(0, params.nTalk | 0) : 0;
+    if (counts && wantCheck && !wantTalk) params = Object.assign({}, params, { kind: 'check' });
+    if (counts && wantTalk && !wantCheck) params = Object.assign({}, params, { kind: 'talk' });
+    const n = counts ? (wantCheck + wantTalk) || 1 : (params.n || (warmup ? 3 : 6));
+    const nCheck = counts ? wantCheck : Math.ceil(n / 2);
     const text = (params.chunks || []).map(function (c) { return c.text; }).join(' ').slice(0, 12000);
     const system = 'You help a language teacher prepare a speaking activity ' + (warmup ? 'BEFORE' : 'AFTER') + ' a video. Output ONLY a JSON object, no prose, no markdown fences.';
     const kindOnly = !warmup && (params.kind === 'check' || params.kind === 'talk');   // rigenerazione di UNA domanda di un tipo preciso
@@ -440,7 +445,7 @@
       ? 'Write exactly ' + n + ' warm-up questions in ' + lang + ' for BEFORE the video: they elicit the TOPIC — activate what students already know and spark curiosity. The students have NOT seen the video yet: never mention what the video says, never quote its facts, examples or numbers, no spoilers. Each question must be open (never answerable with yes/no or one word), personal and concrete ("Ti è mai capitato…?", "Cosa sai di…?", "Secondo te perché…?"). Order them from easy and personal to more general. Language and grammar suited to a ' + level + ' student; short, one sentence each. Set "kind":"warmup" on each.'
       : kindOnly
         ? 'Write exactly ' + n + ' question' + (n === 1 ? '' : 's') + ' in ' + lang + ' for AFTER the video, SPECIFIC to this video (never a generic question that could be asked without having watched it): ' + (params.kind === 'check' ? CHECK : TALK) + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.'
-        : 'Write ' + n + ' questions in ' + lang + ' for AFTER the video, all SPECIFIC to this video (never generic questions that could be asked without having watched it). First ' + nCheck + ' ' + CHECK + ' Then ' + (n - nCheck) + ' ' + TALK + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.';
+        : 'Write exactly ' + n + ' questions in ' + lang + ' for AFTER the video, all SPECIFIC to this video (never generic questions that could be asked without having watched it). First ' + nCheck + ' ' + CHECK + ' Then ' + (n - nCheck) + ' ' + TALK + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.';
     const avoid = (params.avoid || []).map(function (a) { return String(a || '').trim(); }).filter(Boolean);
     if (avoid.length) task += ' Do NOT repeat or paraphrase these questions, already in use: ' + avoid.map(function (a) { return '"' + a + '"'; }).join('; ') + '. Ask about something else in the video.';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + level,
@@ -459,6 +464,11 @@
       const kind = warmup ? 'warmup' : kindOnly ? params.kind : (String((q && q.kind) || '').toLowerCase() === 'check' ? 'check' : 'talk');
       return { kind: kind, text: String((q && q.text) || '').trim(), help: frameHelp(String((q && q.help) || ''), kind) };
     }).filter(function (q) { return q.text; }).slice(0, 12);
+    if (counts) {   // mai più domande di quelle chieste, per tipo
+      const left = { check: wantCheck, talk: wantTalk };
+      const kept = questions.filter(function (q) { if (left[q.kind] > 0) { left[q.kind]--; return true; } return false; });
+      return { questions: kept, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
+    }
     return { questions: questions, ai: { model: res.model, usage: res.usage, cost: estimateCost(res.usage, res.model || params.model || DEFAULT_MODEL) } };
   }
 
