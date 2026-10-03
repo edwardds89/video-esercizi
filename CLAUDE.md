@@ -1,5 +1,17 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- PARLIAMONE: NIENTE DOMANDE SIMILI A QUELLE GIÀ PRESENTI (v190, 3/10). Edoardo: "a volte vengono riproposte domande
+  simili a quelle che ci sono già... devono essere capite le domande già presenti e se ne devono fare di nuove". Tre cose
+  in AI.suggestDiscussion quando arriva avoid: (1) il prompt elenca le domande presenti come "punti già coperti" e vieta lo
+  stesso punto con altre parole o cambiato di tipo; ogni domanda nuova dichiara "about" (il punto del video); (2) si
+  chiedono 2 domande in più per tipo; (3) AI.similarQuestion scarta quelle che condividono >= 60% delle parole di contenuto
+  con una esistente o con un'altra nuova (o hanno lo stesso "about"), poi si taglia al numero chiesto. Vale anche per
+  "Rigenera" di una sola domanda. Il filtro è lessicale: due domande sullo stesso punto con parole tutte diverse passano
+  solo se il modello non rispetta il prompt.
+- PARLIAMONE: ANIMAZIONE MENTRE L'AI SCRIVE (v190, 3/10). Edoardo: "quando clicco su proponi voglio un'animazione simile a
+  quella del caricamento ma con sfondo trasparente, con il logo del play e pause che si muovono". È lo stesso #overlay
+  (gara U/Play, plRun) con la classe .glass: fondo bianco al 50% + sfocatura leggera, testo in una pillola. La classe si
+  toglie quando la risposta arriva o fallisce. Il toast dice anche quante domande sono state scartate perché simili.
 - PARLIAMONE: QUANTE DOMANDE (v189, 3/10). Edoardo: "quando clicco su proponi con IA deve apparire un pop up che mi fa
   scegliere quante domande voglio, 3 di comprensione e 3 opinione o solo 2 opinione". talkAiAsk(before, go): dialogo creato
   al volo con due contatori (comprensione, opinione; 0-8) dopo il video, uno solo (1-8) prima del video. AI.suggestDiscussion

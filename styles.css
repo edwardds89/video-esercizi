@@ -1932,3 +1932,9 @@ a.btnlink.primary:hover{background:#185dc9}
 .tai-step{display:flex;align-items:center;gap:10px;flex:0 0 auto}
 .tai-step button{width:36px;height:36px;font-size:20px;line-height:1;padding:0}
 .tai-n{min-width:1.4em;text-align:center;font-size:22px}
+.tai-step button,.tai-n{user-select:none;-webkit-user-select:none}
+
+/* v190: caricamento "di vetro" (Parliamone): fondo trasparente, la pagina si vede sotto */
+#overlay.glass{background:rgba(255,255,255,.5);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+#overlay.glass #overlay-text{display:inline-block;background:#fff;color:#12203a;font-weight:700;padding:8px 18px;border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.14)}
+#overlay.glass .pl-stage{filter:drop-shadow(0 4px 14px rgba(255,255,255,.9))}

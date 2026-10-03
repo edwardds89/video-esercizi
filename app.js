@@ -2853,15 +2853,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         const avoid = sec.questions.filter(function (x) { return x.text; }).map(function (x) { return x.text; });
         const prm = { chunks: chunks, lang: ls.lang, level: ls.level, mode: before ? 'warmup' : 'after', avoid: avoid, focus: ls.params && ls.params.focus, apiKey: S.settings.apiKey, model: S.settings.model };
         if (before) prm.n = pick.n; else { prm.nCheck = pick.check; prm.nTalk = pick.talk; }
+        // v190: mentre l'AI scrive, l'animazione del marchio (U contro Play) su fondo trasparente: la pagina resta visibile sotto
+        const tot = before ? pick.n : pick.check + pick.talk;
+        const wait = function (on) { $('#overlay').classList.toggle('glass', on); overlay(on, on ? (tot === 1 ? 'Scrivo la domanda…' : 'Scrivo le ' + tot + ' domande…') : ''); };
+        wait(true);
         AI.suggestDiscussion(prm)
           .then(function (r) {
+            wait(false);
             const have = new Set(sec.questions.map(function (q) { return L.normalize(q.text); }));
             let added = 0;
             r.questions.forEach(function (q) { if (have.has(L.normalize(q.text))) return; sec.questions.push({ id: uid(), text: q.text, help: q.help, kind: q.kind }); added++; });
             touch(ls); renderFlow(ls);
-            toast(added + (added === 1 ? ' domanda proposta' : ' domande proposte') + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''));
+            status.textContent = '';
+            toast((added === 0 ? 'Nessuna domanda nuova: riprova' : added + (added === 1 ? ' domanda proposta' : ' domande proposte')) + (added > 0 && added < tot ? ' (su ' + tot + ': le altre somigliavano a quelle che hai già)' : '') + (r.ai && r.ai.cost != null ? ' · ' + (r.ai.cost * 100).toFixed(1) + ' cent' : ''));
           })
-          .catch(function (e) { status.textContent = 'AI: ' + e.message; toast('AI: ' + e.message, 6000); });
+          .catch(function (e) { wait(false); status.textContent = 'AI: ' + e.message; toast('AI: ' + e.message, 6000); });
       });
     });
     return card;

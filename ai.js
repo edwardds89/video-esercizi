@@ -425,6 +425,23 @@
     }).slice(0, 3).join(' · ');
   }
 
+  /** v190: due domande "si somigliano" se condividono gran parte delle parole di contenuto (senza accenti, senza parole
+   *  corte o di servizio). Serve a scartare i doppioni che il modello propone lo stesso. */
+  const Q_STOP = ' secondo video dice perche perché come quando quale quali cosa cose che cosa sono sei tuo tua tuoi tue nel nella nello nelle negli degli della dello delle dei del con per una uno gli the what why how does did video according think your you this that with about which are and  que como por para porque segun dice video una los las del con est sont que pour dans avec selon vous votre '.split(' ');
+  function qWords(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\u0400-\uffff ]+/g, ' ').split(/\s+/)
+      .filter(function (w) { return w.length > 3 && Q_STOP.indexOf(w) === -1; }).map(function (w) { return w.length > 5 ? w.slice(0, 5) : w; });
+  }
+  function similarQuestion(a, b, thr) {
+    const A = qWords(a), B = qWords(b);
+    if (!A.length || !B.length) return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+    const setB = {}; B.forEach(function (w) { setB[w] = 1; });
+    const setA = {}; A.forEach(function (w) { setA[w] = 1; });
+    const ka = Object.keys(setA), kb = Object.keys(setB);
+    const common = ka.filter(function (w) { return setB[w]; }).length;
+    const small = Math.min(ka.length, kb.length);
+    return common / small >= (thr || 0.6) && (common >= 2 || small === 1);
+  }
   async function suggestDiscussion(params) {
     const lang = params.lang || 'it';
     const level = params.level || 'B1';
@@ -441,13 +458,19 @@
     const kindOnly = !warmup && (params.kind === 'check' || params.kind === 'talk');   // rigenerazione di UNA domanda di un tipo preciso
     const CHECK = 'COMPREHENSION questions ("kind":"check"): they verify that students understood the main ideas and key points of THIS video — what it says, why, how, with which examples, according to the video; open questions answerable by retelling the video (never yes/no, no trivial numbers or dates).';
     const TALK = 'DISCUSSION questions ("kind":"talk") for SPEAKING practice: personal reactions and opinions ANCHORED to a specific point the video made (e.g. "Il video dice che…: sei d\'accordo?", "Nel tuo paese succede la stessa cosa?").';
-    let task = warmup
-      ? 'Write exactly ' + n + ' warm-up questions in ' + lang + ' for BEFORE the video: they elicit the TOPIC — activate what students already know and spark curiosity. The students have NOT seen the video yet: never mention what the video says, never quote its facts, examples or numbers, no spoilers. Each question must be open (never answerable with yes/no or one word), personal and concrete ("Ti è mai capitato…?", "Cosa sai di…?", "Secondo te perché…?"). Order them from easy and personal to more general. Language and grammar suited to a ' + level + ' student; short, one sentence each. Set "kind":"warmup" on each.'
-      : kindOnly
-        ? 'Write exactly ' + n + ' question' + (n === 1 ? '' : 's') + ' in ' + lang + ' for AFTER the video, SPECIFIC to this video (never a generic question that could be asked without having watched it): ' + (params.kind === 'check' ? CHECK : TALK) + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.'
-        : 'Write exactly ' + n + ' questions in ' + lang + ' for AFTER the video, all SPECIFIC to this video (never generic questions that could be asked without having watched it). First ' + nCheck + ' ' + CHECK + ' Then ' + (n - nCheck) + ' ' + TALK + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.';
+    // v190 (Edoardo: "a volte vengono riproposte domande simili a quelle che ci sono già"): con domande già presenti
+    // 1) il modello le riceve come "punti già coperti" e per ogni domanda nuova dichiara il punto del video che tocca ("about");
+    // 2) se ne chiedono 2 in più per tipo e qui si scartano quelle che somigliano a una esistente o a un'altra nuova.
     const avoid = (params.avoid || []).map(function (a) { return String(a || '').trim(); }).filter(Boolean);
-    if (avoid.length) task += ' Do NOT repeat or paraphrase these questions, already in use: ' + avoid.map(function (a) { return '"' + a + '"'; }).join('; ') + '. Ask about something else in the video.';
+    const extra = avoid.length ? 2 : 0;
+    const aN = n + extra * (!warmup && !kindOnly && nCheck > 0 && n - nCheck > 0 ? 2 : 1);
+    const aCheck = nCheck + extra, aTalk = (n - nCheck) + extra;
+    let task = warmup
+      ? 'Write exactly ' + aN + ' warm-up questions in ' + lang + ' for BEFORE the video: they elicit the TOPIC — activate what students already know and spark curiosity. The students have NOT seen the video yet: never mention what the video says, never quote its facts, examples or numbers, no spoilers. Each question must be open (never answerable with yes/no or one word), personal and concrete ("Ti è mai capitato…?", "Cosa sai di…?", "Secondo te perché…?"). Order them from easy and personal to more general. Language and grammar suited to a ' + level + ' student; short, one sentence each. Set "kind":"warmup" on each.'
+      : kindOnly
+        ? 'Write exactly ' + aN + ' question' + (aN === 1 ? '' : 's') + ' in ' + lang + ' for AFTER the video, SPECIFIC to this video (never a generic question that could be asked without having watched it): ' + (params.kind === 'check' ? CHECK : TALK) + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.'
+        : 'Write exactly ' + aN + ' questions in ' + lang + ' for AFTER the video, all SPECIFIC to this video (never generic questions that could be asked without having watched it). First ' + aCheck + ' ' + CHECK + ' Then ' + aTalk + ' ' + TALK + ' Language and grammar suited to a ' + level + ' student; short, one sentence each.';
+    if (avoid.length) task += ' ALREADY IN THE LESSON (read them first and work out which point, moment or idea of the video each one covers): ' + avoid.map(function (a, k) { return (k + 1) + ') "' + a + '"'; }).join(' ') + '. Every NEW question must be about a DIFFERENT point, moment, example or idea of the video than all of these and than the other new ones: never the same point asked again with other words, never the same point turned from comprehension into opinion or the other way round, never a narrower or broader version of one of them. If the obvious points are taken, go to the details, examples, causes, consequences or parts of the video not asked about yet. For each new question also give "about": 3 to 6 words naming the specific point of the video it is about (it must not match the point of any question above).';
     const user = ['LANGUAGE OF THE VIDEO: ' + lang + '   STUDENT LEVEL: ' + level,
       task +
       ' For each question give "help": 2 or 3 SENTENCE OPENERS (in ' + lang + ', separated by " · ") — the words the student uses to START the answer, nothing more. '
@@ -456,14 +479,26 @@
       + 'A student must be able to read them without learning anything about the video. '
       + (warmup ? 'These come before the video: an opener that hints at what the video says is a spoiler.' : 'This matters most for the comprehension questions: if the opener contains the answer, the question stops being comprehension.') +
       (params.focus ? ' Teacher\'s note: ' + params.focus : ''),
-      'SCHEMA: {"questions":[{"kind":"' + (warmup ? 'warmup' : 'check|talk') + '","text":"...","help":"... · ... · ..."}]}', '',
+      'SCHEMA: {"questions":[{"kind":"' + (warmup ? 'warmup' : 'check|talk') + '","text":"...","help":"... · ... · ..."' + (avoid.length ? ',"about":"..."' : '') + '}]}', '',
       'VIDEO TEXT' + (warmup ? ' (for your eyes only — the questions must not reveal it)' : '') + ':', text].join('\n');
     const res = await callAnthropic({ apiKey: params.apiKey, model: params.model, system: system, user: user, maxTokens: 1500, fetchImpl: params.fetchImpl });
     const plan = extractJSON(res.text);
-    const questions = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) {
+    const questions0 = (Array.isArray(plan.questions) ? plan.questions : []).map(function (q) {
       const kind = warmup ? 'warmup' : kindOnly ? params.kind : (String((q && q.kind) || '').toLowerCase() === 'check' ? 'check' : 'talk');
-      return { kind: kind, text: String((q && q.text) || '').trim(), help: frameHelp(String((q && q.help) || ''), kind) };
-    }).filter(function (q) { return q.text; }).slice(0, 12);
+      return { kind: kind, text: String((q && q.text) || '').trim(), help: frameHelp(String((q && q.help) || ''), kind), about: String((q && q.about) || '').trim() };
+    }).filter(function (q) { return q.text; }).slice(0, 16);
+    let questions = questions0;
+    {   // doppioni: contro le domande già presenti e fra le nuove (anche per "about" uguale)
+      const seenQ = avoid.slice(), seenAbout = [];
+      questions = questions0.filter(function (q) {
+        if (seenQ.some(function (o) { return similarQuestion(o, q.text); })) return false;
+        if (q.about && seenAbout.some(function (o) { return similarQuestion(o, q.about, 0.75); })) return false;
+        seenQ.push(q.text); if (q.about) seenAbout.push(q.about);
+        return true;
+      });
+    }
+    questions = questions.map(function (q) { return { kind: q.kind, text: q.text, help: q.help }; });
+    if (!counts) questions = questions.slice(0, n);
     if (counts) {   // mai più domande di quelle chieste, per tipo
       const left = { check: wantCheck, talk: wantTalk };
       const kept = questions.filter(function (q) { if (left[q.kind] > 0) { left[q.kind]--; return true; } return false; });
@@ -1227,5 +1262,5 @@
     for (let i = 0; i < batches.length; i += 2) await Promise.all(batches.slice(i, i + 2).map(one));
     return { byN: byN };
   }
-  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, photoQueries: photoQueries, editSet: editSet, translateSet: translateSet, askExercise: askExercise };
+  return { DEFAULT_MODEL: DEFAULT_MODEL, PRICES: PRICES, buildMessages: buildMessages, callAnthropic: callAnthropic, extractJSON: extractJSON, locate: locate, applyPlan: applyPlan, generateWithAI: generateWithAI, estimateCost: estimateCost, testKey: testKey, cleanVocab: cleanVocab, suggestVocab: suggestVocab, translateWords: translateWords, checkVocab: checkVocab, generateMC: generateMC, shuffleMC: shuffleMC, makeTricky: makeTricky, translateSentence: translateSentence, suggestDiscussion: suggestDiscussion, similarQuestion: similarQuestion, frameHelp: frameHelp, generateQuizSet: generateQuizSet, generateQuizOption: generateQuizOption, generateConvUnit: generateConvUnit, regenerateConvPart: regenerateConvPart, itemsFromImage: itemsFromImage, topicsFromImage: topicsFromImage, similarItem: similarItem, photoQueries: photoQueries, editSet: editSet, translateSet: translateSet, askExercise: askExercise };
 });
