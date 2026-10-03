@@ -7232,6 +7232,22 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const ls = current(); if (!ls) return;
     if (confirm('Eliminare il set "' + (ls.title || 'senza titolo') + '"?')) { deleteLesson(ls); renderHome(); }
   });
+  /** v181 (Edoardo: "gli esercizi vorrei poterli aprire anche per una one to one e farli sul pc senza QR ... ovviamente
+   *  la sfida in classe voglio che rimanga"): "▶ Fai qui" apre l'esercitazione su QUESTO schermo, con lo stesso giro dei
+   *  compiti (aiuto con la regola, risposta da ricopiare, traduzione, riepilogo degli errori). Niente classe, niente
+   *  codice, niente rete: S.assign.local = true, assignSend non manda niente e nessun risultato viene salvato. */
+  function playSetHere(ls) {
+    if (!ls || !ls.chal || !chalSetReady(ls)) return toast('Il set è vuoto: aggiungi almeno un esercizio');
+    const lesson = asgPayload(ls);
+    show('assign');
+    document.body.classList.add('as-local');
+    const box = $('#as-box'); box.innerHTML = '';
+    const oldBack = $('#as-back'); if (oldBack) oldBack.remove();
+    box.parentNode.insertBefore(el('div', { id: 'as-back', style: 'margin-bottom:10px' }, el('button', { class: 'small', text: '◀ Torna all\'esercitazione', onclick: function () { document.body.classList.remove('as-local'); const b = $('#as-back'); if (b) b.remove(); clearTimeout(S.assign && S.assign.timer); S.assign = null; openChalSet(ls.id); } })), box);
+    S.assign = { local: true, backId: ls.id, be: null, code: '', id: VLClass.uuid(), name: '', detail: {}, lesson: lesson, status: 'local', timer: null, err: '' };
+    playAssignSet({ title: ls.title || 'Esercitazione', code: '', lesson: lesson });
+  }
+  $('#cs-here').addEventListener('click', function () { const ls = current(); if (ls) { ls.title = $('#cs-title').value.trim() || ls.title; playSetHere(ls); } });
   $('#cs-play').addEventListener('click', function () {
     const ls = current(); if (!ls) return;
     if (!chalSetReady(ls)) return toast('Il set è vuoto: importa o aggiungi almeno un esercizio prima di lanciare la sfida');
@@ -9293,7 +9309,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     it: { name: 'Il tuo nome e cognome', namePh: 'Nome e cognome', privacy: 'Il tuo nome e le tue risposte li vede solo il docente. Non serve un account.', start: 'Inizia ▶', exercises: 'esercizi', needName: 'Scrivi nome e cognome',
       check: 'Controlla', retry: '✗ Non è giusto: riprova.', almost: '✗ Quasi ({p}% giusto): riprova.', ok: '✓ Giusto!', okLate: '✓ Giusto al secondo tentativo', wrong: '✗ Sbagliato', solution: 'Soluzione: ', next: 'Avanti ▶', result: 'Vedi il risultato ▶',
       review: 'Da ripassare', youWrote: 'Hai scritto: ', correct: 'Giusto: ', again: '↻ Rifai da capo', accents: ' Attenzione agli accenti (è ≠ e).', answerFirst: 'Prima rispondi', wrongPh: 'Scrivi la parola giusta', missPh: 'La parola che manca', scrHint: 'Tocca le parole qui sotto nell’ordine giusto',
-      typo: '✏️ Quasi! Controlla come hai scritto: c\'è un errore di battitura.', hint: '💡 Aiuto', typeIt: '✗ Non ancora. La risposta giusta è:', typeIt2: 'Scrivila qui sotto per andare avanti.', notYet: '✗ Non è giusto. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
+      typo: '✏️ Quasi! Controlla come hai scritto: c\'è un errore di battitura.', hint: '💡 Aiuto', typeIt: 'Non ancora. La risposta giusta è:', typeIt2: 'Scrivila qui sotto per andare avanti.', notYet: 'Non ancora. Ecco un aiuto, riprova:', hStart: 'Comincia con «{w}…» ({n} lettere)', hWrong: 'La parola sbagliata è «{w}»', hMiss: 'Manca una parola dopo «{w}»', hMiss0: 'Manca la prima parola',
       hExtraA: 'La parola in più è nella prima metà della frase', hExtraB: 'La parola in più è nella seconda metà della frase', hScr: 'La frase comincia con «{w}»', hMatch: 'Una coppia giusta: {w}', hMc: 'Ho tolto {n} risposte sbagliate', okHelp: '✓ Giusto, con l\'aiuto', koHelp: '✗ Sbagliato anche con l\'aiuto',
       me: '📚 I miei compiti', meSub: 'Entra con la tua email: ritrovi i compiti fatti e gli errori da ripassare, dal telefono o dal PC.', meOpt: '👤 Entra per ritrovare i tuoi compiti (facoltativo)', signedAs: 'Collegato come {e}', logout: 'Esci', email: 'La tua email', sendCode: 'Inviami il codice', codeSent: 'Ti ho mandato un codice a {e}: scrivilo qui (guarda anche nello spam).', code: 'Codice', enter: 'Entra', badCode: 'Codice sbagliato o scaduto', none: 'Non hai ancora compiti collegati al tuo profilo.', review2: 'Rivedi', redo: 'Rifai', done2: 'consegnato', inProgress: 'in corso', yourName: 'Nome e cognome', backList: '← I miei compiti', linked: '{n} compiti fatti su questo dispositivo collegati al tuo profilo',
       waitTitle: 'Sei dentro! ✓', waitMsg: 'Aspetta: il quiz parte quando lo dice il docente…', ended: 'La sessione è finita: il docente ha chiuso il quiz.', timeUp: '⏰ Tempo scaduto!', stopped: '⏹ Il docente ha fermato il quiz.',
@@ -9303,7 +9319,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     en: { name: 'Your first and last name', namePh: 'First and last name', privacy: 'Only your teacher sees your name and your answers. You don\'t need an account.', start: 'Start ▶', exercises: 'exercises', needName: 'Write your first and last name',
       check: 'Check', retry: '✗ Not quite: try again.', almost: '✗ Almost ({p}% right): try again.', ok: '✓ Correct!', okLate: '✓ Correct on the second try', wrong: '✗ Wrong', solution: 'Answer: ', next: 'Next ▶', result: 'See your result ▶',
       review: 'To review', youWrote: 'You wrote: ', correct: 'Correct: ', again: '↻ Start again', accents: ' Mind the accents (è ≠ e).', answerFirst: 'Answer first', wrongPh: 'Write the right word', missPh: 'The missing word', scrHint: 'Tap the words below in the right order',
-      typo: '✏️ Almost! Check your spelling: there is a typo.', hint: '💡 Hint', typeIt: '✗ Not yet. The right answer is:', typeIt2: 'Write it below to continue.', notYet: '✗ Not quite. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
+      typo: '✏️ Almost! Check your spelling: there is a typo.', hint: '💡 Hint', typeIt: 'Not yet. The right answer is:', typeIt2: 'Write it below to continue.', notYet: 'Not yet. Here is a hint, try again:', hStart: 'It starts with «{w}…» ({n} letters)', hWrong: 'The wrong word is «{w}»', hMiss: 'A word is missing after «{w}»', hMiss0: 'The first word is missing',
       hExtraA: 'The extra word is in the first half of the sentence', hExtraB: 'The extra word is in the second half of the sentence', hScr: 'The sentence starts with «{w}»', hMatch: 'One right pair: {w}', hMc: 'I removed {n} wrong answers', okHelp: '✓ Correct, with the hint', koHelp: '✗ Wrong, even with the hint',
       me: '📚 My assignments', meSub: 'Sign in with your email: find the assignments you did and the mistakes to review, on your phone or computer.', meOpt: '👤 Sign in to keep your assignments (optional)', signedAs: 'Signed in as {e}', logout: 'Sign out', email: 'Your email', sendCode: 'Send me the code', codeSent: 'We sent a code to {e}: type it here (check your spam folder too).', code: 'Code', enter: 'Sign in', badCode: 'Wrong or expired code', none: 'No assignments linked to your profile yet.', review2: 'Review', redo: 'Do it again', done2: 'submitted', inProgress: 'in progress', yourName: 'First and last name', backList: '← My assignments', linked: '{n} assignments done on this device linked to your profile',
       waitTitle: 'You\'re in! ✓', waitMsg: 'Wait: the quiz starts when your teacher says so…', ended: 'The session is over: your teacher closed the quiz.', timeUp: '⏰ Time\'s up!', stopped: '⏹ Your teacher stopped the quiz.',
@@ -9327,6 +9343,21 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   })();
   // v133 (Edoardo: "ricordati che gli studenti non parlano italiano"): se il docente non ha scelto, l'interfaccia
   // dello studente è in INGLESE; prima di sapere il compito (errori, #me) si segue la lingua del browser dello studente.
+  /** v181 (Edoardo, compito: '"Wrong, even with the hint": questa scritta è denigratoria, cambiala! qualcosa di più
+   *  positivo tipo "we learn with our mistakes" ... creane 10 di frasi friendly e ne metti una random ogni volta').
+   *  Dopo un errore non si dice "sbagliato": una frase incoraggiante a caso (mai la stessa due volte di fila), poi la risposta. */
+  const KIND_WORDS = {
+    en: ['We learn from our mistakes 💪', 'Mistakes are part of learning 🌱', 'Good try! Here is the answer 👇', 'Every mistake is a step forward 👣', 'No problem: next time you\'ll get it 😉', 'That\'s how we learn! ✨', 'Keep going, you\'re learning 🚀', 'Nice effort! Remember this one 📌', 'Not yet, and that\'s okay 🙂', 'Now you know it! 💡'],
+    it: ['Sbagliando si impara 💪', 'Gli errori fanno parte del gioco 🌱', 'Bel tentativo! Ecco la risposta 👇', 'Ogni errore è un passo avanti 👣', 'Nessun problema: la prossima volta la sai 😉', 'È così che si impara! ✨', 'Continua così, stai imparando 🚀', 'Bravo per averci provato! Ricordati questa 📌', 'Non ancora, e va bene così 🙂', 'Adesso la sai! 💡']
+  };
+  let KIND_LAST = -1;
+  function kindWord(lang) {
+    const list = KIND_WORDS[lang === 'it' ? 'it' : 'en'];
+    let k = Math.floor(Math.random() * list.length);
+    if (k === KIND_LAST) k = (k + 1) % list.length;
+    KIND_LAST = k;
+    return list[k];
+  }
   function asgT(lesson) { return ASG_T[(lesson && lesson.uiLang) || 'en'] || ASG_T.en; }
   function stuBrowserLang() { let l = ''; try { l = localStorage.getItem('vle.stuLang') || ''; } catch (e) { /* ignora */ } return l || (/^it\b/i.test(navigator.language || '') ? 'it' : 'en'); }
   /** v126: cosa viaggia nel compito. Video-lezione: studentPayload. Set di esercizi (esercitazione): solo gli item. */
@@ -9945,8 +9976,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
         S.assign.timer = setTimeout(function () { assignSend(false); }, 400);
         box.innerHTML = '';
         box.appendChild(head());
-        const fb = el('div', { class: 'chp-reveal ' + (ok ? 'ok' : 'no') },
-          el('div', { class: 'big', text: ok ? (cell.hints ? T.okHelp : cell.tries.length > 1 ? T.okLate : T.ok) : (cell.hints ? T.koHelp : T.wrong) }),
+        const fb = el('div', { class: 'chp-reveal ' + (ok ? 'ok' : 'no soft') },
+          el('div', { class: 'big', text: ok ? (cell.hints ? T.okHelp : cell.tries.length > 1 ? T.okLate : T.ok) : kindWord(a.lesson.uiLang) }),
           ok ? null : el('div', { class: 'sol', text: T.solution + VLChal.solutionText(item) }),
           item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null);
         box.appendChild(fb);
@@ -9976,7 +10007,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
             el('div', { class: 'as-sol', text: T.correct + VLChal.solutionText(it) }));
         })));
       }
-      box.appendChild(el('p', { style: 'margin-top:12px' }, el('a', { href: '#me', text: T.me + (STU.user ? '' : ' · ' + T.meOpt.replace(/^👤 /, '')), onclick: function (ev) { ev.preventDefault(); openMine(); } })));
+      if (!S.assign.local) box.appendChild(el('p', { style: 'margin-top:12px' }, el('a', { href: '#me', text: T.me + (STU.user ? '' : ' · ' + T.meOpt.replace(/^👤 /, '')), onclick: function (ev) { ev.preventDefault(); openMine(); } })));
       if (crN) box.appendChild(crN);
       if (!live) box.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { text: T.again, onclick: function () { assignNewAttempt(); if (shuffleOn) items = VLChal.shuffleArr(items, Math.random); i = 0; over = false; step(); } })));
     };
@@ -10025,6 +10056,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   function assignSend(finished) {
     const A = S.assign; if (!A) return Promise.resolve(false);
+    if (A.local) { paintAssignStatus(); return Promise.resolve(true); }   // v181: fatto qui sul computer, non si manda niente
     rememberAttempt(A.id, A.code);   // v132: per collegarlo al profilo se lo studente entra dopo
     try { localStorage.setItem('vle.stuLang', (A.lesson && A.lesson.uiLang) || 'en'); } catch (e) { /* ignora */ }
     const sc = VLClass.scoreOf(A.lesson, A.detail);
@@ -10047,6 +10079,11 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const box = $('#as-status'); const A = S.assign; if (!box || !A) return;
     const T = asgT(A.lesson);
     box.innerHTML = ''; box.className = 'notice';
+    if (A.local) {
+      box.textContent = A.lesson.uiLang === 'en' || !A.lesson.uiLang ? 'Done on this computer: nothing is saved or sent.' : 'Fatto su questo computer: niente viene salvato né inviato.';
+      box.appendChild(el('button', { class: 'small', style: 'margin-left:10px', text: '✎ Torna all\'esercitazione', onclick: function () { document.body.classList.remove('as-local'); const id = A.backId; S.assign = null; openChalSet(id); } }));
+      return;
+    }
     if (A.status === 'done') { box.classList.add('ok'); box.textContent = T.done.split('{n}').join(A.name); }
     else if (A.status === 'closed') { box.classList.add('bad'); box.textContent = T.closed; }
     else if (A.status === 'error') {

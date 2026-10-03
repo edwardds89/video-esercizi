@@ -10,7 +10,8 @@
   const PLATFORMS = {
     islcollective: { name: 'ISLCollective', host: /(^|\.)islcollective\.com$/i, kinds: ['video-lezioni'] },
     wayground: { name: 'Wayground', host: /(^|\.)(wayground|quizizz)\.com$/i, kinds: ['quiz'] },
-    wordwall: { name: 'Wordwall', host: /(^|\.)wordwall\.net$/i, kinds: ['attività'] }
+    wordwall: { name: 'Wordwall', host: /(^|\.)wordwall\.net$/i, kinds: ['attività'] },
+    learningapps: { name: 'LearningApps', host: /(^|\.)learningapps\.org$/i, kinds: ['app'] }
   };
 
   /* ---------- ISLCollective ----------
@@ -275,12 +276,77 @@
     return { set: { title: clean(p.title), items: items, lang: opts.lang || 'it', importedFrom: { site: 'wordwall', id: String(p.id || ''), url: p.id ? 'https://wordwall.net/resource/' + p.id : '', at: new Date().toISOString() } }, skipped: skipped };
   }
 
+  /* ---------- LearningApps (v181) ----------
+     Edoardo: "su learningapps non funziona ancora?" + learningapps.org/display?v=pyq62ueok20 (testo con lacune).
+     La pagina display contiene un iframe watch.php che contiene un iframe show.php: lì c'è window.AppClientAppData =
+     { tool: "140", title, tasktext, initparameters: "type=…&clozetext=…&cloze1=…&cloze2=…" } (una query string).
+     Tool 140 = "Testo con lacune": clozetext ha i segnaposto -1- -2- …; clozeN = "giusta; altra; altra; altra".
+     Con type "Seleziona dalla lista" la PRIMA è la giusta e le altre sono le scelte sbagliate → scelta multipla;
+     negli altri tipi (si scrive) il ";" separa risposte tutte accettate → completa gli spazi con la prima.
+     Si conosce SOLO il tool 140 (visto dal vero): gli altri hanno initparameters diversi. */
+  function laSlim(appData, id) {
+    if (!appData || !appData.initparameters) return null;
+    const p = {};
+    String(appData.initparameters).split('&').forEach(function (kv) {
+      const i = kv.indexOf('='); if (i < 1) return;
+      let k = kv.slice(0, i), v = kv.slice(i + 1);
+      try { k = decodeURIComponent(k.replace(/\+/g, ' ')); v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { /* lascia com'è */ }
+      if (/^(backgroundImage|feedback)$/.test(k)) return;
+      p[k] = v;
+    });
+    return { site: 'learningapps', id: String(id || ''), title: clean(htmlText(appData.title)), tool: String(appData.tool || ''), task: clean(htmlText(appData.tasktext)), p: p, sample: clean(p.clozetext || '') };
+  }
+  function fromLearningApps(pl, opts) {
+    opts = opts || {};
+    const uid = opts.uid || function () { return Math.random().toString(36).slice(2, 9); };
+    const rand = opts.rand || Math.random;
+    const items = [], skipped = [];
+    const P = pl.p || {};
+    if (String(pl.tool) !== '140' || !P.clozetext) throw new Error('questo tipo di app di LearningApps (tool ' + pl.tool + ') non lo so ancora importare: per ora solo "Testo con lacune"');
+    const select = /list|lista|liste|auswahl|select|dropdown|choix|elegir|выб/i.test(P.type || '');
+    // una riga (frase) = un esercizio; le righe senza segnaposto sono titoli o esempi e si saltano
+    String(P.clozetext).split(/\n+/).map(clean).filter(Boolean).forEach(function (line, k) {
+      const marks = line.match(/-\d+-/g) || [];
+      if (!marks.length) return;
+      const text = line.replace(/^\s*\d+\s*[.)]\s*/, '');   // "1. " davanti alla frase
+      const opt = function (m) { return String(P['cloze' + m.replace(/-/g, '')] || '').split(';').map(clean).filter(Boolean); };
+      if (select && marks.length === 1) {
+        const o = opt(marks[0]);
+        if (o.length < 2) { skipped.push({ n: k + 1, type: 'lacuna senza scelte' }); return; }
+        const order = o.map(function (x, i) { return i; });
+        for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
+        const b = EX.buildExercise('mc', 'x x x', { choices: { question: text.replace(marks[0], '_____'), options: order.map(function (i) { return o[i]; }), correct: order.indexOf(0) } });
+        if (!b) { skipped.push({ n: k + 1, type: 'scelta non costruibile' }); return; }
+        items.push({ id: 'i' + uid(), kind: 'mc', src: 'learningapps:' + pl.id + ':' + k, sentence: '', data: b.data });
+        return;
+      }
+      // si scrive: la frase con le risposte al loro posto, una casella per segnaposto
+      const tokens = [], idx = [];
+      let ok = true;
+      text.split(/(-\d+-)/).forEach(function (part) {
+        if (/^-\d+-$/.test(part)) {
+          const a = opt(part)[0];
+          if (!a) { ok = false; return; }
+          toks(a).forEach(function (t) { idx.push(tokens.length); tokens.push(t); });
+          return;
+        }
+        toks(part).forEach(function (t) {
+          if (/^[.,;:!?…)»]+$/.test(t.raw) && tokens.length) { tokens[tokens.length - 1] = L.tokenize(tokens[tokens.length - 1].raw + t.raw)[0]; return; }
+          tokens.push(t);
+        });
+      });
+      if (!ok || !idx.length || tokens.length < 2) { skipped.push({ n: k + 1, type: 'lacuna senza risposta' }); return; }
+      items.push({ id: 'i' + uid(), kind: 'gap', src: 'learningapps:' + pl.id + ':' + k, strict: true, sentence: raw(tokens).join(' '), data: { tokens: raw(tokens), gapIndices: idx, answers: idx.map(function (i) { return tokens[i].core; }) } });
+    });
+    return { set: { title: clean(pl.title), items: items, lang: opts.lang || 'it', importedFrom: { site: 'learningapps', id: String(pl.id || ''), url: pl.id ? 'https://learningapps.org/display?v=' + pl.id : '', at: new Date().toISOString() } }, skipped: skipped };
+  }
+
   /** v122: lingua di studio rilevata dalle frasi (parole funzionali per lingua: L.stopwords). Il campo `language` di
    *  ISLCollective NON è affidabile (dice "en" anche per una lezione in italiano: è la lingua del sito, non del video).
    *  Restituisce {lang, score:{it:n,en:n}, sure:bool}; sure = una lingua ha almeno il doppio dell'altra e ≥ 5 parole. */
   function detectLanguage(payload, langs) {
     langs = langs || ['it', 'en'];
-    const text = (payload.pairs || []).map(function (x) { return x.a + ' ' + x.b; }).join(' ') + ' ' + (payload.questions || []).map(function (q) {
+    const text = (payload.sample || '') + ' ' + (payload.pairs || []).map(function (x) { return x.a + ' ' + x.b; }).join(' ') + ' ' + (payload.questions || []).map(function (q) {
       const d = q.data || {};
       if (q.html != null) return htmlText(q.html) + ' ' + (q.options || []).map(function (o) { return htmlText(o.text); }).join(' ');   // Wayground
       if (Array.isArray(d.parts)) return d.parts.map(function (p) { return p.part; }).join(' ');
@@ -301,8 +367,9 @@
     if (payload.site === 'islcollective') return fromISL(payload, opts);
     if (payload.site === 'wayground') return fromWayground(payload, opts);
     if (payload.site === 'wordwall') return fromWordwall(payload, opts);
+    if (payload.site === 'learningapps') return fromLearningApps(payload, opts);
     throw new Error('piattaforma non supportata: ' + payload.site);
   }
 
-  return { PLATFORMS: PLATFORMS, islSlim: islSlim, fromISL: fromISL, wgSlim: wgSlim, fromWayground: fromWayground, wwSlim: wwSlim, fromWordwall: fromWordwall, htmlText: htmlText, convert: convert, detectLanguage: detectLanguage };
+  return { PLATFORMS: PLATFORMS, islSlim: islSlim, fromISL: fromISL, wgSlim: wgSlim, fromWayground: fromWayground, wwSlim: wwSlim, fromWordwall: fromWordwall, laSlim: laSlim, fromLearningApps: fromLearningApps, htmlText: htmlText, convert: convert, detectLanguage: detectLanguage };
 });

@@ -1858,3 +1858,7 @@ a.btnlink.primary:hover{background:#185dc9}
   .rv-item.big .rv-pie span { width: 78px; height: 78px; font-size: 24px; }
   .rv-item.big .rv-pietxt { font-size: 15px; text-align: center; }
 }
+
+/* v181: dopo un errore nei compiti una frase incoraggiante, non un rosso "sbagliato" */
+.chp-reveal.no.soft .big{color:#c2410c}
+.chp-reveal.no.soft{border-color:#f5c27a;background:#fffaf2}

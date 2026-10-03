@@ -1,5 +1,16 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- "FAI QUI" + IMPORTA DA LEARNINGAPPS (v181, 3/10). (1) Edoardo: "gli esercizi vorrei poterli aprire anche per una one
+  to one e farli sul pc senza QR ... la sfida in classe voglio che rimanga". #cs-here "▶ Fai qui" → playSetHere(ls): lo
+  stesso giro dei compiti (playAssignSet) su questo schermo, con S.assign.local = true: assignSend non manda niente,
+  paintAssignStatus dice "niente viene salvato", pulsanti per tornare all'esercitazione. (2) LearningApps, guardato dal
+  vero (display?v=pyq62ueok20): display → iframe watch.php → iframe show.php con window.AppClientAppData = { tool,
+  title, tasktext, initparameters (query string) }. Solo tool 140 "Testo con lacune": clozetext con -N-, clozeN =
+  "giusta; altre…". type "Seleziona dalla lista" → scelta multipla (opzioni mescolate), altrimenti completa gli spazi
+  con la prima alternativa. Altri tool: avviso con il numero. Anche qui il pulsante dei preferiti va trascinato di nuovo.
+  (3) FRASI GENTILI (Edoardo: '"Wrong, even with the hint" è denigratoria ... creane 10 di frasi friendly e ne metti una
+  random ogni volta'): nei compiti, dopo un errore, kindWord(lingua) sceglie una di 10 frasi incoraggiante (KIND_WORDS,
+  en/it, mai la stessa due volte di fila) al posto di T.wrong / T.koHelp; riquadro arancione (.soft), non rosso.
 - ERRORE DI BATTITURA = "CONTROLLA COME HAI SCRITTO" (v180, 3/10). Edoardo, "maestea" per "maestra": 'c'è un modo per
   invitare lo studente a scrivere meglio se ha fatto un typo? ... oppure si rischia di far passare tutti? l'importante
   qui era azzeccare la -a finale'. VLChal.typoOf(item, value): solo gap; una battitura sola (oneEdit: lettera cambiata,

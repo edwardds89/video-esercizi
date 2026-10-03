@@ -59,9 +59,27 @@ window.VL_BOOKMARKLET = function (APP) {
     }).catch(function (e) { alert('Wordwall non ha risposto (' + e.message + '): ricarica la pagina dell\'attività e riprova.'); });
     return;
   }
+  if (/(^|\.)learningapps\.org$/i.test(location.hostname)) {
+    // v181: app di LearningApps → set di esercizi. I dati (AppClientAppData) stanno nel riquadro più interno della pagina
+    // (display → watch.php → show.php, stessa origine): si cerca lì dentro. Stessa riduzione di VLPlat.laSlim.
+    var find = function (w, depth) {
+      try { if (w.AppClientAppData && w.AppClientAppData.initparameters) return w.AppClientAppData; } catch (e) { return null; }
+      if (depth > 4) return null;
+      try { for (var i = 0; i < w.frames.length; i++) { var r = find(w.frames[i], depth + 1); if (r) return r; } } catch (e) { /* riquadro di un altro sito */ }
+      return null;
+    };
+    var D = find(window, 0);
+    if (!D) { alert('Apri su LearningApps la pagina di una app (quella dove si gioca), aspetta che sia caricata, poi clicca il pulsante.'); return; }
+    if (String(D.tool) !== '140') { alert('Questo tipo di app di LearningApps non lo so ancora importare (tool ' + D.tool + '). Per ora importo "Testo con lacune". Manda questo messaggio a chi cura PauseLearn.'); return; }
+    var q = {}; String(D.initparameters).split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i < 1) return; var k = kv.slice(0, i), v = kv.slice(i + 1); try { k = decodeURIComponent(k.replace(/\+/g, ' ')); v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { /* com'è */ } if (!/^(backgroundImage|feedback)$/.test(k)) q[k] = v; });
+    var st = function (h) { var d = document.createElement('div'); d.innerHTML = String(h || ''); return (d.textContent || '').replace(/\s+/g, ' ').trim(); };
+    var lid = ''; try { var u = new URL(location.href); lid = u.searchParams.get('v') || u.searchParams.get('id') || ''; } catch (e) { /* ignore */ }
+    location.href = APP + '#platform=' + b64url(JSON.stringify({ site: 'learningapps', id: lid, title: st(D.title), tool: String(D.tool), task: st(D.tasktext), p: q, sample: String(q.clozetext || '').replace(/\s+/g, ' ').trim() }));
+    return;
+  }
   var id = null;
   try { id = new URL(location.href).searchParams.get('v'); } catch (e) { /* ignore */ }
-  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video), una tua video-lezione su ISLCollective, un tuo quiz su Wayground o una tua attività su Wordwall, poi clicca il pulsante.'); return; }
+  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video), una tua video-lezione su ISLCollective, un tuo quiz su Wayground, una tua attività su Wordwall o una tua app su LearningApps, poi clicca il pulsante.'); return; }
   var title = document.title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube\s*$/, '');
   var video = document.querySelector('video');
   var duration = (video && video.duration) || 0;
