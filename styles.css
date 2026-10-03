@@ -1862,3 +1862,9 @@ a.btnlink.primary:hover{background:#185dc9}
 /* v181: dopo un errore nei compiti una frase incoraggiante, non un rosso "sbagliato" */
 .chp-reveal.no.soft .big{color:#c2410c}
 .chp-reveal.no.soft{border-color:#f5c27a;background:#fffaf2}
+
+/* v182: foto nella correzione di gruppo */
+.fix-qrow{display:flex;gap:20px;align-items:center;margin:12px 0}
+.fix-qrow .fix-q{margin:0;flex:1}
+.fix-img{width:min(34%,340px);max-height:300px;object-fit:cover;border-radius:12px;flex:0 0 auto}
+@media (max-width:700px){.fix-qrow{flex-direction:column;align-items:stretch}.fix-img{width:100%}}

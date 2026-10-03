@@ -61,7 +61,7 @@
     if (!lesson) return [];
     if (Array.isArray(lesson.exercises)) return lesson.exercises;
     const items = (lesson.chal && lesson.chal.items) || [];
-    return items.map(function (it) { return { id: it.id, type: it.kind, sentence: it.sentence || (it.kind === 'mc' && it.data ? it.data.question : ''), data: it.data || {}, pairs: it.pairs, explain: it.explain }; });
+    return items.map(function (it) { return { id: it.id, type: it.kind, sentence: it.sentence || (it.kind === 'mc' && it.data ? it.data.question : ''), data: it.data || {}, pairs: it.pairs, explain: it.explain, image: it.image || '' }; });
   }
   /** v129: la domanda SENZA la risposta, per la correzione di gruppo proiettata (e.sentence del gap contiene la soluzione). */
   function promptOf(e) {
@@ -107,7 +107,7 @@
   /** Tabella del report: righe = studenti (per nome), colonne = esercizi della lezione del compito. */
   function reportMatrix(lesson, rows) {
     const exs = asgItems(lesson).map(function (e, i) {
-      return { id: e.id, n: i + 1, type: e.type, label: SET_LABELS[e.type] || (EX && EX.LABELS && EX.LABELS[e.type]) || e.type, sentence: e.sentence || '', prompt: promptOf(e), solution: solutionOf(e), explain: e.explain || '' };
+      return { id: e.id, n: i + 1, type: e.type, label: SET_LABELS[e.type] || (EX && EX.LABELS && EX.LABELS[e.type]) || e.type, sentence: e.sentence || '', prompt: promptOf(e), solution: solutionOf(e), explain: e.explain || '', image: e.image || '' };
     });
     const groups = {};
     (rows || []).forEach(function (r) { const k = normName(r.student_name); (groups[k] = groups[k] || []).push(r); });

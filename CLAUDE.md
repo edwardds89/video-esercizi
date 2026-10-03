@@ -1,5 +1,8 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- FOTO NELLA CORREZIONE DI GRUPPO (v182, 3/10). Edoardo: "nella correzione perché non c'è la foto? la voglio".
+  VLClass.asgItems e la matrice del report ora portano image; la scheda "Correzione" (.fix-card) mostra la foto a
+  sinistra della domanda (.fix-qrow / .fix-img). Vale per i compiti assegnati dalla v125 in poi: la foto è nel compito.
 - "FAI QUI" + IMPORTA DA LEARNINGAPPS (v181, 3/10). (1) Edoardo: "gli esercizi vorrei poterli aprire anche per una one
   to one e farli sul pc senza QR ... la sfida in classe voglio che rimanga". #cs-here "▶ Fai qui" → playSetHere(ls): lo
   stesso giro dei compiti (playAssignSet) su questo schermo, con S.assign.local = true: assignSend non manda niente,

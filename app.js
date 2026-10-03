@@ -9714,7 +9714,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;gap:8px' },
       el('div', { class: 'fix-n', text: 'Esercizio ' + e.n + ' · ' + e.label }),
       el('div', { class: 'fix-pct' + (x.p.pct != null && x.p.pct < 60 ? ' low' : ''), text: x.p.pct == null ? '' : x.p.pct + '% giusto · ' + x.p.done + ' risposte' })));
-    card.appendChild(el('div', { class: 'fix-q', text: e.prompt || e.sentence }));
+    // v182 (Edoardo, correzione di gruppo: "perché non c'è la foto? la voglio"): la foto dell'esercizio accanto alla domanda
+    const fq = el('div', { class: 'fix-q', text: e.prompt || e.sentence });
+    if (e.image) {
+      const im = el('img', { class: 'fix-img', src: e.image, alt: '', referrerpolicy: 'no-referrer' });
+      im.addEventListener('error', function () { im.remove(); });
+      card.appendChild(el('div', { class: 'fix-qrow' }, im, fq));
+    } else card.appendChild(fq);
     const solBox = el('div', { class: 'fix-sol' });
     if (F.show) { solBox.appendChild(el('div', { text: '✓ ' + e.solution })); if (e.explain) solBox.appendChild(el('div', { class: 'fix-exp', text: e.explain })); }
     card.appendChild(solBox);
