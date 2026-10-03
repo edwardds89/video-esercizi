@@ -207,4 +207,24 @@ test('Wordwall: coppie con ___ → completa gli spazi (con foto), coppie semplic
   assert.strictEqual(P.wwSlim({ activityId: 7 }, { templateId: 5, content: { questions: [] } }), null);
 });
 
+test('LearningApps: testo con lacune "scegli dalla lista" → scelta multipla (la prima è la giusta, mescolata)', function () {
+  const D = { tool: '140', title: 'Pronomi Combinati', tasktext: 'Completa <b>le frasi</b>', initparameters: 'type=Seleziona%20dalla%20lista&clozetext=' + encodeURIComponent('1. Spedisco un pacco a Maria -> -1- spedisco.\n\n2. Anna ti scrive una lettera -> Anna -2- scrive.') + '&cloze1=' + encodeURIComponent('glielo; gliela; glieli; gliele') + '&cloze2=' + encodeURIComponent('te la; te lo; te li; te le') + '&feedback=ok&backgroundImage=x' };
+  const slim = P.laSlim(D, 'abc');
+  assert.strictEqual(slim.site, 'learningapps'); assert.strictEqual(slim.p.cloze2, 'te la; te lo; te li; te le'); assert.strictEqual(slim.p.feedback, undefined);
+  const r = P.convert(slim, { lang: 'it', rand: function () { return 0; } });
+  assert.strictEqual(r.set.items.length, 2);
+  const a = r.set.items[0];
+  assert.strictEqual(a.kind, 'mc'); assert.strictEqual(a.data.question, 'Spedisco un pacco a Maria -> _____ spedisco.');
+  assert.strictEqual(a.data.options[a.data.correct], 'glielo'); assert.strictEqual(a.data.options.length, 4);
+  assert.strictEqual(r.set.items[1].data.options[r.set.items[1].data.correct], 'te la');
+  assert.strictEqual(r.set.importedFrom.url, 'https://learningapps.org/display?v=abc');
+});
+test('LearningApps: lacune da scrivere → completa gli spazi; altri tool → errore chiaro', function () {
+  const slim = P.laSlim({ tool: '140', title: 'T', initparameters: 'type=Scrivi&clozetext=' + encodeURIComponent('Anna -1- scrive una lettera.') + '&cloze1=' + encodeURIComponent('te la; tela') }, 'x');
+  const r = P.convert(slim, { lang: 'it' });
+  assert.strictEqual(r.set.items[0].kind, 'gap'); assert.strictEqual(r.set.items[0].sentence, 'Anna te la scrive una lettera.');
+  assert.deepStrictEqual(r.set.items[0].data.gapIndices, [1, 2]);
+  assert.throws(function () { P.convert(P.laSlim({ tool: '71', title: 'T', initparameters: 'a=1' }, 'y'), {}); }, /tool 71/);
+});
+
 console.log('\n' + passed + ' test passati' + (process.exitCode ? ', con errori' : ''));
