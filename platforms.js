@@ -9,7 +9,8 @@
 
   const PLATFORMS = {
     islcollective: { name: 'ISLCollective', host: /(^|\.)islcollective\.com$/i, kinds: ['video-lezioni'] },
-    wayground: { name: 'Wayground', host: /(^|\.)(wayground|quizizz)\.com$/i, kinds: ['quiz'] }
+    wayground: { name: 'Wayground', host: /(^|\.)(wayground|quizizz)\.com$/i, kinds: ['quiz'] },
+    wordwall: { name: 'Wordwall', host: /(^|\.)wordwall\.net$/i, kinds: ['attività'] }
   };
 
   /* ---------- ISLCollective ----------
@@ -216,12 +217,70 @@
     return { set: { title: clean(p.title), items: items, lang: opts.lang || 'it', importedFrom: { site: 'wayground', id: String(p.id || ''), url: p.id ? 'https://wayground.com/admin/quiz/' + p.id : '', at: new Date().toISOString() } }, skipped: skipped };
   }
 
+
+  /* ---------- Wordwall (v179) ----------
+     Edoardo: "https://wordwall.net/resource/116013390 ho moltissime attività, per il momento vedi se riesci a importare
+     questa". Nella pagina dell'attività window.pageData ha activityGuid e authorUserId; il contenuto è un JSON pubblico:
+     https://user.cdn.wordwall.net/content-models/<authorUserId>/<activityGuid>.json →
+     { templateId, content: { pairs: [{ primary: {text,image}, secondary: {text,image} }] } } (testo dentro <n>…</n>,
+     immagini = https://user.cdn.wordwall.net/content-images/<image>). Per ora si conosce SOLO la forma "pairs"
+     (template 3 = Match up, visto dal vero): gli altri template hanno forme diverse e vanno aggiunti guardandone uno.
+     Una coppia con "___" in uno dei due lati è una frase da completare → "completa gli spazi" (con la foto);
+     le altre coppie → "abbina" (a gruppi di 6). */
+  const WW_IMG = 'https://user.cdn.wordwall.net/content-images/';
+  function wwSlim(pageData, model) {
+    const c = model && model.content;
+    if (!pageData || !c || !Array.isArray(c.pairs)) return null;
+    const side = function (x) { return htmlText(x && x.text); };
+    return {
+      site: 'wordwall', id: String(pageData.activityId || ''), title: clean(pageData.activityTitle), templateId: model.templateId,
+      pairs: c.pairs.map(function (p) { return { a: side(p.primary), b: side(p.secondary), img: (p.secondary && p.secondary.image) || (p.primary && p.primary.image) || '' }; })
+    };
+  }
+  function fromWordwall(p, opts) {
+    opts = opts || {};
+    const uid = opts.uid || function () { return Math.random().toString(36).slice(2, 9); };
+    const items = [], skipped = [], loose = [];
+    const BL = /_{2,}/g;
+    (p.pairs || []).forEach(function (pr, k) {
+      const a = clean(pr.a), b = clean(pr.b);
+      if (!a || !b) { skipped.push({ n: k + 1, type: 'coppia senza testo' }); return; }
+      const sa = (a.match(BL) || []).length, sb = (b.match(BL) || []).length;
+      if (sa + sb === 1) {
+        const sent = sb ? b : a, ans = sb ? a : b;
+        const parts = sent.split(/_{2,}/);
+        const tokens = [], idx = [];
+        toks(parts[0]).forEach(function (t) { tokens.push(t); });
+        toks(ans).forEach(function (t) { idx.push(tokens.length); tokens.push(t); });
+        toks(parts[1]).forEach(function (t) {
+          // punteggiatura rimasta sola dopo lo spazio ("___ .") si riattacca alla risposta
+          if (/^[.,;:!?…)»]+$/.test(t.raw) && tokens.length) { tokens[tokens.length - 1] = L.tokenize(tokens[tokens.length - 1].raw + t.raw)[0]; return; }
+          tokens.push(t);
+        });
+        if (tokens.length < 2 || !idx.length) { skipped.push({ n: k + 1, type: 'frase troppo corta' }); return; }
+        const it = { id: 'i' + uid(), kind: 'gap', src: 'wordwall:' + p.id + ':' + k, strict: true, sentence: raw(tokens).join(' '), data: { tokens: raw(tokens), gapIndices: idx, answers: idx.map(function (i) { return tokens[i].core; }) } };
+        if (pr.img) { it.image = /^https?:/.test(pr.img) ? pr.img : WW_IMG + pr.img; }
+        items.push(it);
+        return;
+      }
+      loose.push({ a: a, b: b });
+    });
+    // le coppie semplici (parola ↔ parola) restano un "abbina", a gruppi di 6 (l'ultimo assorbe un avanzo di 1)
+    for (let i = 0; i < loose.length; i += 6) {
+      let grp = loose.slice(i, i + 6);
+      if (loose.length - (i + 6) === 1) { grp = loose.slice(i, i + 7); i++; }
+      if (grp.length >= 2) items.push({ id: 'i' + uid(), kind: 'match', src: 'wordwall:' + p.id + ':m' + i, pairs: grp });
+      else skipped.push({ n: 0, type: 'una coppia sola: non basta per un abbinamento' });
+    }
+    return { set: { title: clean(p.title), items: items, lang: opts.lang || 'it', importedFrom: { site: 'wordwall', id: String(p.id || ''), url: p.id ? 'https://wordwall.net/resource/' + p.id : '', at: new Date().toISOString() } }, skipped: skipped };
+  }
+
   /** v122: lingua di studio rilevata dalle frasi (parole funzionali per lingua: L.stopwords). Il campo `language` di
    *  ISLCollective NON è affidabile (dice "en" anche per una lezione in italiano: è la lingua del sito, non del video).
    *  Restituisce {lang, score:{it:n,en:n}, sure:bool}; sure = una lingua ha almeno il doppio dell'altra e ≥ 5 parole. */
   function detectLanguage(payload, langs) {
     langs = langs || ['it', 'en'];
-    const text = (payload.questions || []).map(function (q) {
+    const text = (payload.pairs || []).map(function (x) { return x.a + ' ' + x.b; }).join(' ') + ' ' + (payload.questions || []).map(function (q) {
       const d = q.data || {};
       if (q.html != null) return htmlText(q.html) + ' ' + (q.options || []).map(function (o) { return htmlText(o.text); }).join(' ');   // Wayground
       if (Array.isArray(d.parts)) return d.parts.map(function (p) { return p.part; }).join(' ');
@@ -241,8 +300,9 @@
     if (!payload || !payload.site) throw new Error('piattaforma non indicata');
     if (payload.site === 'islcollective') return fromISL(payload, opts);
     if (payload.site === 'wayground') return fromWayground(payload, opts);
+    if (payload.site === 'wordwall') return fromWordwall(payload, opts);
     throw new Error('piattaforma non supportata: ' + payload.site);
   }
 
-  return { PLATFORMS: PLATFORMS, islSlim: islSlim, fromISL: fromISL, wgSlim: wgSlim, fromWayground: fromWayground, htmlText: htmlText, convert: convert, detectLanguage: detectLanguage };
+  return { PLATFORMS: PLATFORMS, islSlim: islSlim, fromISL: fromISL, wgSlim: wgSlim, fromWayground: fromWayground, wwSlim: wwSlim, fromWordwall: fromWordwall, htmlText: htmlText, convert: convert, detectLanguage: detectLanguage };
 });

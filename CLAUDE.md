@@ -1,5 +1,14 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- IMPORTA DA WORDWALL (v179, 3/10). Edoardo: "questo pulsante funziona su wordwall?" + link a una sua attività. Guardata
+  dal vero (wordwall.net/resource/116013390, Match up): window.pageData ha activityGuid/authorUserId/activityTitle; il
+  contenuto è https://user.cdn.wordwall.net/content-models/<authorUserId>/<guid>.json (CORS aperto dalla pagina) =
+  { templateId, content: { pairs: [{primary:{text,image}, secondary:{text,image}}] } }, testo in <n>…</n>, immagini su
+  user.cdn.wordwall.net/content-images/<image>. bookmarklet.js (ramo wordwall.net) → #platform → VLPlat.fromWordwall:
+  coppia con "___" = "completa gli spazi" (con la foto), coppie semplici = "abbina" a gruppi di 6. SOLO la forma "pairs":
+  gli altri template (quiz, anagrammi, ruota…) hanno un content diverso, il pulsante lo dice con un avviso che riporta
+  templateId e chiavi del content: per aggiungerli serve guardarne uno vero. Chi aveva già il pulsante nei preferiti deve
+  TRASCINARLO DI NUOVO (il codice è dentro il segnalibro). LearningApps: non guardato.
 - REPORT E REVISIONE CON LA ROTELLA, IN SECONDO PIANO (v178, 3/10). Edoardo: "voglio poter cliccare anche con la rotella
   del mouse in modo che la scheda si apra ma non venga messa in primo piano". Erano <button> + window.open (la rotella
   non faceva niente, e window.open porta sempre davanti). Ora sono <a class="btnlink" target="_blank"> con href vero:

@@ -45,9 +45,23 @@ window.VL_BOOKMARKLET = function (APP) {
     }).catch(function (e) { alert('Wayground non ha risposto (' + e.message + '): ricarica la pagina del quiz e riprova.'); });
     return;
   }
+  if (/(^|\.)wordwall\.net$/i.test(location.hostname)) {
+    // v179: attività di Wordwall → set di esercizi. window.pageData dice quale attività è; il contenuto è un JSON sul CDN
+    // di Wordwall (stessa riduzione di VLPlat.wwSlim in platforms.js). Per ora solo le attività fatte di COPPIE.
+    var pd = window.pageData || {};
+    if (!pd.activityGuid || !pd.authorUserId) { alert('Apri su Wordwall la pagina di una TUA attività (quella dove si gioca), poi clicca il pulsante.'); return; }
+    fetch('https://user.cdn.wordwall.net/content-models/' + pd.authorUserId + '/' + pd.activityGuid + '.json').then(function (r) { return r.json(); }).then(function (m) {
+      var c = m && m.content, tx = function (x) { var d = document.createElement('div'); d.innerHTML = String((x && x.text) || ''); return (d.textContent || '').replace(/\s+/g, ' ').trim(); };
+      if (!c || !c.pairs || !c.pairs.length) { alert('Questo tipo di attività di Wordwall non lo so ancora importare (template ' + (m && m.templateId) + ', contenuto: ' + Object.keys(c || {}).join(', ') + '). Per ora importo le attività fatte di coppie (Match up e simili). Manda questo messaggio a chi cura PauseLearn.'); return; }
+      var slim = { site: 'wordwall', id: String(pd.activityId || ''), title: String(pd.activityTitle || '').replace(/\s+/g, ' ').trim(), templateId: m.templateId,
+        pairs: c.pairs.map(function (p) { return { a: tx(p.primary), b: tx(p.secondary), img: (p.secondary && p.secondary.image) || (p.primary && p.primary.image) || '' }; }) };
+      location.href = APP + '#platform=' + b64url(JSON.stringify(slim));
+    }).catch(function (e) { alert('Wordwall non ha risposto (' + e.message + '): ricarica la pagina dell\'attività e riprova.'); });
+    return;
+  }
   var id = null;
   try { id = new URL(location.href).searchParams.get('v'); } catch (e) { /* ignore */ }
-  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video), una tua video-lezione su ISLCollective o un tuo quiz su Wayground, poi clicca il pulsante.'); return; }
+  if (!/youtube\.com\/watch/.test(location.href) || !id) { alert('Apri prima un video su YouTube (pagina del video), una tua video-lezione su ISLCollective, un tuo quiz su Wayground o una tua attività su Wordwall, poi clicca il pulsante.'); return; }
   var title = document.title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube\s*$/, '');
   var video = document.querySelector('video');
   var duration = (video && video.duration) || 0;
