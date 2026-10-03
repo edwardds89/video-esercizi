@@ -1,5 +1,12 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- SCELTA MULTIPLA: IL CLIC È LA RISPOSTA, FEEDBACK SUL POSTO (v186, 3/10). Edoardo: "quando clicco su un'opzione, se è
+  corretta mi viene messa a fianco a 'spedisco', poi sotto anziché 'check' ci sarà 'next'". In compiti / Fai qui
+  chpItemInput riceve instant:true: il clic su un'opzione fa partire subito il controllo (il bottone Check c'è ma è nascosto,
+  .chp-instant). done() non ricostruisce più la pagina: sostituisce la casella corrente (curInput) con chpSolvedNode + riga
+  "Correct!" (.chp-reveal.slim.line) + "Next" dove c'era "Check"; consegna, traduzione e foto restano dove sono.
+  Se è sbagliata resta il giro di prima (aiuto, due opzioni tolte, si riprova). Sfida dal vivo: non toccata (lì si può
+  cambiare idea prima di inviare).
 - FEEDBACK CON LA FRASE ANCORA VISIBILE (v185, 3/10). Edoardo: "non mi piace questo feedback perché viene tolta la frase e
   non si vede più la scelta corretta". In compiti / Fai qui, done() ora mette sotto "Correct!" (riquadro .chp-reveal.slim)
   la foto e chpSolvedNode(item): la frase con la soluzione nella casella verde (.chp-blank.fill; chpQNode(text, fills)) e,

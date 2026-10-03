@@ -1889,3 +1889,9 @@ a.btnlink.primary:hover{background:#185dc9}
 .chp-solved .chp-mc.off{opacity:.3}
 .chp-qsol{color:#1c7c3e}
 .chp-qpair{font-size:clamp(17px,2.2vw,24px);font-weight:700;margin:4px 0}
+
+/* v186: feedback sul posto, riga compatta tra le opzioni e "Next" */
+.chp-reveal.slim.line{border:none;background:none;padding:6px 0 2px;margin:8px 0 0}
+.chp-reveal.slim.line .big{font-size:20px}
+.chp-reveal.slim.line.no.soft{background:none}
+.chp-instant > .chp-send{display:none}

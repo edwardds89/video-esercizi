@@ -8696,12 +8696,13 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     const inlineGaps = !!(opts.inline && pub.sentence && (kind === 'gap' || kind === 'gapbank') && pub.sentence.indexOf('_____') !== -1);
     if (pub.sentence && !inlineGaps) box.appendChild(chpQNode(pub.sentence));
     if (kind === 'mc') {
+      if (opts.instant) box.classList.add('chp-instant');   // v186: il clic è la risposta, "Check" non serve
       if (pub.q) box.appendChild(chpQNode(pub.q));
       let sel = -1;
       const grid = el('div', { class: 'chp-mcgrid' });
       for (let i = 0; i < (pub.n || 4); i++) {
         const b = el('button', { class: 'chp-mc o' + i + (opts.mcOff && opts.mcOff.indexOf(i) !== -1 ? ' off' : '') }, el('span', { class: 'lt', text: 'ABCD'[i] }), pub.options ? el('span', { class: 'tx', text: pub.options[i] || '' }) : null);
-        b.addEventListener('click', function () { sel = i; $$('.chp-mc', grid).forEach(function (x, j) { x.classList.toggle('sel', j === i); }); });
+        b.addEventListener('click', function () { sel = i; $$('.chp-mc', grid).forEach(function (x, j) { x.classList.toggle('sel', j === i); }); if (opts.instant) setTimeout(function () { const sb = box.querySelector('.chp-send'); if (sb && !sb.disabled) sb.click(); }, 0); });
         grid.appendChild(b);
       }
       box.appendChild(grid);
@@ -9981,7 +9982,8 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       if (i >= items.length) { clearInterval(S.liveTick); clearInterval(S.livePoll); over = true; return finish(); }
       const item = items[i];
       const cell = assignCell({ id: item.id, type: item.kind });
-      box.appendChild(head());
+      let headNode = head();
+      box.appendChild(headNode);
       const pub = VLChal.pubItem(item, { showQ: true });
       if (item.kind === 'mc' && !pub.q) pub.q = item.data.question;
       if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
@@ -9998,9 +10000,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       box.appendChild(trBar(trv && trv.t, hintPaint, item.kind));
       const msg = el('div', { class: 'as-msg' });
       const hintBox = el('div', { class: 'as-hint', style: 'display:none' });
-      let mcOff = null;
+      let mcOff = null, curInput = null;
       const ask = function () {
-        const inputBox = chpItemInput(pub, { inline: true, mcOff: mcOff, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
+        const inputBox = curInput = chpItemInput(pub, { inline: true, instant: true, mcOff: mcOff, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, scrHint: T.scrHint, onSubmit: function (v) {
           const res = VLChal.checkItem(item, v, pub);
           // v180: errore di battitura = "controlla come hai scritto", non consuma il tentativo (una volta sola)
           if (!res.correct && !cell.typo && VLChal.typoOf(item, v)) { cell.typo = 1; msg.className = 'as-msg no'; msg.textContent = T.typo; return 'retry'; }
@@ -10031,7 +10033,7 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
           hintBox.appendChild(el('div', { class: 'as-copy-do', text: T.typeIt2 }));
           hintBox.style.display = '';
           const copy = function () {
-            const cb = chpItemInput(pub, { inline: true, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, onSubmit: function (v2) {
+            const cb = curInput = chpItemInput(pub, { inline: true, sendLabel: T.check, answerFirst: T.answerFirst, wrongPh: T.wrongPh, missPh: T.missPh, onSubmit: function (v2) {
               if (VLChal.checkItem(item, v2, pub).correct) return done(false);
               cb.replaceWith(copy());
             } });
@@ -10044,16 +10046,17 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
       const done = function (ok) {
         clearTimeout(S.assign.timer);
         S.assign.timer = setTimeout(function () { assignSend(false); }, 400);
-        box.innerHTML = '';
-        box.appendChild(head());
-        const fb = el('div', { class: 'chp-reveal slim ' + (ok ? 'ok' : 'no soft') },
+        // v186: il feedback arriva SUL POSTO: la pagina non si ricostruisce, la risposta giusta entra nella frase,
+        // e dove c'era "Check" compare "Next".
+        const h2 = head(); headNode.replaceWith(h2); headNode = h2;
+        msg.textContent = ''; msg.className = 'as-msg'; hintBox.style.display = 'none';
+        const solved = chpSolvedNode(item);
+        solved.appendChild(el('div', { class: 'chp-reveal slim line ' + (ok ? 'ok' : 'no soft') },
           el('div', { class: 'big', text: ok ? (cell.hints ? T.okHelp : cell.tries.length > 1 ? T.okLate : T.ok) : kindWord(a.lesson.uiLang) }),
-          item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null);
-        box.appendChild(fb);
-        if (item.image) box.appendChild(el('img', { class: 'as-img', src: item.image, alt: '' }));
-        box.appendChild(chpSolvedNode(item));   // v185
+          item.explain ? el('div', { class: 'sol as-explain', text: item.explain }) : null));
         const next = el('button', { class: 'primary big chp-send', text: i + 1 < items.length ? T.next : T.result, onclick: function () { i++; step(); } });
-        box.appendChild(next);
+        solved.appendChild(next);
+        if (curInput && curInput.parentNode) curInput.replaceWith(solved); else box.appendChild(solved);
         setTimeout(function () { next.focus(); }, 30);
       };
       box.appendChild(msg);
