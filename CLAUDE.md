@@ -1,5 +1,10 @@
 # PauseLearn (ex Proflandia, ex Video Esercizi) — note per chi lavora sul codice
 
+- LA DOMANDA IN EVIDENZA (v184, 3/10). Edoardo, "Fai qui" con scelta multipla: "voglio che la frase in questione sia più
+  outstanding". chpQNode(text): riquadro azzurro, testo grande e centrato (.chp-qbig); "_____" diventa una casella
+  tratteggiata con "?" (.chp-blank); con una freccia ("partenza -> da completare") la partenza va sopra piccola e la frase
+  da completare sotto grande. Vale ovunque si usi chpItemInput (compiti, Fai qui, telefono della sfida). Anche la frase
+  con le caselle da scrivere (.chp-inline) ha lo stesso riquadro.
 - COPERTINA DAL FONDO DI LEARNINGAPPS (v183, 3/10). Edoardo, set importato: "perché non c'è la foto?". L'app aveva uno
   sfondo (initparameters.backgroundImage = "image|https://…") che scartavo. Ora laSlim/bookmarklet lo passano come bg,
   fromLearningApps lo mette in set.cover, finishSetImport in ls.chal.coverUrl, e chalCoverThumb lo usa (img con

@@ -1872,3 +1872,11 @@ a.btnlink.primary:hover{background:#185dc9}
 /* v183: copertina da immagine del set */
 .lesson-card .thumb.chal-thumb .cover-img{width:100%;height:100%;object-fit:cover;display:block}
 .lesson-card .thumb.chal-thumb.has-cover{overflow:hidden}
+
+/* v184: la domanda in evidenza */
+.chp-q.chp-qbig{margin:4px 0 16px;padding:18px 16px;border-radius:16px;background:linear-gradient(180deg,#f3f7ff,#e9f0ff);border:2px solid #c9d8f5;text-align:center;line-height:1.35}
+.chp-qbig .chp-qto{font-size:clamp(22px,3.4vw,36px);font-weight:800;color:#12203a}
+.chp-qbig .chp-qfrom{font-size:clamp(16px,2vw,22px);font-weight:600;color:#55627a}
+.chp-qbig .chp-qarrow{font-size:18px;color:#8a9ab8;line-height:1.2;margin:2px 0}
+.chp-blank{display:inline-block;min-width:2.6em;margin:0 .18em;padding:0 .5em;border-radius:10px;background:#fff;border:2px dashed #3b6fe0;color:#3b6fe0;font-weight:800;line-height:1.25}
+.chp-q.chp-inline{font-size:clamp(20px,2.6vw,28px);font-weight:700;padding:14px 14px;border-radius:16px;background:linear-gradient(180deg,#f3f7ff,#e9f0ff);border:2px solid #c9d8f5;margin-bottom:14px}

@@ -8633,6 +8633,27 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
   }
   /** Il pannello di risposta sul telefono, per tipo. pub e' la versione pubblica; con opts.local (item completo,
    *  student-paced) la domanda e' sempre visibile e la correzione avviene sul telefono. */
+  /** v184 (Edoardo, scelta multipla: "non mi piace questa visualizzazione, voglio che la frase in questione sia più
+   *  outstanding"): la domanda sta in un riquadro suo, grande e centrata; lo spazio "_____" è una casella evidenziata.
+   *  Con una freccia ("frase di partenza -> frase da completare") la partenza va sopra, più piccola, e quella da
+   *  completare sotto, grande: è lì che si guarda. */
+  function chpQNode(text) {
+    const box = el('div', { class: 'chp-q chp-qbig' });
+    const fill = function (node, t) {
+      String(t).split(/(_{3,})/).forEach(function (part) {
+        if (/^_{3,}$/.test(part)) node.appendChild(el('span', { class: 'chp-blank', text: '?' }));
+        else if (part) node.appendChild(document.createTextNode(part));
+      });
+      return node;
+    };
+    const m = String(text).match(/^(.*?\S)\s*(?:->|→|⇒)\s*(\S.*)$/);
+    if (m && /_{3,}/.test(m[2]) && !/_{3,}/.test(m[1])) {
+      box.appendChild(fill(el('div', { class: 'chp-qfrom' }), m[1]));
+      box.appendChild(el('div', { class: 'chp-qarrow', text: '↓' }));
+      box.appendChild(fill(el('div', { class: 'chp-qto' }), m[2]));
+    } else box.appendChild(fill(el('div', { class: 'chp-qto' }), text));
+    return box;
+  }
   function chpItemInput(pub, opts) {
     const box = el('div', { class: 'chp-item' });
     let getVal = function () { return null; };
@@ -8640,9 +8661,9 @@ MockPlayer.prototype.unmute = function () { this.muted = false; };
     // v126 (compiti senza video): con opts.inline gli spazi si scrivono DENTRO la frase, come sul libro,
     // invece che in caselle "spazio 1, spazio 2" sotto la frase (quelle restano per la sfida dal vivo).
     const inlineGaps = !!(opts.inline && pub.sentence && (kind === 'gap' || kind === 'gapbank') && pub.sentence.indexOf('_____') !== -1);
-    if (pub.sentence && !inlineGaps) box.appendChild(el('div', { class: 'chp-q', text: pub.sentence }));
+    if (pub.sentence && !inlineGaps) box.appendChild(chpQNode(pub.sentence));
     if (kind === 'mc') {
-      if (pub.q) box.appendChild(el('div', { class: 'chp-q', text: pub.q }));
+      if (pub.q) box.appendChild(chpQNode(pub.q));
       let sel = -1;
       const grid = el('div', { class: 'chp-mcgrid' });
       for (let i = 0; i < (pub.n || 4); i++) {
